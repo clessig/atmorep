@@ -53,9 +53,9 @@ After following the steps described below, the final directory structure will lo
 ````
 The directories ``data``, ``models``, and ``results`` need to be created if they do not exist. All directories might be large and should thus be on a directory with sufficient storage space; in this case they can be soft-linked to the default ones above or they can be set in ``atmorep/config/config``. 
 
-## 4. Download the data 
+## 2. Download the data 
 
-### 4.1 Download pre-trained models
+### 2.1 Download pre-trained models
 
 Models can be downloaded from: https://datapub.fz-juelich.de/atmorep/trained-models.html
 
@@ -71,7 +71,7 @@ AtmoRep_id4nvwbetz.mod  model_id4nvwbetz.json
 `````
 
 
-### 4.2 Download model input data (ERA5)
+### 2.2 Download model input data (ERA5)
 
 The input data in the required structure can be downloaded from the [Jülich datapub](https://datapub.fz-juelich.de/atmorep/era5-data.html) server. Direct link to WebDAV [https://datapub.fz-juelich.de/atmorep/data/](https://datapub.fz-juelich.de/atmorep/data/). Alternatively, it can be directly downloaded from MARS using the following [script](https://www.atmorep.org/code/mars_era5_download.py).
 
@@ -98,7 +98,7 @@ Coefficients for data normalization per field and level can be downloaded here: 
 % atmorep/data/> tar xvzf normalization_vorticity_ml137.tar.gz
 `````
 
-## 5. Install python packages
+## 3. Install python packages
 
 Create a python environment, e.g.
 
@@ -125,7 +125,7 @@ torch is currently not included (since it is often available or has particular d
 `````
 We require torch 2.x. (A container solution allows to run even on systems where torch 2.x is not available.)
 
-## 6. Run model:
+## 4. Run model:
 Pre-trained models can normally be run by:
 `````
 % atmorep/> python atmorep/core/evaluate.py
