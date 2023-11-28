@@ -21,19 +21,7 @@ The pre-print for the work is available on ArXiv: https://arxiv.org/abs/2308.132
 `````
 %> wget git@github.com:clessig/atmorep.git
 `````
-This creates a directory ``atmorep`` with the code. The structure of the directory will look as follows:
-
-````
-├── LICENSE
-├── CITATION.cff
-├── README.md (this file)
-├── atmorep/                      <- AtmoRep code
-|   |── config/
-|   |── core/
-|   |── ...
-````
-
-The ``atmorep`` directory contains the source code including the python scripts for model training and evaluation.
+This creates a directory ``atmorep`` with the code that contains the source code including the python scripts for model training and evaluation.
 
 After following the steps described below, the final directory structure will look as follows:
 ````
