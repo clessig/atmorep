@@ -85,7 +85,7 @@ AtmoRep_id4nvwbetz.mod  model_id4nvwbetz.json
 
 ### 4.2 Download model input data (ERA5)
 
-The input data in the required structure can be downloaded from the [Jülich datapub](https://datapub.fz-juelich.de/atmorep/era5-data.html) server. Direct link to WebDAV [https://datapub.fz-juelich.de/atmorep/data/](https://datapub.fz-juelich.de/atmorep/data/). Alternatively, it can be directly downloaded from MARS using the following [script](https://www.atmorep.org).
+The input data in the required structure can be downloaded from the [Jülich datapub](https://datapub.fz-juelich.de/atmorep/era5-data.html) server. Direct link to WebDAV [https://datapub.fz-juelich.de/atmorep/data/](https://datapub.fz-juelich.de/atmorep/data/). Alternatively, it can be directly downloaded from MARS using the following [script](https://www.atmorep.org/code/mars_era5_download.py).
 
 #### Download a subset of files
 
@@ -196,6 +196,6 @@ We perform a 3 hour forecast, since 1 token is 3 hours wide. Another mode is the
 `````
 mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123, 137]}
 `````
-Again, we chose some custom options by using two levels instead of the five ones that are default and were used during pre-training.
+Again, we chose some custom options by using two levels instead of the five ones that are default and were used during pre-training and by using 2021 as the test year (since we downloaded the data).
 
-The generated model output (stored in ``./results/id{wandbid}``) for the ```global_forecast``` example can be post-processed into a spatial map with the [following code](https://www.atmoep.org). The run_id at the top needs to be replaced by the wandb_id of your run, it can be read off from the console output. Results will be stored as ``example_0000{0,1,2}.png``. The code is also an as-simple-as-possible example with many parameters hard-coded, see our analysis code for a proper handling. 
+The generated model output (stored in ``./results/id{wandbid}``) for the ```global_forecast``` example can be post-processed into a spatial map with the [following code](https://www.atmorep.org/code/plot_forecast.py). The run_id at the top needs to be replaced by the wandb_id of your run, it can be read off from the console output. Results will be stored as ``example_0000{0,1,2}.png``. The code is also an as-simple-as-possible example with many parameters hard-coded, see our analysis code for a proper handling. 
