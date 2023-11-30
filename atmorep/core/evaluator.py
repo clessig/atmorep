@@ -84,6 +84,7 @@ class Evaluator( Trainer_BERT) :
     cf.par_size = par_size
     # overwrite old config
     cf.data_dir = str(config.path_data)
+    cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
