@@ -982,7 +982,7 @@ class Trainer_BERT( Trainer_Base) :
     write_BERT( cf.wandb_id, epoch, batch_idx,
                              levels, sources_out,
                              [sources_dates_out, sources_lats_out, sources_lons_out],
-                             targets_out, [targets_dates_out,targets_lons_out,targets_lons_out],
+                             targets_out, [targets_dates_out, targets_lats_out, targets_lons_out],
                              preds_out, ensembles_out )
 
   def log_attention( self, epoch, bidx, log) : 
