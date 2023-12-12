@@ -40,10 +40,10 @@ if __name__ == '__main__':
   # e.g. global_forecast where a start date can be specified
   
   # BERT masked token model
-  # mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [137]}
+  # mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123, 137], 'attention' : False}
   
   # BERT forecast mode
-  # mode, options = 'forecast', {'forecast_num_tokens' : 1} #, 'fields[0][2]' : [123, 137] }
+  # mode, options = 'forecast', {'forecast_num_tokens' : 1} #, 'fields[0][2]' : [123, 137], 'attention' : False }
   
   # BERT forecast with patching to obtain global forecast
   mode, options = 'global_forecast', { 'fields[0][2]' : [123, 137],
