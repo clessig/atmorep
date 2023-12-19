@@ -38,22 +38,26 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   par_rank, par_size = setup_ddp( with_ddp)
 
   cf = Config().load_json( wandb_id)
+
+  cf.with_ddp = with_ddp
   cf.par_rank = par_rank
   cf.par_size = par_size
+  cf.optimizer_zero = False
+  cf.attention = False
   # name has changed but ensure backward compatibility
   if hasattr( cf, 'loader_num_workers') :
     cf.num_loader_workers = cf.loader_num_workers
-  
+
   # any parameter in cf can be overwritten when training is continued, e.g. we can increase the 
   # masking rate 
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-  
+
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
-  # setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
-
+  #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
+  
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
     cf.print()
@@ -233,8 +237,8 @@ if __name__ == '__main__':
 
   train()
 
-  # wandb_id, epoch = '4nvwbetz', -2
-  # epoch_continue = epoch
-  
-  # Trainer = Trainer_BERT
-  # train_continue( wandb_id, epoch, Trainer, epoch_continue)
+#  wandb_id, epoch = '1jh2qvrx', -2 #'4nvwbetz', -2 #392  #'4nvwbetz', -2
+#  epoch_continue = epoch
+#
+#  Trainer = Trainer_BERT
+#  train_continue( wandb_id, epoch, Trainer, epoch_continue)
