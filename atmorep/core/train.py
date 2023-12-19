@@ -54,10 +54,6 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
 
-#  for i in range(len(cf.fields)) :
-#    cf.fields[i][3][0] = 4 #load 12 hours
-#  cf.forecast_num_tokens = 4 #predict 12 hours
-  
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  

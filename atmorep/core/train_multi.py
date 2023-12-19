@@ -46,11 +46,6 @@ def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
   if hasattr( cf, 'loader_num_workers') :
     cf.num_loader_workers = cf.loader_num_workers
 
-#  for i in range(len(cf.fields)) :
-#    cf.fields[i][3][0] = 4 #load 12 hours
-#    print ( cf.fields[i][0], cf.fields[i][3])
-#  cf.forecast_num_tokens = 4 #predict 12 hours
-  
   setup_wandb( cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
 
   if cf.with_wandb and 0 == cf.par_rank :

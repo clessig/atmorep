@@ -33,7 +33,9 @@ if __name__ == '__main__':
   # model_id = '1jh2qvrx'     # multiformer, velocity
   # model_id = 'wqqy94oa'     # multiformer, vorticity
   # model_id = '3cizyl1q'     # 3 field config: u,v,T
-
+  # model_id = '1v4qk0qx'     # pre-trained, 3h forecasting
+  # model_id = '1m79039j'     # pre-trained, 6h forecasting
+  
   # supported modes: test, forecast, fixed_location, temporal_interpolation, global_forecast,
   #                  global_forecast_range
   # options can be used to over-write parameters in config; some modes also have specific options, 
