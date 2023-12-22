@@ -43,7 +43,7 @@ class DynamicFieldLevel() :
                 num_tokens = [3, 9, 9], token_size = [1, 9, 9], 
                 level_type = 'pl', vl = 975, time_sampling = 1,
                 smoothing = 0, file_format = 'grib', corr_type = 'local', 
-                log_transform_data = False ) :
+                log_transform_data = False, partial_load = 0 ) :
     '''
       Data set for single dynamic field at a single vertical level
     '''
@@ -97,7 +97,8 @@ class DynamicFieldLevel() :
 
     self.loader = DataLoader( self.file_path, self.file_shape, data_type,
                               file_format = self.file_format, level_type = self.level_type, 
-                              smoothing = self.smoothing, log_transform=self.log_transform_data)
+                              smoothing = self.smoothing, log_transform=self.log_transform_data,
+                              partial_load=partial_load )
 
   ###################################################
   def load_data( self, years_months, idxs_perm, batch_size = None) :
@@ -135,8 +136,11 @@ class DynamicFieldLevel() :
     for j in range( len(self.data_field) ) :
 
       if self.corr_type == 'local' :
-        coords = [ np.linspace( 0., 180., num=180*4+1, endpoint=True), 
-                   np.linspace( 0., 360., num=360*4, endpoint=False) ]
+        fg = self.file_geo_range
+        ns_lat = int( round((fg[0][1] - fg[0][0]) / self.res + 1))
+        ns_lon = int( round((fg[1][1] - fg[1][0]) / self.res) + (0 if self.is_global else 1) )
+        coords = [ np.linspace( fg[0][0], fg[0][1], num=ns_lat, endpoint=True),
+                   np.linspace( fg[1][0], fg[1][1], num=ns_lon, endpoint=False) ]
       else :
         coords = None
 

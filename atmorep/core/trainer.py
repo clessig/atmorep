@@ -241,7 +241,7 @@ class Trainer_Base() :
     ctr = 0
 
     for batch_idx in range( model.len( NetMode.train)) :
-      
+
       batch_data = self.model.next()
 
       batch_data = self.prepare_batch( batch_data)

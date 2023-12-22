@@ -37,7 +37,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                 rng_seed = None, file_shape = (-1, 721, 1440),
                 level_type = 'ml', time_sampling = 1, 
                 smoothing = 0, file_format = 'grib', month = None, lat_sampling_weighted = True,
-                geo_range = [[-90.,90.], [0.,360.]], 
+                geo_range = [[-90.,90.], [0.,360.]], partial_load = 0,
                 fields_targets = [], pre_batch_targets = None
               ) :
     '''
@@ -56,10 +56,14 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.range_lat    = 90. - np.array( geo_range[0])
     self.range_lon    = np.array( geo_range[1])
     self.geo_range    = geo_range
+    self.partial_load = partial_load
 
     # order North to South
     self.range_lat = np.flip(self.range_lat) if self.range_lat[1] < self.range_lat[0] \
                                              else self.range_lat
+
+    print( f'self.range_lat : {self.range_lat}')
+    print( f'self.range_lon : {self.range_lon}')
 
     # prepare range_lat and range_lon for sampling
     self.is_global = 0 == self.range_lat[0] and self.range_lon[0] == 0.  \
@@ -162,7 +166,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                                                   num_tokens, token_size,
                                                   self.level_type, vlevel, self.time_sampling, 
                                                   smoothing, file_format, corr_type, 
-                                                  log_transform_data ) )
+                                                  log_transform_data, self.partial_load ) )
       
       else :
           assert False
@@ -198,7 +202,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       # random wrap-around (with 1 instead of 128 there is clustering on the first days)
       hours_in_day = int( 24 / self.time_sampling)
       time_slices = 128 * 31 * hours_in_day
-      time_slices_i_ym = hours_in_day * days_in_month( ym[0], ym[1])
+      # time_slices_i_ym = hours_in_day * days_in_month( ym[0], ym[1])
+      time_slices_i_ym = self.datasets[0][0].data_field[i_ym].shape[0] - self.datasets[0][0].num_tokens[0] * self.datasets[0][0].tok_size[0]
       idxs_perm_temp = np.mod(self.rng.permutation(time_slices), time_slices_i_ym)
       # fixed number of time samples independent of length of month
       idxs_perm_temp = idxs_perm_temp[:self.num_t_samples]
@@ -325,12 +330,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       perms_m = np.concatenate( [self.rng.permutation( np.arange( 1, 12+1)) for i in range(16)])
       self.years_months = [ ( years_data[iyear], perms_m[i]) for i,iyear in enumerate(perms)]
 
-    # generate random permutations passed to the loaders for individual files 
-    # to ensure consistent processing
-    self.shuffle()
-
     # perform actual loading of data
  
+    self.idxs_perm = np.array([])
+
     for ds_field in self.datasets :
       for ds in ds_field :
         ds.load_data( self.years_months, self.idxs_perm, batch_size)
@@ -338,6 +341,18 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     for ds_field in self.datasets_targets :
       for ds in ds_field :
         ds.load_data( self.years_months, self.idxs_perm, batch_size)
+
+    # generate random permutations passed to the loaders for individual files
+    # to ensure consistent processing
+    self.shuffle()
+
+    for ds_field in self.datasets :
+      for ds in ds_field :
+        ds.idxs_perm = self.idxs_perm.copy()
+
+    for ds_field in self.datasets_targets :
+      for ds in ds_field :
+        ds.idxs_perm = self.idxs_perm.copy()
 
   ###################################################
   def set_data( self, times_pos, batch_size = None) :

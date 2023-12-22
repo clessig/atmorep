@@ -203,7 +203,8 @@ def train_multi() :
   cf.test_initial = True
   cf.attention = False
 
-  cf.rng_seed = None 
+  cf.rng_seed = None
+  cf.partial_load = 24*20
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True

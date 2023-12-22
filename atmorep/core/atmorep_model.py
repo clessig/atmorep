@@ -222,6 +222,7 @@ class AtmoRepData( torch.nn.Module) :
                                                 month = cf.month,
                                                 time_sampling = cf.time_sampling,
                                                 geo_range = cf.geo_range_sampling,
+                                                partial_load = cf.partial_load,
                                                 fields_targets = cf.fields_targets,
                                                 pre_batch_targets = self.pre_batch_targets )
                                       
@@ -240,6 +241,7 @@ class AtmoRepData( torch.nn.Module) :
                                               time_sampling = cf.time_sampling,
                                               geo_range = cf.geo_range_sampling,
                                               lat_sampling_weighted = cf.lat_sampling_weighted,
+                                              partial_load = cf.partial_load,
                                               fields_targets = cf.fields_targets,
                                               pre_batch_targets = self.pre_batch_targets )
 
@@ -385,9 +387,7 @@ class AtmoRep( torch.nn.Module) :
   ###################################################
   def load_block( self, field_info, block_name, block ) :
 
-    # name = self.__class__.__name__ + '_' + block_name + '_' + field_info[0]
     name = 'AtmoRep_' + block_name + '_' + field_info[0]
-
     b_loaded = torch.load( get_model_filename(name, field_info[1][4][0], field_info[1][4][1]))
 
     # in coupling mode, proj_out of attention heads needs separate treatment: only the pre-trained

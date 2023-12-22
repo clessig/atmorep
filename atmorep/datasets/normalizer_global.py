@@ -23,10 +23,10 @@ class NormalizerGlobal() :
   def __init__(self, field_info, vlevel, file_shape, data_type = 'era5', level_type = 'ml') :
 
     # TODO: use path from config and pathlib.Path()
-    fname_base = '{}/normalization/{}/global_normalization_mean_var_{}_{}{}.bin'
+    fname_base = '{}/{}/normalization/{}/global_normalization_mean_var_{}_{}{}.bin'
 
     fn = field_info[0]
-    corr_fname = fname_base.format( str(config.path_data), fn, fn, level_type, vlevel)
+    corr_fname = fname_base.format( str(config.path_data), data_type, fn, fn, level_type, vlevel)
     self.corr_data = np.fromfile(corr_fname, dtype=np.float32).reshape( (-1, 4))
 
   def normalize( self, year, month, data, coords = None) :

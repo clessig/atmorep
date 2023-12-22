@@ -49,7 +49,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-  
+
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   # setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
@@ -216,6 +216,8 @@ def train() :
   cf.attention = False
 
   cf.rng_seed = None 
+
+  cf.partial_load = 24*20
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True
