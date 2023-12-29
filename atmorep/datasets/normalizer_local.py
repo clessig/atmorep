@@ -24,8 +24,6 @@ class NormalizerLocal() :
 
   def __init__(self, field_info, vlevel, file_shape, data_type = 'era5', level_type = 'ml') :
 
-    print( f'data_type = {data_type}')
-
     if 'cosmo_rea6' == data_type :
       path = ''
       fname_base = './data/{}/normalization/{}/normalization_mean_var_{}_y{}_m{:02d}_{}{}.bin'
@@ -60,9 +58,12 @@ class NormalizerLocal() :
 
   def normalize( self, year, month, data, coords) :
 
-    corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + month ]
+    corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + (month-1) ]
     mean = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='mean').values
     var = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='var').values
+    if (var == 0.).all() :
+      print( f'var == 0 :: ym : {year} / {month}')
+      assert False
 
     if len(data.shape) > 2 :
       for i in range( data.shape[0]) :
@@ -74,7 +75,7 @@ class NormalizerLocal() :
 
   def denormalize( self, year, month, data, coords) :
 
-    corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + month ]
+    corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + (month-1) ]
     mean = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='mean').values
     var = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='var').values
 

@@ -318,7 +318,6 @@ class Trainer_Base() :
 
     # clean memory
     self.optimizer.zero_grad()
-    del batch_data, loss, loss_total, mse_loss_total, grad_loss_total, std_dev_total
       
   ###################################################
   def profile( self):

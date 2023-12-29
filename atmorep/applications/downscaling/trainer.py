@@ -306,12 +306,12 @@ class Trainer_Downscaling( Trainer_Base) :
       fname = fname_base.format( 'preds', fn, s2s(log_preds[fidx][0].shape))
       log_preds[fidx][0].cpu().detach().numpy().tofile( fname)
 
-      fname = fname_base.format( 'target', fn, s2s(self.targets[fidx].shape))
-      self.targets[fidx].cpu().detach().numpy().tofile( fname)
+      # fname = fname_base.format( 'target', fn, s2s(self.targets[fidx].shape))
+      # self.targets[fidx].cpu().detach().numpy().tofile( fname)
 
-      ttinfos = self.targets_token_infos[fidx]
-      fname = fname_base.format( 'target_token_infos', fn, s2s(ttinfos.shape))
-      ttinfos.cpu().detach().numpy().tofile( fname)
+      # ttinfos = self.targets_token_infos[fidx]
+      # fname = fname_base.format( 'target_token_infos', fn, s2s(ttinfos.shape))
+      # ttinfos.cpu().detach().numpy().tofile( fname)
 
       # tmi = self.tokens_masked_idx[fidx]
       # fname = fname_base.format( 'targets_tokens_masked_idx', fn, s2s(tmi.shape))

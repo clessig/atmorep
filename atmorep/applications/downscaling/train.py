@@ -263,10 +263,10 @@ def train() :
   cf.grad_checkpointing = True
   
   cf.lr_start = 0.00001
-  cf.lr_max = 0.000025
+  cf.lr_max = 0.000015  # 0.00002 # 0.0000125 # 0.000015
   cf.lr_min = 0.00001
   cf.lr_decay_rate = 1.1
-  cf.lr_start_epochs = 3
+  cf.lr_start_epochs = 5
   cf.log_test_num_ranks = 1
   cf.num_loader_workers = 8
   cf.optimizer_zero = 0
@@ -276,7 +276,7 @@ def train() :
 
   cf.attention = False
 
-  # cf.test_initial = False
+  cf.test_initial = True
   cf.partial_load = 0
 
   cf.num_epochs = 256

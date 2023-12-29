@@ -482,7 +482,7 @@ class AtmoRep( torch.nn.Module) :
     # encoder
     embeds_layers = [[] for i in self.field_pred_idxs]
     for ib in range(self.cf.encoder_num_layers) :
-      fields_embed, att = self.forward_encoder_block( ib, fields_embed) 
+      fields_embed, att = self.forward_encoder_block( ib, fields_embed)
       [embeds_layers[idx].append( fields_embed[i]) for idx,i in enumerate(self.field_pred_idxs)]
       [atts[i].append( att[i]) for i,_ in enumerate(cf.fields) ]
         
@@ -508,8 +508,9 @@ class AtmoRep( torch.nn.Module) :
   def forward_encoder_block( self, iblock, fields_embed) :
     ''' evaluate one block (attention and mlp) '''
 
-    # double buffer for commutation-invariant result (w.r.t evaluation order of transformers)
+    # double buffer for permutation-invariant result (w.r.t evaluation order of transformers)
     fields_embed_cur, atts = [], []
+
 
     # attention heads
     for ifield in range( len(fields_embed)) :
