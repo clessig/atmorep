@@ -20,6 +20,7 @@ import numpy as np
 import xarray as xr
 from functools import partial
 
+import atmorep.config.config as config
 import atmorep.utils.utils as utils
 from atmorep.config.config import year_base
 from atmorep.utils.utils import tokenize
@@ -30,7 +31,7 @@ from atmorep.datasets.file_io import grib_file_loader, netcdf_file_loader, bin_f
 
 class DataLoader:
     
-    def __init__(self, path, file_shape, data_type = 'reanalysis',
+    def __init__(self, path, file_shape, data_type, field_info,
                        file_format = 'grib', level_type = 'pl',
                        fname_base = '{}/{}/{}/{}{}/{}_{}_y{}_m{}_{}{}',
                        smoothing = 0,
@@ -39,6 +40,7 @@ class DataLoader:
 
       self.path = path
       self.data_type = data_type
+      self.field_info = field_info
       self.file_format = file_format
       self.file_shape = file_shape
       self.fname_base = fname_base
@@ -138,7 +140,12 @@ class DataLoader:
                           token_size = [-1, -1], t_pad = [-1, -1, 1]):
         
       data_field = []
+      extent_t = config.datasets[self.data_type]['extent'][0]
       for year, month in years_months :
+        # skip loading when the year is not available for the dataset
+        if year < extent_t[0] or year > extent_t[1] :
+           data_field.append( [])
+           continue
         data_field.append( self.get_field( year, month, field, level_type, vl, token_size, t_pad))
 
       return data_field
