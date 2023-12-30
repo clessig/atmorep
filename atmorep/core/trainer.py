@@ -155,9 +155,9 @@ class Trainer_Base() :
         self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
                                             weight_decay=cf.weight_decay)
       else :
-        self.optimizer = ZeroRedundancyOptimizer(self.model_ddp.parameters(),
-                                                              optimizer_class=torch.optim.AdamW,
-                                                              lr=cf.lr_start )
+        self.optimizer = ZeroRedundancyOptimizer( self.model_ddp.parameters(),
+                                                  optimizer_class=torch.optim.AdamW,
+                                                  lr=cf.lr_start )
     else :
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                         weight_decay=cf.weight_decay)
@@ -186,6 +186,8 @@ class Trainer_Base() :
         g['lr'] = lr
       self.model.load_data( NetMode.train, batch_size = cf.batch_size_max)
       self.profile()
+
+    self.save( -1)
 
     # training loop
     while True :
@@ -285,7 +287,7 @@ class Trainer_Base() :
               torch.mean( preds[0][1]) ), flush=True)
     
           # save model (use -2 as epoch to indicate latest, stored without epoch specification)
-          # self.save( -2)
+          self.save( -2)
 
         # reset
         loss_total = [[] for i in range(len(cf.losses)) ]
