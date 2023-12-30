@@ -109,7 +109,7 @@ class Config :
         json_str = f.readlines() 
     except IOError :
       # try path used for logging training results and checkpoints
-      fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format( wandb_id, wandb_id))
+      fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format( wandb_id, wandb_id))
       with open(fname, 'r') as f :
         json_str = f.readlines()
 
