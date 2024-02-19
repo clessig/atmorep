@@ -1027,4 +1027,4 @@ class Trainer_BERT( Trainer_Base) :
         
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
     write_attention(cf.wandb_id, epoch,
-                    bidx, levels, attn_out, [attn_dates_out,attn_lons_out,attn_lons_out])
+                    bidx, levels, attn_out, [attn_dates_out,attn_lats_out,attn_lons_out])
