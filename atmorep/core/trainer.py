@@ -1010,6 +1010,8 @@ class Trainer_BERT( Trainer_Base) :
                                           360. + tinfo[0,0,0,-1,5] + lon_d_h*res + 0.001, res*token_size[2]), 360.)
         else :
           lons = np.arange(tinfo[0,0,0,0,5]-lon_d_h*res, tinfo[0,0,0,-1,5]+lon_d_h*res+0.001,res*token_size[2])
+
+        lats = [90.-lat for lat in lats]
         lons = np.remainder( lons, 360.)
 
         dates = np.array([(utils.token_info_to_time(tinfo[0,t,0,0,:3])) for t in range(tinfo.shape[1])], dtype='datetime64[s]')
