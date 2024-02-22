@@ -241,7 +241,6 @@ class Trainer_Base() :
     ctr = 0
 
     for batch_idx in range( model.len( NetMode.train)) :
-      
       batch_data = self.model.next()
 
       batch_data = self.prepare_batch( batch_data)
@@ -501,7 +500,7 @@ class Trainer_Base() :
         batch_data = self.prepare_batch( batch_data)
                           
         preds, atts = self.model( batch_data)
-        
+
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
 
@@ -740,7 +739,6 @@ class Trainer_BERT( Trainer_Base) :
   ###################################################
   def log_validate_forecast( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=forecast.'''
-
     cf = self.cf
     detok = utils.detokenize
 
@@ -783,13 +781,13 @@ class Trainer_BERT( Trainer_Base) :
     # TODO: check that last token matches first one
 
     # process input fields
-    for fidx, field_info in enumerate(cf.fields) : 
+    for fidx, field_info in enumerate(cf.fields) :
       # reshape from tokens to contiguous physical field
       num_levels = len(field_info[2])
       source = detok( sources[fidx].cpu().detach().numpy())
       # recover tokenized shape
-      target = detok( targets[fidx].cpu().detach().numpy().reshape( [ -1, num_levels, 
-                                        forecast_num_tokens, *field_info[3][1:], *field_info[4] ]))
+      target = detok( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
+                                                                      forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
       # TODO: check that geo-coords match to general ones that have been pre-determined
       for bidx in range(token_infos[fidx].shape[0]) :
         for vidx, _ in enumerate(field_info[2]) :
@@ -808,12 +806,13 @@ class Trainer_BERT( Trainer_Base) :
       num_levels = len(field_info[2])
       # predictions
       pred = log_preds[fidx][0].cpu().detach().numpy()
-      pred = detok( pred.reshape( [ -1, num_levels, 
-                                    forecast_num_tokens, *field_info[3][1:], *field_info[4] ]))
+      pred = detok( pred.reshape( [ num_levels, -1, 
+                                    forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
       # ensemble
-      ensemble = log_preds[fidx][2].cpu().detach().numpy()
-      ensemble = detok( ensemble.reshape( [ -1, cf.net_tail_num_nets, num_levels, 
-                                      forecast_num_tokens, *field_info[3][1:], *field_info[4] ]) )
+      ensemble = log_preds[fidx][2].cpu().detach().numpy().swapaxes(0,1)
+      ensemble = detok( ensemble.reshape( [ cf.net_tail_num_nets, num_levels, -1, 
+                                            forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(1, 2)).swapaxes(0,1)
+      
       # denormalize
       for bidx in range(token_infos[fidx].shape[0]) :
         for vidx, vl in enumerate(field_info[2]) :
@@ -839,7 +838,7 @@ class Trainer_BERT( Trainer_Base) :
                                  levels, sources_out, [dates_sources, lats, lons],
                                  targets_out, [dates_targets, lats, lons],
                                  preds_out, ensembles_out )
-
+    
   ###################################################
   def log_validate_BERT( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=BERT.'''
@@ -1011,6 +1010,8 @@ class Trainer_BERT( Trainer_Base) :
                                           360. + tinfo[0,0,0,-1,5] + lon_d_h*res + 0.001, res*token_size[2]), 360.)
         else :
           lons = np.arange(tinfo[0,0,0,0,5]-lon_d_h*res, tinfo[0,0,0,-1,5]+lon_d_h*res+0.001,res*token_size[2])
+
+        lats = [90.-lat for lat in lats]
         lons = np.remainder( lons, 360.)
 
         dates = np.array([(utils.token_info_to_time(tinfo[0,t,0,0,:3])) for t in range(tinfo.shape[1])], dtype='datetime64[s]')
@@ -1028,4 +1029,4 @@ class Trainer_BERT( Trainer_Base) :
         
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
     write_attention(cf.wandb_id, epoch,
-                    bidx, levels, attn_out, [attn_dates_out,attn_lons_out,attn_lons_out])
+                    bidx, levels, attn_out, [attn_dates_out,attn_lats_out,attn_lons_out])
