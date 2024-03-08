@@ -95,7 +95,7 @@ class DynamicFieldLevel() :
     else :
       self.normalizer = NormalizerLocal( field_info, vl, self.file_shape, data_type)
 
-    self.loader = DataLoader( self.file_path, self.file_shape, data_type,
+    self.loader = DataLoader( self.file_path, self.file_shape, data_type, field_info,
                               file_format = self.file_format, level_type = self.level_type, 
                               smoothing = self.smoothing, log_transform=self.log_transform_data)
 

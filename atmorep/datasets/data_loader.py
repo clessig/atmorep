@@ -20,6 +20,7 @@ import numpy as np
 import xarray as xr
 from functools import partial
 
+import atmorep.config.config as config
 import atmorep.utils.utils as utils
 from atmorep.config.config import year_base
 from atmorep.utils.utils import tokenize
@@ -30,19 +31,22 @@ from atmorep.datasets.file_io import grib_file_loader, netcdf_file_loader, bin_f
 
 class DataLoader:
     
-    def __init__(self, path, file_shape, data_type = 'reanalysis',
+    def __init__(self, path, file_shape, data_type, field_info,
                        file_format = 'grib', level_type = 'pl',
-                       fname_base = '{}/{}/{}{}/{}_{}_y{}_m{}_{}{}',
+                       fname_base = '{}/{}/{}/{}{}/{}_{}_y{}_m{}_{}{}',
                        smoothing = 0,
-                       log_transform = False): 
+                       log_transform = False,
+                       partial_load = 0):
 
       self.path = path
       self.data_type = data_type
+      self.field_info = field_info
       self.file_format = file_format
       self.file_shape = file_shape
       self.fname_base = fname_base
       self.smoothing = smoothing
       self.log_transform = log_transform
+      self.partial_load = partial_load
 
       if 'grib' == file_format :
         self.file_ext = '.grib'
@@ -58,16 +62,11 @@ class DataLoader:
         self.file_loader = netcdf_file_loader
       else :
         raise ValueError('Unsupported file format.')
-      
+
       self.fname_base = fname_base + self.file_ext
 
-      self.grib_index = { 'vorticity' : 'vo', 'divergence' : 'd', 'geopotential' : 'z',
-                          'orography' : 'z', 'temperature': 't', 'specific_humidity' : 'q',
-                          'mean_top_net_long_wave_radiation_flux' : 'mtnlwrf',
-                          'velocity_u' : 'u', 'velocity_v': 'v', 'velocity_z' : 'w',
-                          'total_precip' : 'tp', 'radar_precip' : 'yw_hourly',
-                          't2m' : 't_2m', 'u_10m' : 'u_10m', 'v_10m' : 'v_10m',  }
-
+      self.grib_index = config.grib_index
+      
     def get_field( self, year, month, field, level_type, vl, 
                    token_size = [-1, -1], t_pad = [-1, -1, 1]):
         
@@ -75,8 +74,7 @@ class DataLoader:
       data_ym = torch.zeros( (0, self.file_shape[1], self.file_shape[2]))
 
       # pre-fill fixed values
-      # fname_base = self.fname_base.format( self.path, self.data_type, field, level_type, vl, 
-      fname_base = self.fname_base.format( self.path, field, level_type, vl, 
+      fname_base = self.fname_base.format( self.path, self.data_type, field, level_type, vl,
                                            self.data_type, field, {},{},{},{})
 
       # padding pre
@@ -98,7 +96,7 @@ class DataLoader:
       # data
       fname = fname_base.format( year, str(month).zfill(2), level_type, vl)
       days_month = utils.days_in_month( year, month)
-      x = self.file_loader(fname, self.grib_index[field], [0, 0, t_srate], days_month)
+      x = self.file_loader(fname,self.grib_index[field], [0, self.partial_load, t_srate],days_month)
 
       data_ym = torch.cat((data_ym,x),0)
 
@@ -137,7 +135,12 @@ class DataLoader:
                           token_size = [-1, -1], t_pad = [-1, -1, 1]):
         
       data_field = []
+      extent_t = config.datasets[self.data_type]['extent'][0]
       for year, month in years_months :
+        # skip loading when the year is not available for the dataset
+        if year < extent_t[0] or year > extent_t[1] :
+           data_field.append( [])
+           continue
         data_field.append( self.get_field( year, month, field, level_type, vl, token_size, t_pad))
 
       return data_field
