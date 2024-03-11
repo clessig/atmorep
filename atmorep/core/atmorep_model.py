@@ -35,6 +35,7 @@ from atmorep.transformer.transformer_encoder import TransformerEncoder
 from atmorep.transformer.transformer_decoder import TransformerDecoder
 from atmorep.transformer.tail_ensemble import TailEnsemble
 
+
 ####################################################################################################
 class AtmoRepData( torch.nn.Module) :
 
@@ -76,8 +77,6 @@ class AtmoRepData( torch.nn.Module) :
   ###################################################
   def _load_data( self, dataset, batch_size, num_loader_workers) :
     '''Private implementation for load'''
-
-    dataset.load_data( batch_size)
 
     loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': num_loader_workers, 'pin_memory': True}
@@ -208,40 +207,14 @@ class AtmoRepData( torch.nn.Module) :
     self.pre_batch_targets = pre_batch_targets
 
     cf = self.net.cf
-    self.dataset_train = MultifieldDataSampler( cf.data_dir, cf.years_train, cf.fields,
-                                                batch_size = cf.batch_size_start,
-                                                num_t_samples = cf.num_t_samples,
-                                                num_patches_per_t = cf.num_patches_per_t_train,
-                                                num_load = cf.num_files_train,
-                                                pre_batch = self.pre_batch,
-                                                rng_seed = self.rng_seed,
-                                                file_shape = cf.file_shape,
-                                                smoothing = cf.data_smoothing,
-                                                level_type = cf.level_type,
-                                                file_format = cf.file_format,
-                                                month = cf.month,
-                                                time_sampling = cf.time_sampling,
-                                                geo_range = cf.geo_range_sampling,
-                                                fields_targets = cf.fields_targets,
-                                                pre_batch_targets = self.pre_batch_targets )
+    self.dataset_train = MultifieldDataSampler( cf.fields, cf.levels, cf.years_train,
+                                                cf.batch_size_start,
+                                                pre_batch, cf.n_size, cf.num_samples_per_epoch )
                                       
-    self.dataset_test = MultifieldDataSampler( cf.data_dir, cf.years_test, cf.fields,
-                                              batch_size = cf.batch_size_test,
-                                              num_t_samples = cf.num_t_samples,
-                                              num_patches_per_t = cf.num_patches_per_t_test,
-                                              num_load = cf.num_files_test,
-                                              pre_batch = self.pre_batch,
-                                              rng_seed = self.rng_seed,
-                                              file_shape = cf.file_shape,
-                                              smoothing = cf.data_smoothing,
-                                              level_type = cf.level_type,
-                                              file_format = cf.file_format,
-                                              month = cf.month,
-                                              time_sampling = cf.time_sampling,
-                                              geo_range = cf.geo_range_sampling,
-                                              lat_sampling_weighted = cf.lat_sampling_weighted,
-                                              fields_targets = cf.fields_targets,
-                                              pre_batch_targets = self.pre_batch_targets )
+    self.dataset_test = MultifieldDataSampler( cf.fields, cf.levels, cf.years_test,
+                                               cf.batch_size_start,
+                                               pre_batch, cf.n_size, cf.num_samples_validate,
+                                               with_source_idxs = True )
 
     return self
 
@@ -261,7 +234,6 @@ class AtmoRep( torch.nn.Module) :
 
     cf = self.cf
     self.devices = devices
-    size_token_info = 6
     self.fields_coupling_idx = []
 
     self.fields_index = {}

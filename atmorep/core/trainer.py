@@ -162,6 +162,8 @@ class Trainer_Base() :
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                         weight_decay=cf.weight_decay)
     
+    self.grad_scaler = torch.cuda.amp.GradScaler(enabled=cf.with_mixed_precision)
+
     if 0 == cf.par_rank :
       # print( self.model.net)
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
@@ -240,17 +242,21 @@ class Trainer_Base() :
     grad_loss_total = []
     ctr = 0
 
+    self.optimizer.zero_grad()
+    
     for batch_idx in range( model.len( NetMode.train)) :
       batch_data = self.model.next()
 
-      batch_data = self.prepare_batch( batch_data)
-      preds, _ = self.model_ddp( batch_data)
+      with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
+        batch_data = self.prepare_batch( batch_data)
+        preds, _ = self.model_ddp( batch_data)
+        loss, mse_loss, losses = self.loss( preds, batch_idx)
 
-      loss, mse_loss, losses = self.loss( preds, batch_idx)
+      self.grad_scaler.scale(loss).backward()
+      self.grad_scaler.step(self.optimizer)
+      self.grad_scaler.update()
 
       self.optimizer.zero_grad()
-      loss.backward()
-      self.optimizer.step()
 
       [loss_total[idx].append( losses[key]) for idx, key in enumerate(losses)]
       mse_loss_total.append( mse_loss.detach().cpu() )
@@ -371,21 +377,11 @@ class Trainer_Base() :
     test_len = 0
 
     self.mode_test = True
-
-    # run in training mode
-    offset = 0
-    if -1 == epoch and 0 == cf.par_rank :
-      if 1 == cf.num_accs_per_task :  # bug in torchinfo; fixed in v1.8.0
-        offset += 1
-        print( 'Network size:')
-        batch_data = self.model.next()
-        batch_data = self.prepare_batch( batch_data)
-        torchinfo.summary( self.model, input_data=[batch_data])
       
     # run test set evaluation
 
     with torch.no_grad() : 
-      for it in range( self.model.len( NetMode.test) - offset) :
+      for it in range( self.model.len( NetMode.test)) :
 
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
@@ -393,19 +389,18 @@ class Trainer_Base() :
           (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
           # targets
           if len(batch_data[1]) > 0 :
-            if type(batch_data[1][0][0]) is list :
-              targets = [batch_data[1][i][0][0] for i in range( len(batch_data[1]))]
-            else :
-              targets = batch_data[1][0]
+            targets = []
+            for target_field in batch_data[1] :
+              targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
           # store on cpu
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [ti.detach().clone().cpu() for ti in token_infos],
                           [target.detach().clone().cpu() for target in targets ],
-                            tmis, tmis_list ) 
+                            tmis, tmis_list )
 
-        batch_data = self.prepare_batch( batch_data)
-
-        preds, atts = self.model( batch_data)
+        with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
+          batch_data = self.prepare_batch( batch_data)
+          preds, atts = self.model( batch_data)
         
         loss = torch.tensor( 0.)
         ifield = 0
@@ -492,6 +487,7 @@ class Trainer_Base() :
             for target_field in batch_data[1] :
               targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
           # store on cpu
+          # TODO: is this still all needed with self.sources_idx
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                                 [ti.detach().clone().cpu() for ti in token_infos],
                                 [target.detach().clone().cpu() for target in targets ],
@@ -624,6 +620,7 @@ class Trainer_BERT( Trainer_Base) :
     # unpack loader output
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx,fields_tokens_masked_idx_list) = xin[0]
+    self.sources_idxs = xin[2]
 
     # network input
     batch_data = [ ( sources[i].to( devs[ cf.fields[i][1][3] ], non_blocking=True), 
@@ -641,10 +638,12 @@ class Trainer_BERT( Trainer_Base) :
       self.targets.append( targets[ifield].to( devs[cf.fields[ifield][1][3]], non_blocking=True ))
 
     # idxs of masked tokens
-    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
-    for i,tmi in enumerate(fields_tokens_masked_idx) :
-      tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
-    self.tokens_masked_idx = tmi_out
+    # tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
+    # for i,tmi in enumerate(fields_tokens_masked_idx) :
+    #   tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
+    # self.tokens_masked_idx = tmi_out
+    self.tokens_masked_idx = [tmi.to(devs[cf.fields[i][1][3]], non_blocking=True) 
+                                              for i,tmi in enumerate(fields_tokens_masked_idx)]
 
     # idxs of masked tokens per batch entry
     self.fields_tokens_masked_idx_list = fields_tokens_masked_idx_list
@@ -674,51 +673,11 @@ class Trainer_BERT( Trainer_Base) :
     
     # select "fixed" masked tokens for loss computation
     
-    # recover vertical level dimension
-    num_tokens = self.num_tokens[field_idx]
-    num_vlevels = len(self.cf.fields[field_idx][2])
     # flatten token dimensions: remove space-time separation
     pred = torch.flatten( pred, 2, 3).to( dev)
-    
     # extract masked token level by level
-    pred_masked = []
-    for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
-
-      # select masked tokens, flattened along batch dimension for easier indexing and processing
-      pred_l = torch.flatten( pred[:,lidx], 0, 1)
-      pred_masked_l = pred_l[ target_idx[lidx] ]
-      target_idx_l = target_idx[lidx]
-
-      # add positional encoding of masked tokens
-
-      # # TODO: do we need the positional encoding?
-
-      # compute space time indices of all tokens
-      target_idxs_v = level * torch.ones( target_idx_l.shape[0], device=dev)
-      num_tokens_space = num_tokens[1] * num_tokens[2]
-      # remove offset introduced by linearization
-      target_idx_l = torch.remainder( target_idx_l, np.prod(num_tokens))
-      target_idxs_t = (target_idx_l / num_tokens_space).int()
-      temp = torch.remainder( target_idx_l, num_tokens_space)
-      target_idxs_x = (temp / num_tokens[1]).int()
-      target_idxs_y = torch.remainder( temp, num_tokens[2])
-
-      # apply harmonic positional encoding
-      dim_embed = pred.shape[-1]
-      pe = torch.zeros( pred_masked_l.shape[0], dim_embed, device=dev)
-      xs = (2. * np.pi / dim_embed) * torch.arange( 0, dim_embed, 2, device=dev) 
-      pe[:, 0::2] = 0.5 * torch.sin( torch.outer( 8 * target_idxs_x, xs) ) \
-                      + torch.sin( torch.outer( target_idxs_t, xs) )
-      pe[:, 1::2] = 0.5 * torch.cos( torch.outer( 8 * target_idxs_y, xs) ) \
-                      + torch.cos( torch.outer( target_idxs_v, xs) )
-
-      # TODO: with or without final positional encoding?
-      # pred_masked.append( pred_masked_l + pe)
-      pred_masked.append( pred_masked_l)
-
-    # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
-    # as ordering of dimensions
-    pred_masked = torch.cat( pred_masked, 0)
+    pred_masked = torch.flatten( pred, 0, 2)
+    pred_masked = pred_masked[ target_idx ]
 
     return pred_masked
 
@@ -739,6 +698,9 @@ class Trainer_BERT( Trainer_Base) :
   ###################################################
   def log_validate_forecast( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=forecast.'''
+    
+    # TODO, TODO: use sources_idx
+
     cf = self.cf
     detok = utils.detokenize
 

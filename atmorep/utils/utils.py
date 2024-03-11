@@ -293,9 +293,14 @@ def tokenize( data, token_size = [-1,-1,-1]) :
     tok_tot_x = int( data_shape[-2] / token_size[1])
     tok_tot_y = int( data_shape[-1] / token_size[2])
 
-    if 4 == len(data_shape) :
-      t2 = torch.reshape( data, (-1, tok_tot_t, token_size[0], tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
-      data_tokenized = torch.transpose(torch.transpose( torch.transpose( t2, 5, 4), 3, 2), 4, 3)
+    if 5 == len(data_shape) :
+      t2 = torch.reshape( data, (data.shape[0], data.shape[1], tok_tot_t, token_size[0], 
+                                tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
+      data_tokenized = t2.permute( [0, 1, 2, 4, 6, 3, 5, 7])
+    elif 4 == len(data_shape) :
+      t2 = torch.reshape( data, (-1, tok_tot_t, token_size[0], 
+                                tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
+      data_tokenized = t2.permute( [0, 1, 3, 5, 4, 3, 6])
     elif 3 == len(data_shape) :
       t2 = torch.reshape( data, (tok_tot_t, token_size[0], tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
       data_tokenized = torch.transpose(torch.transpose( torch.transpose( t2, 4, 3), 2, 1), 3, 2)

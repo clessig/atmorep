@@ -22,7 +22,7 @@ import code
 from atmorep.utils.utils import tokenize
 
 ####################################################################################################
-def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data) :
+def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data, fields_infos) :
   
   fields_tokens_masked_idx = [[] for _ in fields_data]
   fields_tokens_masked_idx_list = [[] for _ in fields_data]
@@ -59,61 +59,65 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data)
     size_lat = int(rngs[0].integers( 2, fields[0][3][1]+1, 1)[0] / 2.) * 2
     size_lon = int(rngs[0].integers( 2, fields[0][3][2]+1, 1)[0] / 2.) * 2
 
-  rng_idx = 1
-  for ifield, data_field in enumerate(fields_data) :
-    for ilevel, (field_data, token_info) in enumerate(data_field) :
+  # swap fields (idx=2) in first position for iteration and time (idx=1) before spatial coordinates
+  # fields_data = fields_data.permute( [3, 0, 2, 1, 4, 5])
+  fields_data = fields_data.permute( [2, 0, 3, 1, 4, 5])
+  fields_data_out, fields_infos_out, fields_targets = [], [], []
+  fields_tokens_masked_idx, fields_tokens_masked_idx_list = [], []
 
-      tok_size = fields[ifield][4]
-      field_data = tokenize( field_data, tok_size )
-      field_data_shape = field_data.shape
+  rng_idx = 0
+  for ifield, field_data in enumerate(fields_data) :
+
+    tok_size = fields[ifield][4]
+    field_data = tokenize( field_data, tok_size )
+
+    # # cut neighborhood for current batch
+    # if cf.BERT_window :
+    #   # adjust size based on token size so that one has a fixed size window in physical space
+    #   cur_size_t = int(size_t * fields[ifield][3][0] / fields[0][3][0])
+    #   cur_size_lat = int(size_lat * fields[ifield][3][1] / fields[0][3][1])
+    #   cur_size_lon = int(size_lon * fields[ifield][3][2] / fields[0][3][2])
+    #   # define indices
+    #   idx_t_s = field_data.shape[1] - cur_size_t
+    #   idx_lat_s = field_data.shape[2] - cur_size_lat
+    #   idx_lon_s = field_data.shape[3] - cur_size_lon
+    #   # cut
+    #   field_data = field_data[ :, idx_t_s:, idx_lat_s:,  idx_lon_s:]
+    #   field_data = field_data.contiguous()
+    #   # for token info first recover space-time shape
+    #   token_info = token_info.reshape( list(field_data_shape[0:4]) + [token_info.shape[-1]]) 
+    #   token_info = token_info[ :, idx_t_s:, idx_lat_s:,  idx_lon_s:]
+    #   token_info = torch.flatten( token_info, 1, -2)
+    #   token_info = token_info.contiguous()
+    
+    # no masking for static fields or if masking rate = 0
+    if fields[ifield][1][0] > 0 and fields[ifield][5][0] > 0. :
+
+      ret = bert_f( cf, ifield, field_data, rngs[rng_idx])
+      (field_data, target, tokens_masked_idx, tokens_masked_idx_list) = ret
       
-      # cut neighborhood for current batch
-      if cf.BERT_window :
-        # adjust size based on token size so that one has a fixed size window in physical space
-        cur_size_t = int(size_t * fields[ifield][3][0] / fields[0][3][0])
-        cur_size_lat = int(size_lat * fields[ifield][3][1] / fields[0][3][1])
-        cur_size_lon = int(size_lon * fields[ifield][3][2] / fields[0][3][2])
-        # define indices
-        idx_t_s = field_data.shape[1] - cur_size_t
-        idx_lat_s = field_data.shape[2] - cur_size_lat
-        idx_lon_s = field_data.shape[3] - cur_size_lon
-        # cut
-        field_data = field_data[ :, idx_t_s:, idx_lat_s:,  idx_lon_s:]
-        field_data = field_data.contiguous()
-        # for token info first recover space-time shape
-        token_info = token_info.reshape( list(field_data_shape[0:4]) + [token_info.shape[-1]]) 
-        token_info = token_info[ :, idx_t_s:, idx_lat_s:,  idx_lon_s:]
-        token_info = torch.flatten( token_info, 1, -2)
-        token_info = token_info.contiguous()
-      
-      # no masking for static fields or if masking rate = 0
-      if fields[ifield][1][0] > 0 and fields[ifield][5][0] > 0. :
+      if target is not None :
+        fields_targets.append( target)
+      fields_tokens_masked_idx.append( tokens_masked_idx)
+      fields_tokens_masked_idx_list.append( tokens_masked_idx_list)
 
-        ret = bert_f( cf, ifield, field_data, token_info, rngs[rng_idx])
-        (field_data, token_info, target, tokens_masked_idx, tokens_masked_idx_list) = ret
-        
-        if target != None :
-          fields_targets[ifield].append( target)
-        fields_tokens_masked_idx[ifield].append( tokens_masked_idx)
-        fields_tokens_masked_idx_list[ifield].append( tokens_masked_idx_list)
+    rng_idx += 1
 
-      rng_idx += 1
+    fields_data_out.append( field_data )
+    fields_infos_out.append( torch.zeros( (*field_data.shape[:5], 8)) )
 
-      sources[ifield].append( field_data.unsqueeze(1) )
-      token_infos[ifield].append( token_info )
+    # merge 
+    # sources[ifield] = torch.cat( sources[ifield], 1)
+    # token_infos[ifield] = torch.cat( token_infos[ifield], 1)
+    # # merge along vertical level, for target we have level, batch, ... ordering 
+    # fields_targets[ifield] = torch.cat( fields_targets[ifield],0) \
+    #                             if len(fields_targets[ifield]) > 0 else fields_targets[ifield]
 
-    # merge along vertical level
-    sources[ifield] = torch.cat( sources[ifield], 1)
-    token_infos[ifield] = torch.cat( token_infos[ifield], 1)
-    # merge along vertical level, for target we have level, batch, ... ordering 
-    fields_targets[ifield] = torch.cat( fields_targets[ifield],0) \
-                                if len(fields_targets[ifield]) > 0 else fields_targets[ifield]
-
-  return (sources, token_infos, fields_targets, fields_tokens_masked_idx,
+  return (fields_data_out, fields_infos_out, fields_targets, fields_tokens_masked_idx,
                                                 fields_tokens_masked_idx_list)
 
 ####################################################################################################
-def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
+def prepare_batch_BERT_field( cf, ifield, source, rng) :
 
   # shortcuts
   mr = partial( torch.nn.functional.interpolate, mode='trilinear')
@@ -125,7 +129,7 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
 
   # collapse token dimensions 
   source_shape0 = source.shape
-  source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
+  source = torch.flatten( torch.flatten( source, 1, 4), 2, 4)
 
   # select random token in the selected space-time cube to be masked/deleted
   BERT_frac = cf.fields[ifield][5][0]
@@ -192,16 +196,11 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
     # unsqueeze(usq()) is required since channel dimension is expected
     temp = mr( mr( usq( source[ idx[idx_mr_cond] ].reshape( (-1,ts[0],ts[1],ts[2])), 1), mrs), ts) 
     source[ idx[idx_mr_cond] ] = sq( fl( temp, -3, -1))
-    # adjust resolution parameter in token_info
-    token_info_shape = token_info.shape
-    token_info = token_info.flatten( 0, 1)
-    token_info[ idx[idx_mr_cond] ][-1] *= (mrs[1] + mrs[2]) / 2.  #TODO: anisotropic resolution
-    token_info = token_info.reshape( token_info_shape)
 
   # recover batch dimension which was flattend for easier indexing and also token dimensions
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
   
-  return (source, token_info, target, tokens_masked_idx, tokens_masked_idx_list)
+  return (source, target, tokens_masked_idx, tokens_masked_idx_list)
 
 ####################################################################################################
 def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :

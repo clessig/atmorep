@@ -136,8 +136,16 @@ def train() :
   #                                 [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
   # cf.fields_prediction = [ ['geopotential', 1.] ]
 
-  
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0], 
+                                [ 114, 123, 137 ], 
+                                [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
+                [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+                                [ 114, 123, 137 ], 
+                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  cf.fields_prediction = [ [cf.fields[0][0], 0.5],  [cf.fields[1][0], 0.5] ]
+
 
   cf.fields_targets = []
   cf.years_train = [2021] # list( range( 1980, 2018))
@@ -228,6 +236,19 @@ def train() :
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
     cf.print()
+
+  cf.levels = [114, 123, 137]
+  cf.with_mixed_precision = True
+  # cf.n_size = [36, 1*9*6, 1.*9*12]
+  # in steps x lat_degrees x lon_degrees
+  # cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  cf.num_samples_per_epoch = 1024
+  cf.num_samples_validate = 128
+  cf.num_loader_workers = 8
+
+  cf.years_train = [2021] # list( range( 1980, 2018))
+  cf.years_test = [2021]  #[2018] 
 
   trainer = Trainer_BERT( cf, device).create()
   trainer.run()
