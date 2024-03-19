@@ -163,10 +163,10 @@ class AtmoRepData( torch.nn.Module) :
   def mode( self, mode : NetMode) :
     
     if mode == NetMode.train :
-      self.data_loader_iter = iter(self.data_loader_train)
+      self.data_loader_iter = iter(self.dataset_train) #iter(self.data_loader_train)
       self.net.train()
     elif mode == NetMode.test :
-      self.data_loader_iter = iter(self.data_loader_test)
+      self.data_loader_iter = iter(self.dataset_test) #iter(self.data_loader_test)
       self.net.eval()
     else :
       assert False

@@ -194,7 +194,6 @@ def train_multi() :
   cf.lat_sampling_weighted = False
   # BERT
   cf.BERT_strategy = 'BERT'      # 'BERT', 'forecast', 'identity', 'totalmask'
-  cf.BERT_window = False          # sample sub-region 
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution

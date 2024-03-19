@@ -143,7 +143,10 @@ def train() :
                                 [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
                 [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
                                 [ 114, 123, 137 ], 
-                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ], #]
+                [ 'total_precip', [ 1, 1536, [ ], 3 ],
+                                  [ 0 ], 
+                                  [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
   cf.fields_prediction = [ [cf.fields[0][0], 0.5],  [cf.fields[1][0], 0.5] ]
 
 
@@ -169,7 +172,7 @@ def train() :
   cf.batch_size_max = 32
   cf.batch_size_delta = 8
   cf.num_epochs = 128
-  cf.num_loader_workers = 8
+  # cf.num_loader_workers = 1#8
   # additional infos
   cf.size_token_info = 8
   cf.size_token_info_net = 16
@@ -216,7 +219,6 @@ def train() :
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation', 'identity'
   cf.BERT_strategy = 'BERT'     
-  cf.BERT_window = False          # sample sub-region 
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution
@@ -245,7 +247,7 @@ def train() :
   cf.n_size = [36, 0.25*9*6, 0.25*9*12]
   cf.num_samples_per_epoch = 1024
   cf.num_samples_validate = 128
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 1 #8
 
   cf.years_train = [2021] # list( range( 1980, 2018))
   cf.years_test = [2021]  #[2018] 
