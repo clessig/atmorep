@@ -66,7 +66,7 @@ class NormalizerLocal() :
         data[i] = (data[i] - mean) / var
     else :
       data = (data - mean) / var
-    print(data.mean(), data.std())
+    #print(data.mean(), data.std())
     return data
 
   def denormalize( self, year, month, data, coords) :

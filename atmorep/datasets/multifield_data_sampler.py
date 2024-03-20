@@ -184,12 +184,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         data_t += [data_lvl]
       
       sources, sources_infos, source_idxs, token_infos = [], [], [], []
-      lat_ran = []
-      lon_ran = []
+      lat_ran, lon_ran = [], []
+    
       for sidx in range(self.batch_size) :
 
         idx = self.idxs_perm[bidx*self.batch_size+sidx]
-
         # slight assymetry with offset by res/2 is required to match desired token count
         lat_ran += [np.where(np.logical_and(lats > idx[0]-ns_2[1]-res[0]/2.,lats < idx[0]+ns_2[1]))[0]]
         # handle periodicity of lon
@@ -201,7 +200,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           lon_ran += [np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)]
         else : 
           lon_ran += [np.where(np.logical_and( lons > il, lons < ir))[0]]
-        
+
         if self.with_source_idxs :
           source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
        
@@ -215,7 +214,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         for ilevel, vl in enumerate(field_info[2]): #self.levels :
          
           nf = self.normalizers[ifield][ilevel].normalize
-          source_data, info_data, tok_info = [], [], []
+          source_data, tok_info = [], []
          
           for sidx in range(self.batch_size) :
             #normalize and tokenize           
@@ -223,33 +222,39 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                                         lat_ran[sidx], -2), lon_ran[sidx], -1), (lat_ran[sidx], lon_ran[sidx]))), tok_size ) ]
           
             dates = self.ds['time'][ idxs_t ].astype(datetime)
-            dates = [(d.year, d.timetuple().tm_yday, d.hour) for d in dates]
-            lats = self.lats[lat_ran[sidx]]
-            lons = self.lons[lon_ran[sidx]]
-            info_data += [[[[[ year, day, hour, vl, 
-                              lat, lon, vl, self.res[0], self.res[1]] for lon in lons] for lat in lats] for (year, day, hour) in dates]] #zip(years, days, hours)]]
-            #store only center of the token: also in time                  
+             #store only center of the token: 
+             #in time we store the *last* datetime in the token, not the center
+            dates = [(d.year, d.timetuple().tm_yday, d.hour) for d in dates][tok_size[0]-1::tok_size[0]]
+            lats_sidx = self.lats[lat_ran[sidx]][int(tok_size[1]/2)::tok_size[1]]
+            lons_sidx = self.lons[lon_ran[sidx]][int(tok_size[2]/2)::tok_size[2]]
+            # info_data += [[[[[ year, day, hour, vl, 
+            #                   lat, lon, vl, self.res[0]] for lon in lons] for lat in lats] for (year, day, hour) in dates]] #zip(years, days, hours)]]
+                       
             tok_info += [[[[[ year, day, hour, vl, 
-                              lat, lon, vl, self.res[0], self.res[1]] for lon in lons[int(tok_size[2]/2)::tok_size[2]]] for lat in lats[int(tok_size[1]/2)::tok_size[1]]] for (year, day, hour) in dates[int(tok_size[0]/2)::tok_size[0]]]] 
+                              lat, lon, vl, self.res[0]] for lon in lons_sidx] for lat in lats_sidx] for (year, day, hour) in dates]] 
 
           #level
           source_lvl += [torch.stack(source_data, dim = 0)]
-          source_info_lvl += [info_data]
+          # source_info_lvl += [info_data]
           tok_info_lvl += [tok_info]
 
         #field
         sources += [torch.stack(source_lvl, dim = 0)] #torch.Size([3, 16, 12, 6, 12, 3, 9, 9])
-        sources_infos += [torch.Tensor(np.array(source_info_lvl))] # torch.Size([3, 16, 36, 54, 108, 9])
-        #token_infos += [torch.Tensor(np.array(tok_info_lvl))] # torch.Size([3, 16, 12, 6, 12, 9])
-        token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 9)] #torch.Size([3, 16, 864, 9])
+        # sources_infos += [torch.Tensor(np.array(source_info_lvl))] # torch.Size([3, 16, 36, 54, 108, 8])
+        #token_infos += [torch.Tensor(np.array(tok_info_lvl))] # torch.Size([3, 16, 12, 6, 12, 8])
+        # extract batch info
+        sources_infos += [ [ self.ds['time'][ idxs_t ], self.levels, 
+                             self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
+        token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 8)] #torch.Size([3, 16, 864, 8])
       
       sources = self.pre_batch(sources,  
                                 token_infos )   
 
       # TODO: implement targets
       target, target_info = None, None
-
-      yield ( sources, (target, target_info), source_idxs )
+      #this already goes back to trainer.py. 
+      #source_info needed to remove log_validate in trainer.py
+      yield ( sources, (target, target_info), source_idxs, sources_infos)
 
   ###################################################
   def __len__(self):

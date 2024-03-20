@@ -25,7 +25,7 @@ import os
 import datetime
 from typing import TypeVar
 import functools
-
+import pdb
 import pandas as pd
 
 import wandb
@@ -172,6 +172,7 @@ class Trainer_Base() :
 
     # test at the beginning as reference
     self.model.load_data( NetMode.test, batch_size=cf.batch_size_test)
+  
     if cf.test_initial :
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
       test_loss = np.array( [cur_test_loss])
@@ -179,7 +180,7 @@ class Trainer_Base() :
       # generic value based on data normalization
       test_loss = np.array( [1.0]) 
     epoch += 1
-
+    print("after test_loss")
     batch_size = cf.batch_size_start - cf.batch_size_delta
 
     if cf.profile :
@@ -621,6 +622,7 @@ class Trainer_BERT( Trainer_Base) :
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx,fields_tokens_masked_idx_list) = xin[0]
     self.sources_idxs = xin[2]
+    self.sources_info = xin[3]
 
     # network input
     batch_data = [ ( sources[i].to( devs[ cf.fields[i][1][3] ], non_blocking=True), 
@@ -642,7 +644,6 @@ class Trainer_BERT( Trainer_Base) :
     for i,tmi in enumerate(fields_tokens_masked_idx) :
       tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
     self.tokens_masked_idx = tmi_out
-    #breakpoint()
     # self.tokens_masked_idx = [tmi.to(devs[cf.fields[i][1][3]], non_blocking=True) 
     #                                           for i,tmi in enumerate(fields_tokens_masked_idx)]
 
@@ -677,8 +678,21 @@ class Trainer_BERT( Trainer_Base) :
     # flatten token dimensions: remove space-time separation
     pred = torch.flatten( pred, 2, 3).to( dev)
     # extract masked token level by level
-    pred_masked = torch.flatten( pred, 0, 2)
-    pred_masked = pred_masked[ target_idx ]
+    #pred_masked = torch.flatten( pred, 0, 2)
+    # extract masked token level by level
+    pred_masked = []
+    for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
+      # select masked tokens, flattened along batch dimension for easier indexing and processing
+      pred_l = torch.flatten( pred[:,lidx], 0, 1)
+      pred_masked_l = pred_l[ target_idx[lidx] ]
+      #target_idx_l = target_idx[lidx]
+      pred_masked.append( pred_masked_l)
+    
+    # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
+    # as ordering of dimensions
+    pred_masked = torch.cat( pred_masked, 0)
+
+    #pred_masked = pred_masked[ target_idx ]
 
     return pred_masked
 
