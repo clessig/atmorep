@@ -638,12 +638,13 @@ class Trainer_BERT( Trainer_Base) :
       self.targets.append( targets[ifield].to( devs[cf.fields[ifield][1][3]], non_blocking=True ))
 
     # idxs of masked tokens
-    # tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
-    # for i,tmi in enumerate(fields_tokens_masked_idx) :
-    #   tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
-    # self.tokens_masked_idx = tmi_out
-    self.tokens_masked_idx = [tmi.to(devs[cf.fields[i][1][3]], non_blocking=True) 
-                                              for i,tmi in enumerate(fields_tokens_masked_idx)]
+    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
+    for i,tmi in enumerate(fields_tokens_masked_idx) :
+      tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
+    self.tokens_masked_idx = tmi_out
+    #breakpoint()
+    # self.tokens_masked_idx = [tmi.to(devs[cf.fields[i][1][3]], non_blocking=True) 
+    #                                           for i,tmi in enumerate(fields_tokens_masked_idx)]
 
     # idxs of masked tokens per batch entry
     self.fields_tokens_masked_idx_list = fields_tokens_masked_idx_list

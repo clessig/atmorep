@@ -176,7 +176,7 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
   num_tokens = source.shape[-6:-3]
   num_tokens_space = num_tokens[1] * num_tokens[2] 
   idxs = (num_tokens[0]-nt) * num_tokens_space + torch.arange(nt * num_tokens_space)
-  breakpoint()
+  
   # collapse token dimensions 
   source_shape0 = source.shape
   source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)

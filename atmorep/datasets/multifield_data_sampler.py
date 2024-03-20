@@ -26,6 +26,7 @@ import pdb
 import code
 from atmorep.utils.utils import days_until_month_in_year
 from atmorep.utils.utils import days_in_month
+from datetime import datetime
 
 import atmorep.config.config as config
 
@@ -182,7 +183,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
             data_lvl += [self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]]
         data_t += [data_lvl]
       
-      sources, sources_infos, source_idxs = [], [], []
+      sources, sources_infos, source_idxs, token_infos = [], [], [], []
       lat_ran = []
       lon_ran = []
       for sidx in range(self.batch_size) :
@@ -204,52 +205,47 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         if self.with_source_idxs :
           source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
        
-      source = []
-      source_infos = []
       # extract data
       # TODO: temporal window can span multiple months
       year, month = self.times[ idxs_t[-1] ].year, self.times[ idxs_t[-1] ].month
       for ifield, field_info in enumerate(self.fields):
-        source_lvl = []
-        source_info_lvl = []
+
+        source_lvl, source_info_lvl, tok_info_lvl  = [], [], []
         tok_size = field_info[4]
         for ilevel, vl in enumerate(field_info[2]): #self.levels :
+         
           nf = self.normalizers[ifield][ilevel].normalize
-          source_data, info_data = [], []
-
+          source_data, info_data, tok_info = [], [], []
+         
           for sidx in range(self.batch_size) :
             #normalize and tokenize           
             source_data += [ tokenize( torch.from_numpy(nf( year, month, np.take( np.take( data_t[ifield][ilevel], 
                                         lat_ran[sidx], -2), lon_ran[sidx], -1), (lat_ran[sidx], lon_ran[sidx]))), tok_size ) ]
-            # info_data += [ torch.Tensor(self.ds['time'][ idxs_t ], vl, 
-            #                   self.lats[lat_ran[sidx]], self.lons[lon_ran[sidx]], self.res) ]    
+          
+            dates = self.ds['time'][ idxs_t ].astype(datetime)
+            dates = [(d.year, d.timetuple().tm_yday, d.hour) for d in dates]
+            lats = self.lats[lat_ran[sidx]]
+            lons = self.lons[lon_ran[sidx]]
+            info_data += [[[[[ year, day, hour, vl, 
+                              lat, lon, vl, self.res[0], self.res[1]] for lon in lons] for lat in lats] for (year, day, hour) in dates]] #zip(years, days, hours)]]
+            #store only center of the token: also in time                  
+            tok_info += [[[[[ year, day, hour, vl, 
+                              lat, lon, vl, self.res[0], self.res[1]] for lon in lons[int(tok_size[2]/2)::tok_size[2]]] for lat in lats[int(tok_size[1]/2)::tok_size[1]]] for (year, day, hour) in dates[int(tok_size[0]/2)::tok_size[0]]]] 
 
-            info_data += [ [self.ds['time'][ idxs_t ], vl, 
-                              self.lats[lat_ran[sidx]], self.lons[lon_ran[sidx]], self.res] ]     
+          #level
           source_lvl += [torch.stack(source_data, dim = 0)]
           source_info_lvl += [info_data]
-        source += [source_lvl]
-        source_infos += [source_info_lvl] 
-    
-      sources = self.pre_batch(source,  #torch.from_numpy( np.concatenate( sources, 0)), 
-                                  source_infos )  # [ source ] # [ np.expand_dims(source, 0) ]
-      sources_infos = [sources_infos]                      
+          tok_info_lvl += [tok_info]
 
-      #sources +=  [ self.pre_batch( source,  #torch.from_numpy( np.concatenate( sources, 0)), 
-      #                            source_infos ) ] # [ source ] # [ np.expand_dims(source, 0) ]
-      #sources_infos += [source_infos]                        
-        # breakpoint()
-        # if self.with_source_idxs :
-        #   source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
-
-        # # extract batch info
-        # sources_infos += [ [ self.ds['time'][ idxs_t ], self.levels, 
-        #                      self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
-
-      # swap
-      # sources = self.pre_batch( sources,  #torch.from_numpy( np.concatenate( sources, 0)), 
-      #                           sources_infos )
+        #field
+        sources += [torch.stack(source_lvl, dim = 0)] #torch.Size([3, 16, 12, 6, 12, 3, 9, 9])
+        sources_infos += [torch.Tensor(np.array(source_info_lvl))] # torch.Size([3, 16, 36, 54, 108, 9])
+        #token_infos += [torch.Tensor(np.array(tok_info_lvl))] # torch.Size([3, 16, 12, 6, 12, 9])
+        token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 9)] #torch.Size([3, 16, 864, 9])
       
+      sources = self.pre_batch(sources,  
+                                token_infos )   
+
       # TODO: implement targets
       target, target_info = None, None
 
