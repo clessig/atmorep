@@ -239,7 +239,7 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
-  cf.levels = [114, 123, 137]
+  #cf.levels = [114, 123, 137]
   cf.with_mixed_precision = True
   # cf.n_size = [36, 1*9*6, 1.*9*12]
   # in steps x lat_degrees x lon_degrees

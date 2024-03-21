@@ -152,7 +152,8 @@ class AtmoRepData( torch.nn.Module) :
       normalizer = self.dataset_train.datasets[fidx].normalizer
 
     elif isinstance( field, int) :
-      normalizer = self.dataset_train.datasets[field][vl_idx].normalizer
+      normalizer = self.dataset_train.normalizers[field][vl_idx]
+#      normalizer = self.dataset_train.datasets[field][vl_idx].normalizer
 
     else :
       assert False, 'invalid argument type (has to be index to cf.fields or field name)'
@@ -207,11 +208,11 @@ class AtmoRepData( torch.nn.Module) :
     self.pre_batch_targets = pre_batch_targets
 
     cf = self.net.cf
-    self.dataset_train = MultifieldDataSampler( cf.fields, cf.levels, cf.years_train,
+    self.dataset_train = MultifieldDataSampler( cf.fields, cf.years_train,
                                                 cf.batch_size_start,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch )
                                       
-    self.dataset_test = MultifieldDataSampler( cf.fields, cf.levels, cf.years_test,
+    self.dataset_test = MultifieldDataSampler( cf.fields, cf.years_test,
                                                cf.batch_size_start,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
                                                with_source_idxs = True )

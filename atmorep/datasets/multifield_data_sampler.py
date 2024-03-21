@@ -38,7 +38,7 @@ from atmorep.utils.utils import tokenize
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
-  def __init__( self, fields, levels, years, batch_size, pre_batch, n_size, num_samples_per_epoch,
+  def __init__( self, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch,
                 rng_seed = None, time_sampling = 1, with_source_idxs = False,
                 fields_targets = None, pre_batch_targets = None ) :
     '''
@@ -86,7 +86,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # self.levels_idxs = np.array( [self.ds.attrs['levels'].index( ll) for ll in levels])
     # self.fields_idxs = [0, 1, 2]
     # self.levels_idxs = [0, 1]
-    self.levels = levels #[123, 137]  # self.ds['levels']
+   # self.levels = levels #[123, 137]  # self.ds['levels']
 
     # TODO
     # # create (target) fields 
@@ -119,7 +119,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       self.normalizers.append( [])
       corr_type = 'global' if len(field_info) <= 6 else field_info[6]
       ner = NormalizerGlobal if corr_type == 'global' else NormalizerLocal
-      for vl in field_info[2]: #self.levels :
+      for vl in field_info[2]: 
         data_type = 'data_sfc' if vl == 0 else 'data' #surface field
         self.normalizers[-1] += [ ner( field_info, vl, 
                                   np.array(self.ds[data_type].shape)[[0,-2,-1]]) ]
@@ -200,9 +200,12 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           lon_ran += [np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)]
         else : 
           lon_ran += [np.where(np.logical_and( lons > il, lons < ir))[0]]
+        
+        sources_infos += [ [ self.ds['time'][ idxs_t ].astype(datetime), 
+                           self.lats[lat_ran][-1], self.lons[lon_ran][-1], self.res ] ]
 
         if self.with_source_idxs :
-          source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
+          source_idxs += [ (idxs_t, lat_ran[-1], lon_ran[-1]) ]
        
       # extract data
       # TODO: temporal window can span multiple months
@@ -211,7 +214,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
         source_lvl, source_info_lvl, tok_info_lvl  = [], [], []
         tok_size = field_info[4]
-        for ilevel, vl in enumerate(field_info[2]): #self.levels :
+        for ilevel, vl in enumerate(field_info[2]): 
          
           nf = self.normalizers[ifield][ilevel].normalize
           source_data, tok_info = [], []
@@ -242,19 +245,19 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         sources += [torch.stack(source_lvl, dim = 0)] #torch.Size([3, 16, 12, 6, 12, 3, 9, 9])
         # sources_infos += [torch.Tensor(np.array(source_info_lvl))] # torch.Size([3, 16, 36, 54, 108, 8])
         #token_infos += [torch.Tensor(np.array(tok_info_lvl))] # torch.Size([3, 16, 12, 6, 12, 8])
-        # extract batch info
-        sources_infos += [ [ self.ds['time'][ idxs_t ], self.levels, 
-                             self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
+        # extract batch info. level info stored in cf.fields. not stored here.
+        
         token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 8)] #torch.Size([3, 16, 864, 8])
       
       sources = self.pre_batch(sources,  
                                 token_infos )   
 
       # TODO: implement targets
-      target, target_info = None, None
+      targets, target_info = sources, sources_infos
+      target_idxs = None
       #this already goes back to trainer.py. 
       #source_info needed to remove log_validate in trainer.py
-      yield ( sources, (target, target_info), source_idxs, sources_infos)
+      yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
 
   ###################################################
   def __len__(self):

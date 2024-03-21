@@ -92,6 +92,16 @@ class Evaluator( Trainer_BERT) :
     cf.num_loader_workers = cf.loader_num_workers
     cf.data_dir = './data/'
 
+    #backward compatibility
+    if not hasattr( cf, 'n_size'):
+      cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
+    if not hasattr(cf, 'num_samples_per_epoch'):
+      cf.num_samples_per_epoch = 1024
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 128
+    if not hasattr(cf, 'with_mixed_precision'):
+      cf.with_mixed_precision = True
+  
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
 

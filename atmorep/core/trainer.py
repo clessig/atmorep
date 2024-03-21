@@ -180,7 +180,7 @@ class Trainer_Base() :
       # generic value based on data normalization
       test_loss = np.array( [1.0]) 
     epoch += 1
-    print("after test_loss")
+   
     batch_size = cf.batch_size_start - cf.batch_size_delta
 
     if cf.profile :
@@ -390,13 +390,18 @@ class Trainer_Base() :
           (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
           # targets
           if len(batch_data[1]) > 0 :
-            targets = []
-            for target_field in batch_data[1] :
-              targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
+            if type(batch_data[1][0][0]) is list :
+              targets = [batch_data[1][i][0][0] for i in range( len(batch_data[1]))]
+            else :
+              targets = batch_data[1][0]
+            # targets = []
+            # for target_field in batch_data[1] :
+            #   targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
           # store on cpu
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [ti.detach().clone().cpu() for ti in token_infos],
-                          [target.detach().clone().cpu() for target in targets ],
+                          [], 
+                          #[target.detach().clone().cpu() for target in targets ],
                             tmis, tmis_list )
 
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
@@ -621,8 +626,7 @@ class Trainer_BERT( Trainer_Base) :
     # unpack loader output
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx,fields_tokens_masked_idx_list) = xin[0]
-    self.sources_idxs = xin[2]
-    self.sources_info = xin[3]
+    (self.sources_idxs, self.sources_info) = xin[2]
 
     # network input
     batch_data = [ ( sources[i].to( devs[ cf.fields[i][1][3] ], non_blocking=True), 
@@ -644,9 +648,7 @@ class Trainer_BERT( Trainer_Base) :
     for i,tmi in enumerate(fields_tokens_masked_idx) :
       tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
     self.tokens_masked_idx = tmi_out
-    # self.tokens_masked_idx = [tmi.to(devs[cf.fields[i][1][3]], non_blocking=True) 
-    #                                           for i,tmi in enumerate(fields_tokens_masked_idx)]
-
+   
     # idxs of masked tokens per batch entry
     self.fields_tokens_masked_idx_list = fields_tokens_masked_idx_list
 
@@ -827,8 +829,7 @@ class Trainer_BERT( Trainer_Base) :
     (sources, token_infos, targets, tokens_masked_idx, tokens_masked_idx_list) = log_sources
 
     sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
-    sources_dates_out, sources_lats_out, sources_lons_out = [ ], [ ], [ ]
-    targets_dates_out, targets_lats_out, targets_lons_out = [ ], [ ], [ ]
+    coords = []
 
     for fidx, field_info in enumerate(cf.fields) : 
 
@@ -840,53 +841,42 @@ class Trainer_BERT( Trainer_Base) :
       lat_d_h, lon_d_h = int(np.floor(token_size[1]/2.)), int(np.floor(token_size[2]/2.))
       tinfos = token_infos[fidx].reshape( [-1, num_levels, *num_tokens, cf.size_token_info])
       res = tinfos[0,0,0,0,0][-1].item()
-      batch_size = tinfos.shape[0]
+      batch_size = len(self.sources_info) #tinfos.shape[0]
 
       sources_b = detok( sources[fidx].numpy())
-
+      
       if is_predicted :
         # split according to levels
         lens_levels = [t.shape[0] for t in tokens_masked_idx[fidx]]
-        targets_b = torch.split( targets[fidx], lens_levels)
+        #targets_b = torch.split( targets[fidx], lens_levels)
         preds_mu_b = torch.split( log_preds[fidx][0], lens_levels)
         preds_ens_b = torch.split( log_preds[fidx][2], lens_levels)
         # split according to batch
         lens_batches = [ [bv.shape[0] for bv in b] for b in tokens_masked_idx_list[fidx] ]
-        targets_b = [torch.split( targets_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
+        #targets_b = [torch.split( targets_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
         preds_mu_b = [torch.split(preds_mu_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
         preds_ens_b =[torch.split(preds_ens_b[vidx],lens) for vidx,lens in enumerate(lens_batches)]
         # recover token shape
-        targets_b = [[targets_b[vidx][bidx].reshape([-1, *token_size]) 
-                                                                    for bidx in range(batch_size)]
-                                                                    for vidx in range(num_levels)]
+        #targets_b = [[targets_b[vidx][bidx].reshape([-1, *token_size]) 
+        #                                                            for bidx in range(batch_size)]
+        #                                                            for vidx in range(num_levels)]
         preds_mu_b = [[preds_mu_b[vidx][bidx].reshape([-1, *token_size]) 
                                                                     for bidx in range(batch_size)]
                                                                     for vidx in range(num_levels)]
         preds_ens_b = [[preds_ens_b[vidx][bidx].reshape( [-1, cf.net_tail_num_nets, *token_size])
                                                                      for bidx in range(batch_size)]
                                                                      for vidx in range(num_levels)]
-
+     
       # for all batch items
       coords_b = []
-      for bidx, tinfo in enumerate(tinfos) :
-
-        # use first vertical levels since a column is considered
-        lats = np.arange(tinfo[0,0,0,0,4]-lat_d_h*res, tinfo[0,0,-1,0,4]+lat_d_h*res+0.001,res)
-        if tinfo[0,0,0,-1,5] < tinfo[0,0,0,0,5] :
-          lons = np.remainder( np.arange( tinfo[0,0,0,0,5] - lon_d_h*res, 
-                                        360. + tinfo[0,0,0,-1,5] + lon_d_h*res + 0.001, res), 360.)
-        else :
-          lons = np.arange(tinfo[0,0,0,0,5]-lon_d_h*res, tinfo[0,0,0,-1,5]+lon_d_h*res+0.001,res)
-        lons = np.remainder( lons, 360.)
-
-        # time stamp in token_infos is at start time so needs to be advanced by token_size[0]-1
-        s = utils.token_info_to_time( tinfo[0,0,0,0,:3] ) - pd.Timedelta(hours=token_size[0]-1)
-        e = utils.token_info_to_time( tinfo[0,-1,0,0,:3] )
-        dates = pd.date_range( start=s, end=e, freq='h')
-
+      for bidx in range(batch_size): #, tinfo in enumerate(tinfos) :
+        dates = self.sources_info[bidx][0]
+        lats  = 90.- self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
+        
         # target etc are aliasing targets_b which simplifies bookkeeping below
         if is_predicted :
-          target = [targets_b[vidx][bidx] for vidx in range(num_levels)]
+         # target = [targets_b[vidx][bidx] for vidx in range(num_levels)]
           pred_mu = [preds_mu_b[vidx][bidx] for vidx in range(num_levels)]
           pred_ens = [preds_ens_b[vidx][bidx] for vidx in range(num_levels)]
 
@@ -898,11 +888,15 @@ class Trainer_BERT( Trainer_Base) :
           sources_b[bidx,vidx] = normalizer.denormalize( y, m, sources_b[bidx,vidx], [lats, lons])
 
           if is_predicted :
+            # dates_masked = self.targets_info[bidx][vidx][0] #67,3
+            # lats_masked  = 90.- self.targets_info[bidx][vidx][1] #67,9
+            # lons_masked  = self.targets_info[bidx][vidx][2] #67,9
 
             # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
             tinfo_masked = tinfos[bidx,vidx].flatten( 0,2)
             tinfo_masked = tinfo_masked[idx]
+            
             lad, lod = lat_d_h*res, lon_d_h*res
             lats_masked, lons_masked, dates_masked = [], [], []
             for t in tinfo_masked :
@@ -916,50 +910,33 @@ class Trainer_BERT( Trainer_Base) :
             lats_masked = np.concatenate( lats_masked, 0)
             lons_masked = np.remainder( np.concatenate( lons_masked, 0), 360.)
             dates_masked = np.concatenate( dates_masked, 0)
-
-            for ii,(t,p,e,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
+            #for ii,(t,p,e,la,lo) in enumerate(zip( #target[vidx],
+            for ii,(p,e,la,lo) in enumerate(zip( #target[vidx],  
+                                                    pred_mu[vidx], pred_ens[vidx],
                                                     lats_masked, lons_masked)) :
-              targets_b[vidx][bidx][ii] = normalizer.denormalize( y, m, t, [la, lo])
+           #   targets_b[vidx][bidx][ii] = normalizer.denormalize( y, m, t, [la, lo])
               preds_mu_b[vidx][bidx][ii]  = normalizer.denormalize( y, m, p, [la, lo])
               preds_ens_b[vidx][bidx][ii] = normalizer.denormalize( y, m, e, [la, lo])
 
             dates_masked_l += [ dates_masked ]
-            lats_masked_l += [ [90.-lat for lat in lats_masked] ]
+            lats_masked_l += [ [90.- lat for lat in lats_masked] ]
             lons_masked_l += [ lons_masked ]
 
-        dates = dates.to_pydatetime().astype( 'datetime64[s]')
-
-        coords_b += [ [dates, 90.-lats, lons, dates_masked_l, lats_masked_l, lons_masked_l] ]
-
+        coords_b += [ [dates, lats, lons, dates_masked_l, lats_masked_l, lons_masked_l] ]
+      
+      coords += [ coords_b ]
       fn = field_info[0]
       sources_out.append( [fn, sources_b])
-      if is_predicted :
-        targets_out.append([fn, [[t.numpy(force=True) for t in t_v] for t_v in targets_b]])
-        preds_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_mu_b]])
-        ensembles_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_ens_b]])
-      else :
-        targets_out.append( [fn, []])
-        preds_out.append( [fn, []])
-        ensembles_out.append( [fn, []])
 
-      sources_dates_out.append( [c[0] for c in coords_b])
-      sources_lats_out.append( [c[1] for c in coords_b])
-      sources_lons_out.append( [c[2] for c in coords_b])
-      if is_predicted :
-        targets_dates_out.append( [c[3] for c in coords_b])
-        targets_lats_out.append( [c[4] for c in coords_b])
-        targets_lons_out.append( [c[5] for c in coords_b])
-      else :
-        targets_dates_out.append( [ ])
-        targets_lats_out.append( [ ])
-        targets_lons_out.append( [ ])
+     #   targets_out.append([fn, [[t.numpy(force=True) for t in t_v] for t_v in targets_b]] if is_predicted else [fn, []])
+      preds_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_mu_b]] if is_predicted else [fn, []] )
+      ensembles_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_ens_b]] if is_predicted else [fn, []] )
 
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
-    write_BERT( cf.wandb_id, epoch, batch_idx,
-                             levels, sources_out,
-                             [sources_dates_out, sources_lats_out, sources_lons_out],
-                             targets_out, [targets_dates_out, targets_lats_out, targets_lons_out],
-                             preds_out, ensembles_out )
+    write_BERT( cf.wandb_id, epoch, batch_idx, 
+                levels, sources_out, targets_out,
+                preds_out, ensembles_out, coords )
+                          
 
   def log_attention( self, epoch, bidx, log) : 
     '''Hook for logging: output attention maps.'''
