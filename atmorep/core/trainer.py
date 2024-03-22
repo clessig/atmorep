@@ -890,7 +890,7 @@ class Trainer_BERT( Trainer_Base) :
             # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
             grid = np.array(np.meshgrid(self.sources_info[bidx][2], self.sources_info[bidx][1]))
-            grid = np.array(np.broadcast_to(grid, shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1) #add time dimension
+            grid = np.array(np.broadcast_to(grid, shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1) #add time dimension. only way to make tokenize work
             
             lats_mskd = tokenize(torch.Tensor(grid[0]), token_size) #treat separate to avoid errors in tokenize
             lons_mskd = tokenize(torch.Tensor(grid[1]), token_size)
