@@ -22,12 +22,12 @@ import datetime
 import atmorep.config.config as config
 
 def write_item(ds_field, name_idx, data, levels, coords, name  = 'sample' ):
-      ds_batch_item = ds_field.create_group( f'{name}={name_idx:05d}' )
-      ds_batch_item.create_dataset( 'data', data=data)
-      ds_batch_item.create_dataset( 'ml', data=levels)
-      ds_batch_item.create_dataset( 'datetime', data=coords[0])
-      ds_batch_item.create_dataset( 'lat', data=coords[1])
-      ds_batch_item.create_dataset( 'lon', data=coords[2])
+  ds_batch_item = ds_field.create_group( f'{name}={name_idx:05d}' )
+  ds_batch_item.create_dataset( 'data', data=data)
+  ds_batch_item.create_dataset( 'ml', data=levels)
+  ds_batch_item.create_dataset( 'datetime', data=coords[0].astype(np.datetime64))
+  ds_batch_item.create_dataset( 'lat', data=coords[1].astype(np.float32))
+  ds_batch_item.create_dataset( 'lon', data=coords[2].astype(np.float32))
   return ds_batch_item
 
 ####################################################################################################
@@ -121,7 +121,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources, #sources_coords,
     preds, ensemble share coords with targets
   '''
 
-  breakpoint()
+  # breakpoint()
   sources_coords = [[c[:3] for c in coord_field ] for coord_field in coords]
   targets_coords = [[c[3:] for c in coord_field ] for coord_field in coords]
   
@@ -157,12 +157,13 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources, #sources_coords,
       sample = batch_idx * batch_size + bidx
       ds_target_b = ds_field.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
-        ds_target_b_l = ds_target_b.require_group( f'ml={levels[fidx][vidx]}')
-        ds_target_b_l.create_dataset( 'data', data=field[1][vidx][bidx])
-        ds_target_b_l.create_dataset( 'ml', data=levels[fidx][vidx])
-        ds_target_b_l.create_dataset( 'datetime', data=targets_coords[fidx][bidx][0][vidx])
-        ds_target_b_l.create_dataset( 'lat', data=targets_coords[fidx][bidx][1][vidx])
-        ds_target_b_l.create_dataset( 'lon', data=targets_coords[fidx][bidx][2][vidx])
+        ds_target_b_l = write_item(ds_target_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], targets_coords[fidx][bidx][vidx], name = 'ml' )
+        # ds_target_b_l = ds_target_b.require_group( f'ml={levels[fidx][vidx]}')
+        # ds_target_b_l.create_dataset( 'data', data=field[1][vidx][bidx])
+        # ds_target_b_l.create_dataset( 'ml', data=levels[fidx][vidx])
+        # ds_target_b_l.create_dataset( 'datetime', data=targets_coords[fidx][bidx][0][vidx])
+        # ds_target_b_l.create_dataset( 'lat', data=targets_coords[fidx][bidx][1][vidx])
+        # ds_target_b_l.create_dataset( 'lon', data=targets_coords[fidx][bidx][2][vidx])
   store_target.close()
 
   store_pred = zarr_store( fname.format( 'pred'))
@@ -177,7 +178,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources, #sources_coords,
       ds_pred_b = ds_pred.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
         ds_pred_b_l = write_item(ds_pred_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
-                                  [t[vidx] for t in targets_coords[fidx][bidx]], name = 'ml' )
+                                  targets_coords[fidx][bidx][vidx], name = 'ml' )
         # ds_pred_b_l = ds_pred_b.create_group( f'ml={levels[fidx][vidx]}')
         # ds_pred_b_l.create_dataset( 'data', data=field[1][vidx][bidx])
         # ds_pred_b_l.create_dataset( 'ml', data=levels[fidx][vidx])
@@ -198,7 +199,8 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources, #sources_coords,
       ds_ens_b = ds_ens.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
         ds_ens_b_l = write_item(ds_ens_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
-                                [t[vidx] for t in targets_coords[fidx][bidx]], name = 'ml' )
+                                targets_coords[fidx][bidx][vidx], name = 'ml' )
+
         # ds_ens_b_l = ds_ens_b.create_group( f'ml={levels[fidx][vidx]}')
         # ds_ens_b_l.create_dataset( 'data', data=field[1][vidx][bidx])
         # ds_ens_b_l.create_dataset( 'ml', data=levels[fidx][vidx])

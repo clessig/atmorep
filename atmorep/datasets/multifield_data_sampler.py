@@ -253,7 +253,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                                 token_infos )   
 
       # TODO: implement targets
-      targets, target_info = sources, sources_infos
+      targets, target_info = None, None
       target_idxs = None
       #this already goes back to trainer.py. 
       #source_info needed to remove log_validate in trainer.py

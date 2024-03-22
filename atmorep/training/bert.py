@@ -88,11 +88,11 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   sq = torch.squeeze
   usq = torch.unsqueeze 
   cnt_nz = torch.count_nonzero
-  #breakpoint()
+
   # collapse token dimensions 
   source_shape0 = source.shape
   source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
-
+  
   # select random token in the selected space-time cube to be masked/deleted
   BERT_frac = cf.fields[ifield][5][0]
   BERT_frac_mask = cf.fields[ifield][5][1]
@@ -102,6 +102,7 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   token_size = cf.fields[ifield][4]
   batch_dim = source.shape[0]
   num_tokens = source.shape[1] 
+ 
   # 
   masking_ratios = rng.random( batch_dim) * BERT_frac
   # number of tokens masked per batch entry
@@ -119,7 +120,7 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
  
   # keep masked tokens for loss computation
   target = source[idx].clone()
- 
+
   # climatological mean of normalized data
   global_mean = 0. * torch.mean(source, 0)
   global_std  = torch.std(source, 0)

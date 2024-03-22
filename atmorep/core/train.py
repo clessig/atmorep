@@ -47,7 +47,18 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   # name has changed but ensure backward compatibility
   if hasattr( cf, 'loader_num_workers') :
     cf.num_loader_workers = cf.loader_num_workers
-
+  if not hasattr( cf, 'n_size'):
+    cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
+  if not hasattr(cf, 'num_samples_per_epoch'):
+    cf.num_samples_per_epoch = 1024
+  if not hasattr(cf, 'num_samples_validate'):
+    cf.num_samples_validate = 128
+  if not hasattr(cf, 'with_mixed_precision'):
+    cf.with_mixed_precision = True
+  
+  cf.years_train = [2021] # list( range( 1980, 2018))
+  cf.years_test = [2021]  #[2018] 
+  
   # any parameter in cf can be overwritten when training is continued, e.g. we can increase the 
   # masking rate 
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
@@ -258,10 +269,10 @@ def train() :
 ####################################################################################################
 if __name__ == '__main__':
 
-  train()
+ # train()
 
-#  wandb_id, epoch = '1jh2qvrx', -2 #'4nvwbetz', -2 #392  #'4nvwbetz', -2
-#  epoch_continue = epoch
-#
-#  Trainer = Trainer_BERT
-#  train_continue( wandb_id, epoch, Trainer, epoch_continue)
+ wandb_id, epoch = '1jh2qvrx', -2 #'4nvwbetz', -2 #392  #'4nvwbetz', -2
+ epoch_continue = epoch
+
+ Trainer = Trainer_BERT
+ train_continue( wandb_id, epoch, Trainer, epoch_continue)
