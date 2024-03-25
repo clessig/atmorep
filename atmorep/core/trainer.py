@@ -809,27 +809,29 @@ class Trainer_BERT( Trainer_Base) :
                                  targets_out, [dates_targets, lats, lons],
                                  preds_out, ensembles_out )
   ###################################################
-
   #helpers for BERT 
-  def split_data(self, data, idx, idx_list, token_size):
-    lens_levels = [t.shape[0] for t in idx]
+
+  def split_data(self, data, idx_list, token_size) :
+    lens_batches = [[len(t) for t in tt] for tt in idx_list]
+    lens_levels = [torch.tensor( tt).sum() for tt in lens_batches]
     data_b = torch.split( data, lens_levels)    
     # split according to batch
-    lens_batches = [ [bv.shape[0] for bv in b] for b in idx_list ]
     return [torch.split( data_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
 
-  def get_masked_data(self, data, idx, idx_list, token_size, num_levels, ensemble = False):
+  def get_masked_data(self, data, idx_list, token_size, num_levels, ensemble = False) :
+
     cf = self.cf
     batch_size = len(self.sources_info)  
-    data_b  =  self.split_data(data, idx, idx_list, token_size)
+    data_b  =  self.split_data(data, idx_list, token_size)
   
     # recover token shape
     if ensemble:
-      return [[data_b[vidx][bidx].reshape([-1, cf.net_tail_num_nets, *token_size]) for bidx in range(batch_size)]
+      return [[data_b[vidx][bidx].reshape([-1, cf.net_tail_num_nets, *token_size])
+                                                            for bidx in range(batch_size)]
                                                             for vidx in range(num_levels)]
     else:
       return [[data_b[vidx][bidx].reshape([-1, *token_size]) for bidx in range(batch_size)]
-                                                            for vidx in range(num_levels)]
+                                                             for vidx in range(num_levels)]
 
   ###################################################
   def log_validate_BERT( self, epoch, batch_idx, log_sources, log_preds) :
@@ -840,7 +842,6 @@ class Trainer_BERT( Trainer_Base) :
 
     # save source: remains identical so just save ones
     (sources, targets, tokens_masked_idx_list) = log_sources
-    tokens_masked_idx = torch.cat( tokens_masked_idx_list)
 
     sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
     coords = []
@@ -855,9 +856,12 @@ class Trainer_BERT( Trainer_Base) :
       sources_b = detokenize( sources[fidx].numpy())
       
       if is_predicted :
-        targets_b   = self.get_masked_data(targets[fidx], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels)
-        preds_mu_b  = self.get_masked_data(log_preds[fidx][0], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels)
-        preds_ens_b = self.get_masked_data(log_preds[fidx][2], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels, ensemble = True)
+        targets_b   = self.get_masked_data( targets[fidx], tokens_masked_idx_list[fidx],
+                                            token_size, num_levels)
+        preds_mu_b  = self.get_masked_data( log_preds[fidx][0], tokens_masked_idx_list[fidx],
+                                            token_size, num_levels)
+        preds_ens_b = self.get_masked_data( log_preds[fidx][2], tokens_masked_idx_list[fidx],
+                                            token_size, num_levels, ensemble = True)
 
       # for all batch items
       coords_b = []
@@ -882,13 +886,14 @@ class Trainer_BERT( Trainer_Base) :
           if is_predicted :
             # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
-            grid = np.array(np.meshgrid(self.sources_info[bidx][2], self.sources_info[bidx][1]))
-            grid = np.array(np.broadcast_to(grid, shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1) #add time dimension. only way to make tokenize work
+
+            grid = np.array( np.meshgrid( self.sources_info[bidx][2], self.sources_info[bidx][1]))
+            # recover time dimension since idx assumes the full space-time cube
+            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
             
-            lats_mskd = tokenize(torch.Tensor(grid[0]), token_size) #treat separate to avoid errors in tokenize
-            lons_mskd = tokenize(torch.Tensor(grid[1]), token_size)
-            lats_mskd = 90.- torch.flatten( lats_mskd, 0, 2)[idx]
-            lons_mskd = torch.flatten( lons_mskd, 0, 2)[idx]
+            lats_mskd = 90. - tokenize( grid[0], token_size).flatten( 0, 2)[ idx ]
+            lons_mskd = tokenize( grid[1], token_size).flatten( 0, 2)[ idx ]
             
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx % (token_size[0]*num_tokens[0])) #* num_tokens[0]
