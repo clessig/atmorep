@@ -386,7 +386,7 @@ class Trainer_Base() :
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
+          (sources, token_infos, targets, tmis_list) = batch_data[0]
 
           # targets
           #TO-DO: implement target
@@ -402,7 +402,7 @@ class Trainer_Base() :
           # store on cpu
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
-                            tmis, tmis_list )
+                           tmis_list )
 
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
           batch_data = self.prepare_batch( batch_data)
@@ -485,7 +485,7 @@ class Trainer_Base() :
 
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
+          (sources, token_infos, targets, tmis_list) = batch_data[0]
           # targets
           print("len(batch_data[1])", len(batch_data[1]))
           if len(batch_data[1]) > 0 :
@@ -497,7 +497,7 @@ class Trainer_Base() :
           # TODO: is this still all needed with self.sources_idx
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                                 [target.detach().clone().cpu() for target in targets ],
-                                 tmis, tmis_list )
+                                 tmis_list )
         
         batch_data = self.prepare_batch( batch_data)
                           
@@ -625,7 +625,7 @@ class Trainer_BERT( Trainer_Base) :
 
     # unpack loader output
     # xin[0] since BERT does not have targets
-    (sources, token_infos, targets, fields_tokens_masked_idx,fields_tokens_masked_idx_list) = xin[0]
+    (sources, token_infos, targets, fields_tokens_masked_idx_list) = xin[0]
     (self.sources_idxs, self.sources_info) = xin[2]
 
     # network input
@@ -644,14 +644,12 @@ class Trainer_BERT( Trainer_Base) :
       self.targets.append( targets[ifield].to( devs[cf.fields[ifield][1][3]], non_blocking=True ))
 
     # idxs of masked tokens
-    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
-    for i,tmi in enumerate(fields_tokens_masked_idx) :
-      tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
+    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx_list))]
+    for i,tmi in enumerate(fields_tokens_masked_idx_list) :
+      cdev = devs[cf.fields[i][1][3]]
+      tmi_out[i] = [torch.cat(tmi_l,0).to( cdev, non_blocking=True) for tmi_l in tmi] 
     self.tokens_masked_idx = tmi_out
    
-    # idxs of masked tokens per batch entry
-    self.fields_tokens_masked_idx_list = fields_tokens_masked_idx_list
-
     # learnable class token (cannot be done in the data loader since this is running in parallel)
     if cf.learnable_mask :
       for ifield, (source, _) in enumerate(batch_data) :
@@ -680,21 +678,15 @@ class Trainer_BERT( Trainer_Base) :
     # flatten token dimensions: remove space-time separation
     pred = torch.flatten( pred, 2, 3).to( dev)
     # extract masked token level by level
-    #pred_masked = torch.flatten( pred, 0, 2)
-    # extract masked token level by level
     pred_masked = []
     for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
       # select masked tokens, flattened along batch dimension for easier indexing and processing
       pred_l = torch.flatten( pred[:,lidx], 0, 1)
-      pred_masked_l = pred_l[ target_idx[lidx] ]
-      #target_idx_l = target_idx[lidx]
-      pred_masked.append( pred_masked_l)
+      pred_masked.append( pred_l[ target_idx[lidx] ])
     
     # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
     # as ordering of dimensions
     pred_masked = torch.cat( pred_masked, 0)
-
-    #pred_masked = pred_masked[ target_idx ]
 
     return pred_masked
 
@@ -847,7 +839,8 @@ class Trainer_BERT( Trainer_Base) :
     batch_size = len(self.sources_info) 
 
     # save source: remains identical so just save ones
-    (sources, targets, tokens_masked_idx, tokens_masked_idx_list) = log_sources
+    (sources, targets, tokens_masked_idx_list) = log_sources
+    tokens_masked_idx = torch.cat( tokens_masked_idx_list)
 
     sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
     coords = []
@@ -925,7 +918,7 @@ class Trainer_BERT( Trainer_Base) :
                 levels, sources_out, targets_out,
                 preds_out, ensembles_out, coords )
                           
-
+  ###################################################
   def log_attention( self, epoch, bidx, log) : 
     '''Hook for logging: output attention maps.'''
     cf = self.cf
