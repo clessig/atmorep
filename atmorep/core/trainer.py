@@ -431,8 +431,7 @@ class Trainer_Base() :
           self.log_validate( epoch, it, log_sources, log_preds)
           
           if cf.attention:
-            self.log_attention( epoch, it, [atts,
-                                            [ti.detach().clone().cpu() for ti in token_infos]])
+            self.log_attention( epoch, it, atts)
                                             
     # average over all nodes
     total_loss /= test_len * len(self.cf.fields_prediction)
@@ -518,8 +517,7 @@ class Trainer_Base() :
           self.log_validate( data_idx, it, log_sources, preds)
           
           if cf.attention:
-            self.log_attention( data_idx , it, [atts,
-                              [ti.detach().clone().cpu() for ti in token_infos]])
+            self.log_attention( data_idx , it, atts)
 
     # average over all nodes
     loss /= test_len * len(self.cf.fields_prediction)
@@ -734,27 +732,28 @@ class Trainer_BERT( Trainer_Base) :
     
     num_tokens = cf.fields[0][3]
     token_size = cf.fields[0][4]
-    lat_d_h, lon_d_h = int(np.floor(token_size[1]/2.)), int(np.floor(token_size[2]/2.))
-    lats, lons = [ ], [ ]
-    for tinfo in token_infos[0] :
-      lat_min, lat_max = tinfo[0][4], tinfo[ num_tokens[1]*num_tokens[2]-1 ][4]
-      lon_min, lon_max = tinfo[0][5], tinfo[ num_tokens[1]*num_tokens[2]-1 ][5]
-      res = tinfo[0][-1]
-      lat = torch.arange( lat_min - lat_d_h*res, lat_max + lat_d_h*res + 0.001, res)
-      if lon_max < lon_min :
-        lon = torch.arange( lon_min - lon_d_h*res, 360. + lon_max + lon_d_h*res + 0.001, res)
-      else :
-        lon = torch.arange( lon_min - lon_d_h*res, lon_max + lon_d_h*res + 0.001, res) 
-      lats.append( lat.numpy())
-      lons.append( torch.remainder( lon, 360.).numpy())
+    # lat_d_h, lon_d_h = int(np.floor(token_size[1]/2.)), int(np.floor(token_size[2]/2.))
+    # lats, lons = [ ], [ ]
+
+    # for tinfo in token_infos[0] :
+    #   lat_min, lat_max = tinfo[0][4], tinfo[ num_tokens[1]*num_tokens[2]-1 ][4]
+    #   lon_min, lon_max = tinfo[0][5], tinfo[ num_tokens[1]*num_tokens[2]-1 ][5]
+    #   res = tinfo[0][-1]
+    #   lat = torch.arange( lat_min - lat_d_h*res, lat_max + lat_d_h*res + 0.001, res)
+    #   if lon_max < lon_min :
+    #     lon = torch.arange( lon_min - lon_d_h*res, 360. + lon_max + lon_d_h*res + 0.001, res)
+    #   else :
+    #     lon = torch.arange( lon_min - lon_d_h*res, lon_max + lon_d_h*res + 0.001, res) 
+    #   lats.append( lat.numpy())
+    #   lons.append( torch.remainder( lon, 360.).numpy())
 
     # check that last token (bottom right corner) has the expected coords
     # assert np.allclose( )
 
     # extract dates for each token entry, constant for each batch and field
-    dates_t = []
-    for b_token_infos in token_infos[0] :
-      dates_t.append(utils.token_info_to_time(b_token_infos[0])-pd.Timedelta(hours=token_size[0]-1))
+    # dates_t = []
+    # for b_token_infos in token_infos[0] :
+    #   dates_t.append(utils.token_info_to_time(b_token_infos[0])-pd.Timedelta(hours=token_size[0]-1))
 
     # TODO: check that last token matches first one
 
@@ -767,7 +766,10 @@ class Trainer_BERT( Trainer_Base) :
       target = detokenize( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
                                                                       forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
       # TODO: check that geo-coords match to general ones that have been pre-determined
-      for bidx in range(token_infos[fidx].shape[0]) :
+      for bidx in range(batch_size):
+        dates = self.sources_info[bidx][0]
+        lats  = 90. - self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
         for vidx, _ in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( fidx, vidx).denormalize
           date, coords = dates_t[bidx], [lats[bidx], lons[bidx]]
@@ -926,49 +928,24 @@ class Trainer_BERT( Trainer_Base) :
                 preds_out, ensembles_out, coords )
                           
 
-  def log_attention( self, epoch, bidx, log) : 
+  def log_attention( self, epoch, bidx, attention) : 
     '''Hook for logging: output attention maps.'''
     cf = self.cf
 
-    attention, token_infos = log
-    attn_dates_out, attn_lats_out, attn_lons_out = [ ], [ ], [ ]
     attn_out = []
     for fidx, field_info in enumerate(cf.fields) : 
-      # reconstruct coordinates
-      is_predicted = fidx in self.fields_prediction_idx
-      num_levels = len(field_info[2])
-      num_tokens = field_info[3]
-      token_size = field_info[4]
-      lat_d_h, lon_d_h = int(np.floor(token_size[1]/2.)), int(np.floor(token_size[2]/2.))
-      tinfos = token_infos[fidx].reshape( [-1, num_levels, *num_tokens, cf.size_token_info])
+     
+      # coordinates 
       coords_b = []
-
-      for tinfo in tinfos :
-        # use first vertical levels since a column is considered
-        res = tinfo[0,0,0,0,-1]
-        lats = np.arange(tinfo[0,0,0,0,4]-lat_d_h*res, tinfo[0,0,-1,0,4]+lat_d_h*res+0.001,res*token_size[1])
-        if tinfo[0,0,0,-1,5] < tinfo[0,0,0,0,5] :
-          lons = np.remainder( np.arange( tinfo[0,0,0,0,5] - lon_d_h*res, 
-                                          360. + tinfo[0,0,0,-1,5] + lon_d_h*res + 0.001, res*token_size[2]), 360.)
-        else :
-          lons = np.arange(tinfo[0,0,0,0,5]-lon_d_h*res, tinfo[0,0,0,-1,5]+lon_d_h*res+0.001,res*token_size[2])
-
-        lats = [90.-lat for lat in lats]
-        lons = np.remainder( lons, 360.)
-
-        dates = np.array([(utils.token_info_to_time(tinfo[0,t,0,0,:3])) for t in range(tinfo.shape[1])], dtype='datetime64[s]')
+      for bidx in range(batch_size):
+        dates = self.sources_info[bidx][0]
+        lats  = 90. - self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
         coords_b += [ [dates, lats, lons] ]
 
-      if is_predicted:
-        attn_out.append([field_info[0], attention[fidx]])
-        attn_dates_out.append([c[0] for c in coords_b])
-        attn_lats_out.append( [c[1] for c in coords_b])
-        attn_lons_out.append( [c[2] for c in coords_b])
-      else:
-        attn_dates_out.append( [] )
-        attn_lats_out.append( [] )
-        attn_lons_out.append( [] )
-        
+      is_predicted = fidx in self.fields_prediction_idx
+      attn_out.append([field_info[0], attention[fidx]] if is_predicted else [fn, []])
+      
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
     write_attention(cf.wandb_id, epoch,
-                    bidx, levels, attn_out, [attn_dates_out,attn_lats_out,attn_lons_out])
+                    bidx, levels, attn_out,  coords_b )
