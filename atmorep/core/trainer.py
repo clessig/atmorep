@@ -386,7 +386,7 @@ class Trainer_Base() :
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
+          (sources, token_infos, targets, tmis_list) = batch_data[0]
 
           # targets
           #TO-DO: implement target
@@ -402,7 +402,7 @@ class Trainer_Base() :
           # store on cpu
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
-                            tmis, tmis_list )
+                           tmis_list )
 
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
           batch_data = self.prepare_batch( batch_data)
@@ -484,7 +484,7 @@ class Trainer_Base() :
 
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis, tmis_list) = batch_data[0]
+          (sources, token_infos, targets, tmis_list) = batch_data[0]
           # targets
           print("len(batch_data[1])", len(batch_data[1]))
           if len(batch_data[1]) > 0 :
@@ -496,7 +496,7 @@ class Trainer_Base() :
           # TODO: is this still all needed with self.sources_idx
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                                 [target.detach().clone().cpu() for target in targets ],
-                                 tmis, tmis_list )
+                                 tmis_list )
         
         batch_data = self.prepare_batch( batch_data)
                           
@@ -623,7 +623,7 @@ class Trainer_BERT( Trainer_Base) :
 
     # unpack loader output
     # xin[0] since BERT does not have targets
-    (sources, token_infos, targets, fields_tokens_masked_idx,fields_tokens_masked_idx_list) = xin[0]
+    (sources, token_infos, targets, fields_tokens_masked_idx_list) = xin[0]
     (self.sources_idxs, self.sources_info) = xin[2]
 
     # network input
@@ -642,14 +642,12 @@ class Trainer_BERT( Trainer_Base) :
       self.targets.append( targets[ifield].to( devs[cf.fields[ifield][1][3]], non_blocking=True ))
 
     # idxs of masked tokens
-    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx))]
-    for i,tmi in enumerate(fields_tokens_masked_idx) :
-      tmi_out[i] = [tmi_l.to( devs[cf.fields[i][1][3]], non_blocking=True) for tmi_l in tmi] 
+    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx_list))]
+    for i,tmi in enumerate(fields_tokens_masked_idx_list) :
+      cdev = devs[cf.fields[i][1][3]]
+      tmi_out[i] = [torch.cat(tmi_l,0).to( cdev, non_blocking=True) for tmi_l in tmi] 
     self.tokens_masked_idx = tmi_out
    
-    # idxs of masked tokens per batch entry
-    self.fields_tokens_masked_idx_list = fields_tokens_masked_idx_list
-
     # learnable class token (cannot be done in the data loader since this is running in parallel)
     if cf.learnable_mask :
       for ifield, (source, _) in enumerate(batch_data) :
@@ -678,21 +676,15 @@ class Trainer_BERT( Trainer_Base) :
     # flatten token dimensions: remove space-time separation
     pred = torch.flatten( pred, 2, 3).to( dev)
     # extract masked token level by level
-    #pred_masked = torch.flatten( pred, 0, 2)
-    # extract masked token level by level
     pred_masked = []
     for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
       # select masked tokens, flattened along batch dimension for easier indexing and processing
       pred_l = torch.flatten( pred[:,lidx], 0, 1)
-      pred_masked_l = pred_l[ target_idx[lidx] ]
-      #target_idx_l = target_idx[lidx]
-      pred_masked.append( pred_masked_l)
+      pred_masked.append( pred_l[ target_idx[lidx] ])
     
     # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
     # as ordering of dimensions
     pred_masked = torch.cat( pred_masked, 0)
-
-    #pred_masked = pred_masked[ target_idx ]
 
     return pred_masked
 
@@ -818,21 +810,28 @@ class Trainer_BERT( Trainer_Base) :
                                  levels, sources_out, [dates_sources, lats, lons],
                                  targets_out, [dates_targets, lats, lons],
                                  preds_out, ensembles_out )
+  
   ###################################################
 
   #helpers for BERT 
-  def split_data(self, data, idx, idx_list, token_size):
-    lens_levels = [t.shape[0] for t in idx]
+  def split_data(self, data, idx_list, num_tokens, token_size):
+    #idx = torch.cat( idx_list)
+    batch_size = len(self.sources_info)  
+    
+    idx = torch.cat( [idx_list[i] + num_tokens * i for i in range(batch_size)] )
+    lens_levels = [t.shape[0] for t in torch.cat( idx_list, )]
     data_b = torch.split( data, lens_levels)    
     # split according to batch
     lens_batches = [ [bv.shape[0] for bv in b] for b in idx_list ]
     return [torch.split( data_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
 
-  def get_masked_data(self, data, idx, idx_list, token_size, num_levels, ensemble = False):
+  def get_masked_data(self, field_info, data, idx_list, ensemble = False):
     cf = self.cf
     batch_size = len(self.sources_info)  
-    data_b  =  self.split_data(data, idx, idx_list, token_size)
-  
+    num_levels = len(field_info[2])
+    num_tokens = field_info[3]
+    token_size = field_info[4]
+    data_b  =  self.split_data(data, idx_list, num_tokens, token_size)
     # recover token shape
     if ensemble:
       return [[data_b[vidx][bidx].reshape([-1, cf.net_tail_num_nets, *token_size]) for bidx in range(batch_size)]
@@ -849,7 +848,7 @@ class Trainer_BERT( Trainer_Base) :
     batch_size = len(self.sources_info) 
 
     # save source: remains identical so just save ones
-    (sources, targets, tokens_masked_idx, tokens_masked_idx_list) = log_sources
+    (sources, targets, tokens_masked_idx_list) = log_sources
 
     sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
     coords = []
@@ -864,9 +863,9 @@ class Trainer_BERT( Trainer_Base) :
       sources_b = detokenize( sources[fidx].numpy())
       
       if is_predicted :
-        targets_b   = self.get_masked_data(targets[fidx], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels)
-        preds_mu_b  = self.get_masked_data(log_preds[fidx][0], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels)
-        preds_ens_b = self.get_masked_data(log_preds[fidx][2], tokens_masked_idx[fidx], tokens_masked_idx_list[fidx], token_size, num_levels, ensemble = True)
+        targets_b   = self.get_masked_data(field_info, targets[fidx], tokens_masked_idx_list[fidx])
+        preds_mu_b  = self.get_masked_data(field_info, log_preds[fidx][0], tokens_masked_idx_list[fidx])
+        preds_ens_b = self.get_masked_data(field_info, log_preds[fidx][2], tokens_masked_idx_list[fidx], ensemble = True)
 
       # for all batch items
       coords_b = []
@@ -900,8 +899,9 @@ class Trainer_BERT( Trainer_Base) :
             lons_mskd = torch.flatten( lons_mskd, 0, 2)[idx]
             
             #time: idx ranges from 0->863 12x6x12 
-            t_idx = (idx % (token_size[0]*num_tokens[0])) #* num_tokens[0]
-            t_idx = np.array([np.arange(t - token_size[0], t) for t in t_idx]) #create range from t_idx-2 to t_idx
+            breakpoint()
+            t_idx = int(np.floor((idx / (token_size[1]*token_size[2])) * num_tokens[0]))
+            t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx]) #create range from t_idx-2 to t_idx
             dates_mskd = self.sources_info[bidx][0][t_idx]
 
             for ii,(t,p,e,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
@@ -927,7 +927,6 @@ class Trainer_BERT( Trainer_Base) :
                 levels, sources_out, targets_out,
                 preds_out, ensembles_out, coords )
                           
-
   def log_attention( self, epoch, bidx, attention) : 
     '''Hook for logging: output attention maps.'''
     cf = self.cf

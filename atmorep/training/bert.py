@@ -24,7 +24,6 @@ import pdb
 ####################################################################################################
 def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data, fields_infos) :
   
-  fields_tokens_masked_idx = [[] for _ in fields_data]
   fields_tokens_masked_idx_list = [[] for _ in fields_data]
   fields_targets = [[] for _ in fields_data]
   sources = [[] for _ in fields_data]
@@ -56,11 +55,10 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data,
       if fields[ifield][1][0] > 0 and fields[ifield][5][0] > 0. :
 
         ret = bert_f( cf, ifield, field_data, token_info, rngs[rng_idx])
-        (field_data, token_info, target, tokens_masked_idx, tokens_masked_idx_list) = ret
+        (field_data, token_info, target, tokens_masked_idx_list) = ret
         
-        if target != None :
+        if target is not None :
           fields_targets[ifield].append( target)
-        fields_tokens_masked_idx[ifield].append( tokens_masked_idx)
         fields_tokens_masked_idx_list[ifield].append( tokens_masked_idx_list)
 
       rng_idx += 1
@@ -75,8 +73,7 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data,
     fields_targets[ifield] = torch.cat( fields_targets[ifield],0) \
                                 if len(fields_targets[ifield]) > 0 else fields_targets[ifield]
 
-  return (sources, token_infos, fields_targets, fields_tokens_masked_idx,
-                                                fields_tokens_masked_idx_list)
+  return (sources, token_infos, fields_targets, fields_tokens_masked_idx_list)
 
 ####################################################################################################
 def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
@@ -111,7 +108,6 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   
   # linear indices for masking
   idx = torch.cat( [tokens_masked_idx_list[i] + num_tokens * i for i in range(batch_dim)] )
-  tokens_masked_idx = idx 
 
   # flatten along first two dimension to simplify linear indexing (which then requires an
   # easily computable row offset)
@@ -168,7 +164,7 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   # recover batch dimension which was flattend for easier indexing and also token dimensions
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
   
-  return (source, token_info, target, tokens_masked_idx, tokens_masked_idx_list)
+  return (source, token_info, target, tokens_masked_idx_list)
 
 ####################################################################################################
 def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
@@ -185,7 +181,6 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
   # linear indices for masking
   num_tokens = source.shape[1]
   idx = torch.cat( [idxs + num_tokens * i for i in range( source.shape[0] )] )
-  tokens_masked_idx = idx
 
   source_shape = source.shape
   # flatten along first two dimension to simplify linear indexing (which then requires an
@@ -202,7 +197,7 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
   # recover batch dimension which was flattend for easier indexing
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
  
-  return (source, token_info, target, tokens_masked_idx, idxs)
+  return (source, token_info, target, idxs)
 
 ####################################################################################################
 def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
