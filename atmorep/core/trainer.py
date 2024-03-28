@@ -584,11 +584,13 @@ class Trainer_Base() :
         losses['crps'].append( crps_loss)
 
     loss = torch.tensor( 0., device=self.device_out)
+    tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
       # print( 'LOSS : {} :: {}'.format( key, losses[key]))
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
-    loss /= len(self.cf.fields_prediction) * len( self.cf.losses)
+        tot_weight += self.loss_weights[ifield] 
+    loss /= tot_weight
     mse_loss = mse_loss_total / len(self.cf.fields_prediction)
 
     return loss, mse_loss, losses
