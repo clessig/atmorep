@@ -246,6 +246,7 @@ class Trainer_Base() :
     self.optimizer.zero_grad()
     
     for batch_idx in range( model.len( NetMode.train)) :
+
       batch_data = self.model.next()
 
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
@@ -561,7 +562,6 @@ class Trainer_Base() :
         loss_en = torch.tensor( 0., device=target.device)
         for en in torch.transpose( pred[2], 1, 0) :
           loss_en += self.MSELoss( en, target = target) 
-        # losses['mse_ensemble'].append( 50. * loss_en / pred[2].shape[1])
         losses['mse_ensemble'].append( loss_en / pred[2].shape[1])
 
       # Generalized cross entroy loss for continuous distributions
