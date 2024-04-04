@@ -305,7 +305,7 @@ def tokenize( data, token_size = [-1,-1,-1]) :
       t2 = torch.reshape( data, (tok_tot_t, token_size[0], tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
       data_tokenized = torch.transpose(torch.transpose( torch.transpose( t2, 4, 3), 2, 1), 3, 2)
     elif 2 == len(data_shape) :
-      t2 = torch.reshape( t1, (tok_tot_x, token_size[0], tok_tot_y, token_size[1]))
+      t2 = torch.reshape( data, (tok_tot_x, token_size[0], tok_tot_y, token_size[1]))
       data_tokenized = torch.transpose( t2, 1, 2)
     else :
       assert False

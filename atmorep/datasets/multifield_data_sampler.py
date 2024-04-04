@@ -72,21 +72,13 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     self.lats = np.array( self.ds['lats'])
     self.lons = np.array( self.ds['lons'])
-
+    
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
     print( f'self.ds[\'data\'] : {sh} :: {st}')
     print( f'self.lats : {self.lats.shape}', flush=True)
     print( f'self.lons : {self.lons.shape}', flush=True)
     self.fields_idxs = []
-
-    # for f in fields:
-    #  self.fields_idxs = [self.ds.attrs['fields'].index( f[0]) if f[0] in self.ds.attrs['fields'] 
-    #   self.fields_idxs = np.array( [self.ds.attrs['fields'].index( f[0]) for f in fields]) 
-    # self.levels_idxs = np.array( [self.ds.attrs['levels'].index( ll) for ll in levels])
-    # self.fields_idxs = [0, 1, 2]
-    # self.levels_idxs = [0, 1]
-   # self.levels = levels #[123, 137]  # self.ds['levels']
 
     # TODO
     # # create (target) fields 
@@ -99,8 +91,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.range_lon = np.array( self.lons[ [0,-1] ])
 
     self.res = np.zeros( 2)
-    self.res[0] = self.ds.attrs['resol'][0] #(self.range_lat[1]-self.range_lat[0]) / (self.ds['data'].shape[-2]-1)
-    self.res[1] = self.ds.attrs['resol'][1] #(self.range_lon[1]-self.range_lon[0]) / (self.ds['data'].shape[-1]-1)
+    self.res[0] = self.ds.attrs['resol'][0] 
+    self.res[1] = self.ds.attrs['resol'][1] 
     
     # ensure neighborhood does not exceed domain (either at pole or for finite domains)
     self.range_lat += np.array([n_size[1] / 2., -n_size[1] / 2.])
@@ -111,7 +103,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # ensure all data loaders use same rng_seed and hence generate consistent data
     if not rng_seed :
       rng_seed = np.random.randint( 0, 100000, 1)[0]
-    self.rng = np.random.default_rng( rng_seed)
+      self.rng = np.random.default_rng( rng_seed)
+    else:
+      self.rng = rng_seed
 
     # data normalizers
     self.normalizers = []
@@ -154,7 +148,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   def __iter__(self):
 
     # TODO: if we keep this then we should remove the rng_seed argument for the constuctor
-    self.rng = np.random.default_rng()
+    #self.rng = np.random.default_rng()
     self.shuffle()
 
     lats, lons = self.lats, self.lons
@@ -200,7 +194,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           lon_ran += [np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)]
         else : 
           lon_ran += [np.where(np.logical_and( lons > il, lons < ir))[0]]
-        
+  
         sources_infos += [ [ self.ds['time'][ idxs_t ].astype(datetime), 
                            self.lats[lat_ran][-1], self.lons[lon_ran][-1], self.res ] ]
 
@@ -220,9 +214,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           source_data, tok_info = [], []
          
           for sidx in range(self.batch_size) :
-            #normalize and tokenize           
+            #normalize and tokenize  
+            #breakpoint()         
             source_data += [ tokenize( torch.from_numpy(nf( year, month, np.take( np.take( data_t[ifield][ilevel], 
-                                        lat_ran[sidx], -2), lon_ran[sidx], -1), (lat_ran[sidx], lon_ran[sidx]))), tok_size ) ]
+                                        lat_ran[sidx], -2), lon_ran[sidx], -1), (self.lats[lat_ran[sidx]], self.lons[lon_ran[sidx]]))), tok_size ) ]
+                      
           
             dates = self.ds['time'][ idxs_t ].astype(datetime)
              #store only center of the token: 
@@ -230,23 +226,16 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
             dates = [(d.year, d.timetuple().tm_yday, d.hour) for d in dates][tok_size[0]-1::tok_size[0]]
             lats_sidx = self.lats[lat_ran[sidx]][int(tok_size[1]/2)::tok_size[1]]
             lons_sidx = self.lons[lon_ran[sidx]][int(tok_size[2]/2)::tok_size[2]]
-            # info_data += [[[[[ year, day, hour, vl, 
-            #                   lat, lon, vl, self.res[0]] for lon in lons] for lat in lats] for (year, day, hour) in dates]] #zip(years, days, hours)]]
                        
             tok_info += [[[[[ year, day, hour, vl, 
                               lat, lon, vl, self.res[0]] for lon in lons_sidx] for lat in lats_sidx] for (year, day, hour) in dates]] 
 
           #level
           source_lvl += [torch.stack(source_data, dim = 0)]
-          # source_info_lvl += [info_data]
           tok_info_lvl += [tok_info]
 
         #field
         sources += [torch.stack(source_lvl, dim = 0)] #torch.Size([3, 16, 12, 6, 12, 3, 9, 9])
-        # sources_infos += [torch.Tensor(np.array(source_info_lvl))] # torch.Size([3, 16, 36, 54, 108, 8])
-        #token_infos += [torch.Tensor(np.array(tok_info_lvl))] # torch.Size([3, 16, 12, 6, 12, 8])
-        # extract batch info. level info stored in cf.fields. not stored here.
-        
         token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 8)] #torch.Size([3, 16, 864, 8])
       
       sources = self.pre_batch(sources,  

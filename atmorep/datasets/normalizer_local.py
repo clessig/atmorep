@@ -51,22 +51,22 @@ class NormalizerLocal() :
                                 ('lon', np.linspace( lon_min, lon_max, num=ns_lon, endpoint=False)),
                                ('data', ['mean', 'var']) ])
         self.corr_data.append( x)
+   
 
   def normalize( self, year, month, data, coords) :
-
     corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + (month-1) ]
     mean = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='mean').values
     var = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='var').values
     if (var == 0.).all() :
       print( f'var == 0 :: ym : {year} / {month}')
       assert False
-
+    # print("before", data.mean(), data.std())
     if len(data.shape) > 2 :
       for i in range( data.shape[0]) :
         data[i] = (data[i] - mean) / var
     else :
       data = (data - mean) / var
-    #print(data.mean(), data.std())
+    # print("after", data.mean(), data.std())
     return data
 
   def denormalize( self, year, month, data, coords) :
@@ -74,13 +74,13 @@ class NormalizerLocal() :
     corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + (month-1) ]
     mean = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='mean').values
     var = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='var').values
-
+    # print("before", data.mean(), data.std())
     if len(data.shape) > 2 :
       for i in range( data.shape[0]) :
         data[i] = (data[i] * var) + mean
     else :
       data = (data * var) + mean
-
+    # print("after", data.mean(), data.std())
     return data
 
   

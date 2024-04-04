@@ -114,9 +114,9 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'vorticity', [ 1, 2048, [ ], 0 ], 
-                               [ 123 ], 
-                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  # cf.fields = [ [ 'vorticity', [ 1, 2048, [ ], 0 ], 
+  #                              [ 123 ], 
+  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
 
   # cf.fields = [ [ 'velocity_u', [ 1, 2048, [ ], 0], 
   #                               [ 96, 105, 114, 123, 137 ], 
@@ -134,9 +134,7 @@ def train() :
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
 
-  # cf.fields = [ [ 'temperature', [ 1, 1536, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                                [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
+  #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
 
   # cf.fields = [ [ 'total_precip', [ 1, 2048, [ ], 0 ],
   #                                 [ 0 ], 
@@ -147,20 +145,24 @@ def train() :
   #                                 [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
   # cf.fields_prediction = [ ['geopotential', 1.] ]
 
-  cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+  #cf.fields_prediction = [ [cf.fields[0][0], 1.0] ]
 
-  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0], 
-                                [ 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
+  # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0], 
+  #                               [ 114, 123, 137 ], 
+  #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
+  cf.fields = [
                 [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
                                 [ 114, 123, 137 ], 
-                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ], #]
+                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ],
                 [ 'total_precip', [ 1, 1536, [ ], 3 ],
                                   [ 0 ], 
                                   [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
-  cf.fields_prediction = [ [cf.fields[0][0], 0.5],  [cf.fields[1][0], 0.5] ]
-
-
+  #cf.fields_prediction = [ [cf.fields[0][0], 0.33],  [cf.fields[1][0], 0.33],  [cf.fields[2][0], 0.33]]
+  # cf.fields = [ 
+  #               [ 'total_precip', [ 1, 1536, [ ], 3 ],
+  #                                 [ 0 ], 
+  #                                 [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
+  cf.fields_prediction = [ [cf.fields[0][0], 0.5],[cf.fields[1][0], 0.5]  ] 
   cf.fields_targets = []
   cf.years_train = [2021] # list( range( 1980, 2018))
   cf.years_test = [2021]  #[2018] 
@@ -240,7 +242,7 @@ def train() :
   cf.test_initial = True
   cf.attention = False
 
-  cf.rng_seed = None 
+  cf.rng_seed = 0 #None 
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True
@@ -269,10 +271,10 @@ def train() :
 ####################################################################################################
 if __name__ == '__main__':
 
- # train()
+  train()
 
- wandb_id, epoch = '1jh2qvrx', -2 #'4nvwbetz', -2 #392  #'4nvwbetz', -2
- epoch_continue = epoch
+#  wandb_id, epoch = '1jh2qvrx', 392 #'4nvwbetz', -2 #392  #'4nvwbetz', -2
+#  epoch_continue = epoch
 
- Trainer = Trainer_BERT
- train_continue( wandb_id, epoch, Trainer, epoch_continue)
+#  Trainer = Trainer_BERT
+#  train_continue( wandb_id, epoch, Trainer, epoch_continue)

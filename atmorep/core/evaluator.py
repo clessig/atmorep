@@ -91,7 +91,7 @@ class Evaluator( Trainer_BERT) :
 
     cf.num_loader_workers = cf.loader_num_workers
     cf.data_dir = './data/'
-
+    cf.rng_seed = 0 #None 
     #backward compatibility
     if not hasattr( cf, 'n_size'):
       cf.n_size = [36, 0.25*9*6, 0.25*9*12] 

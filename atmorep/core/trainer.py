@@ -252,7 +252,7 @@ class Trainer_Base() :
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
         loss, mse_loss, losses = self.loss( preds, batch_idx)
-
+      
       self.grad_scaler.scale(loss).backward()
       self.grad_scaler.step(self.optimizer)
       self.grad_scaler.update()
@@ -382,7 +382,6 @@ class Trainer_Base() :
     # run test set evaluation
     with torch.no_grad() : 
       for it in range( self.model.len( NetMode.test)) :
-
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
@@ -407,7 +406,7 @@ class Trainer_Base() :
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
           batch_data = self.prepare_batch( batch_data)
           preds, atts = self.model( batch_data)
-        
+        #breakpoint()
         loss = torch.tensor( 0.)
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
@@ -417,7 +416,7 @@ class Trainer_Base() :
           self.test_loss( pred, target)
           # base line loss
           cur_loss = self.MSELoss( pred[0], target = target ).cpu().item()
-           
+         # breakpoint()
           loss += cur_loss 
           total_losses[ifield] += cur_loss
           ifield += 1
@@ -501,7 +500,7 @@ class Trainer_Base() :
         batch_data = self.prepare_batch( batch_data)
                           
         preds, atts = self.model( batch_data)
-
+        breakpoint()
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
 
@@ -544,7 +543,6 @@ class Trainer_Base() :
     losses = dict(zip(cf.losses,[[] for loss in cf.losses ]))
     
     for pred, idx in zip( preds, self.fields_prediction_idx) :
-
       target = self.targets[idx]
 
       mse_loss = self.MSELoss( pred[0], target = target) 
@@ -582,11 +580,13 @@ class Trainer_Base() :
         losses['crps'].append( crps_loss)
 
     loss = torch.tensor( 0., device=self.device_out)
+    tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
-      # print( 'LOSS : {} :: {}'.format( key, losses[key]))
+      #print( 'LOSS : {} :: {}'.format( key, losses[key]))
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
-    loss /= len(self.cf.fields_prediction) * len( self.cf.losses)
+        tot_weight += self.loss_weights[ifield] 
+    loss /= tot_weight
     mse_loss = mse_loss_total / len(self.cf.fields_prediction)
 
     return loss, mse_loss, losses
@@ -760,7 +760,7 @@ class Trainer_BERT( Trainer_Base) :
       # TODO: check that geo-coords match to general ones that have been pre-determined
       for bidx in range(batch_size):
         dates = self.sources_info[bidx][0]
-        lats  = 90. - self.sources_info[bidx][1]
+        lats  = self.sources_info[bidx][1]
         lons  = self.sources_info[bidx][2]
         for vidx, _ in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( fidx, vidx).denormalize
@@ -812,17 +812,12 @@ class Trainer_BERT( Trainer_Base) :
                                  preds_out, ensembles_out )
   
   ###################################################
-
-  #helpers for BERT 
-  def split_data(self, data, idx_list, num_tokens, token_size):
-    #idx = torch.cat( idx_list)
-    batch_size = len(self.sources_info)  
-    
-    idx = torch.cat( [idx_list[i] + num_tokens * i for i in range(batch_size)] )
-    lens_levels = [t.shape[0] for t in torch.cat( idx_list, )]
+  
+  def split_data(self, data, idx_list, token_size) :
+    lens_batches = [[len(t) for t in tt] for tt in idx_list]
+    lens_levels = [torch.tensor( tt).sum() for tt in lens_batches]
     data_b = torch.split( data, lens_levels)    
     # split according to batch
-    lens_batches = [ [bv.shape[0] for bv in b] for b in idx_list ]
     return [torch.split( data_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
 
   def get_masked_data(self, field_info, data, idx_list, ensemble = False):
@@ -831,14 +826,16 @@ class Trainer_BERT( Trainer_Base) :
     num_levels = len(field_info[2])
     num_tokens = field_info[3]
     token_size = field_info[4]
-    data_b  =  self.split_data(data, idx_list, num_tokens, token_size)
+    data_b  =  self.split_data(data, idx_list, token_size)
+   
     # recover token shape
     if ensemble:
-      return [[data_b[vidx][bidx].reshape([-1, cf.net_tail_num_nets, *token_size]) for bidx in range(batch_size)]
+      return [[data_b[vidx][bidx].reshape([-1, cf.net_tail_num_nets, *token_size])
+                                                            for bidx in range(batch_size)]
                                                             for vidx in range(num_levels)]
     else:
       return [[data_b[vidx][bidx].reshape([-1, *token_size]) for bidx in range(batch_size)]
-                                                            for vidx in range(num_levels)]
+                                                             for vidx in range(num_levels)]
 
   ###################################################
   def log_validate_BERT( self, epoch, batch_idx, log_sources, log_preds) :
@@ -871,7 +868,7 @@ class Trainer_BERT( Trainer_Base) :
       coords_b = []
       for bidx in range(batch_size):
         dates = self.sources_info[bidx][0]
-        lats  = 90. - self.sources_info[bidx][1]
+        lats  = self.sources_info[bidx][1]
         lons  = self.sources_info[bidx][2]
         
         # target etc are aliasing targets_b which simplifies bookkeeping below
@@ -885,34 +882,43 @@ class Trainer_BERT( Trainer_Base) :
 
           normalizer = self.model.normalizer( fidx, vidx)
           y, m = dates[0].year, dates[0].month
+          #breakpoint()
+          # print("-----lats source---")
+          # print(lats)
+          # print("-----lons source---")
+          # print(lons)
           sources_b[bidx,vidx] = normalizer.denormalize( y, m, sources_b[bidx,vidx], [lats, lons])
 
           if is_predicted :
             # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
-            grid = np.array(np.meshgrid(self.sources_info[bidx][2], self.sources_info[bidx][1]))
-            grid = np.array(np.broadcast_to(grid, shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1) #add time dimension. only way to make tokenize work
-            
-            lats_mskd = tokenize(torch.Tensor(grid[0]), token_size) #treat separate to avoid errors in tokenize
-            lons_mskd = tokenize(torch.Tensor(grid[1]), token_size)
-            lats_mskd = 90.- torch.flatten( lats_mskd, 0, 2)[idx]
-            lons_mskd = torch.flatten( lons_mskd, 0, 2)[idx]
-            
+            grid = np.flip(np.array( np.meshgrid( self.sources_info[bidx][2], self.sources_info[bidx][1])), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+            # recover time dimension since idx assumes the full space-time cube
+            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+            #breakpoint()
+            #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
+            lats_mskd = np.array([np.unique(t) for t in tokenize( grid[0], token_size).flatten( 0, 2)[ idx ].numpy()])
+            lons_mskd = np.array([np.unique(t) for t in tokenize( grid[1], token_size).flatten( 0, 2)[ idx ].numpy()])
+           
             #time: idx ranges from 0->863 12x6x12 
-            breakpoint()
-            t_idx = int(np.floor((idx / (token_size[1]*token_size[2])) * num_tokens[0]))
+            t_idx = (np.floor(idx / (num_tokens[1]*num_tokens[2])) * token_size[0]).int()
             t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx]) #create range from t_idx-2 to t_idx
             dates_mskd = self.sources_info[bidx][0][t_idx]
 
             for ii,(t,p,e,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
                                                     lats_mskd, lons_mskd)) :
+              # print("----la ----")
+              # print(la)
+              # print("----lo ----")
+              # print(lo)
               targets_b[vidx][bidx][ii]   = normalizer.denormalize( y, m, t, [la, lo])
               preds_mu_b[vidx][bidx][ii]  = normalizer.denormalize( y, m, p, [la, lo])
               preds_ens_b[vidx][bidx][ii] = normalizer.denormalize( y, m, e, [la, lo])
             
-            coords_mskd_l += [[dates_mskd, lats_mskd.numpy(), lons_mskd.numpy()] ]
+            coords_mskd_l += [[dates_mskd, 90.-lats_mskd, lons_mskd] ]
        
-        coords_b += [ [dates, lats, lons] + coords_mskd_l ]
+        coords_b += [ [dates, 90. - lats, lons] + coords_mskd_l ]
       
       coords += [ coords_b ]
       fn = field_info[0]
@@ -926,7 +932,9 @@ class Trainer_BERT( Trainer_Base) :
     write_BERT( cf.wandb_id, epoch, batch_idx, 
                 levels, sources_out, targets_out,
                 preds_out, ensembles_out, coords )
-                          
+
+######################################################
+
   def log_attention( self, epoch, bidx, attention) : 
     '''Hook for logging: output attention maps.'''
     cf = self.cf
