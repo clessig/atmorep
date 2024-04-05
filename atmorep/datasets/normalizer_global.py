@@ -35,11 +35,13 @@ class NormalizerGlobal() :
     corr_data_ym = self.corr_data[ np.where(np.logical_and(self.corr_data[:,0] == float(year),
                                             self.corr_data[:,1] == float(month))) , 2:].flatten()
     data_temp = (data - corr_data_ym[0]) / corr_data_ym[1]
-    #print(data_temp.mean(), data_temp.std())
+    # print(data_temp.mean(), data_temp.std())
     return (data - corr_data_ym[0]) / corr_data_ym[1]
 
   def denormalize( self, year, month, data, coords = None) :
     corr_data_ym = self.corr_data[ np.where(np.logical_and(self.corr_data[:,0] == float(year),
                                             self.corr_data[:,1] == float(month))) , 2:].flatten()
+    data_temp = (data * corr_data_ym[1]) + corr_data_ym[0]
+    #print("after denorm", data_temp.mean(), data_temp.std())                   
     return (data * corr_data_ym[1]) + corr_data_ym[0]
   

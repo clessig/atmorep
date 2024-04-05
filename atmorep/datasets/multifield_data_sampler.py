@@ -130,10 +130,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
   ###################################################
   def shuffle( self) :
-
     rng = self.rng
-    self.idxs_perm_t = rng.permutation( self.idxs_years)[:(self.num_samples // self.batch_size)]
-
+    self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples]
+    
     lats = rng.random(self.num_samples) * (self.range_lat[1] - self.range_lat[0]) +self.range_lat[0]
     lons = rng.random(self.num_samples) * (self.range_lon[1] - self.range_lon[0]) +self.range_lon[0]
 
@@ -149,7 +148,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     # TODO: if we keep this then we should remove the rng_seed argument for the constuctor
     #self.rng = np.random.default_rng()
-    self.shuffle()
+    #TODO: move shuffle outside iter to avoid param overwriting in global_forecast!!! NB. BERT does not work without shuffle!!
+    #self.shuffle()
 
     lats, lons = self.lats, self.lons
     #fields_idxs, levels_idxs = self.fields_idxs, self.levels_idxs
@@ -158,95 +158,166 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     res = self.res
 
     iter_start, iter_end = self.worker_workset()
-
+   
     for bidx in range( iter_start, iter_end) :
      
-      idx = self.idxs_perm_t[bidx]
-      idxs_t = list(np.arange( idx-n_size[0]*ts, idx, ts, dtype=np.int64))
-      data_t = []
-
-      for _, field_info in enumerate(self.fields) :
-        data_lvl = []
-        for vl in field_info[2]:
-          if vl == 0: #surface level
-            field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-            data_lvl += [self.ds['data_sfc'].oindex[ idxs_t, field_idx]]
-          else:
-            field_idx = self.ds.attrs['fields'].index( field_info[0])
-            vl_idx = self.ds.attrs['levels'].index(vl)
-            data_lvl += [self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]]
-        data_t += [data_lvl]
-      
-      sources, sources_infos, source_idxs, token_infos = [], [], [], []
-      lat_ran, lon_ran = [], []
-    
+      sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
+      sources_infos, source_idxs = [], []
+  
       for sidx in range(self.batch_size) :
+        i_bidx = self.idxs_perm_t[bidx]
+        idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
 
         idx = self.idxs_perm[bidx*self.batch_size+sidx]
-        # slight assymetry with offset by res/2 is required to match desired token count
-        lat_ran += [np.where(np.logical_and(lats > idx[0]-ns_2[1]-res[0]/2.,lats < idx[0]+ns_2[1]))[0]]
+        # slight asymetry with offset by res/2 is required to match desired token count
+        lat_ran = np.where(np.logical_and(lats>idx[0]-ns_2[1]-res[0]/2.,lats<idx[0]+ns_2[1]))[0]
         # handle periodicity of lon
         assert not ((idx[1]-ns_2[2]) < 0. and (idx[1]+ns_2[2]) > 360.)
         il, ir = (idx[1]-ns_2[2]-res[1]/2., idx[1]+ns_2[2])
         if il < 0. :
-          lon_ran += [np.concatenate( [np.where( lons > il+360)[0], np.where(lons < ir)[0]], 0)]
+          lon_ran = np.concatenate( [np.where( lons > il+360)[0], np.where(lons < ir)[0]], 0)
         elif ir > 360. :
-          lon_ran += [np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)]
+          lon_ran = np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)
         else : 
-          lon_ran += [np.where(np.logical_and( lons > il, lons < ir))[0]]
-  
+          lon_ran = np.where(np.logical_and( lons > il, lons < ir))[0]
+        
         sources_infos += [ [ self.ds['time'][ idxs_t ].astype(datetime), 
-                           self.lats[lat_ran][-1], self.lons[lon_ran][-1], self.res ] ]
+                             self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
 
         if self.with_source_idxs :
-          source_idxs += [ (idxs_t, lat_ran[-1], lon_ran[-1]) ]
-       
-      # extract data
-      # TODO: temporal window can span multiple months
-      year, month = self.times[ idxs_t[-1] ].year, self.times[ idxs_t[-1] ].month
-      for ifield, field_info in enumerate(self.fields):
+          source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
 
-        source_lvl, source_info_lvl, tok_info_lvl  = [], [], []
-        tok_size = field_info[4]
-        for ilevel, vl in enumerate(field_info[2]): 
-         
-          nf = self.normalizers[ifield][ilevel].normalize
-          source_data, tok_info = [], []
-         
-          for sidx in range(self.batch_size) :
-            #normalize and tokenize  
-            #breakpoint()         
-            source_data += [ tokenize( torch.from_numpy(nf( year, month, np.take( np.take( data_t[ifield][ilevel], 
-                                        lat_ran[sidx], -2), lon_ran[sidx], -1), (self.lats[lat_ran[sidx]], self.lons[lon_ran[sidx]]))), tok_size ) ]
-                      
+        # extract data
+        year, month = self.times[ idxs_t[-1] ].year, self.times[ idxs_t[-1] ].month
+        for ifield, field_info in enumerate(self.fields):
+
+          source_lvl, source_info_lvl, tok_info_lvl  = [], [], []
+          tok_size = field_info[4]
+          for ilevel, vl in enumerate(field_info[2]):
+
+            if vl == 0 : #surface level
+              field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
+              data_t = self.ds['data_sfc'].oindex[ idxs_t, field_idx]
+            else :
+              field_idx = self.ds.attrs['fields'].index( field_info[0])
+              vl_idx = self.ds.attrs['levels'].index(vl)
+              data_t = self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]
+
+            nf = self.normalizers[ifield][ilevel].normalize
+            source_data, tok_info = [], []
+
+            # extract data, normalize and tokenize
+            cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
+            # breakpoint()
+            cdata = nf( year, month, cdata, (lats[lat_ran], lons[lon_ran]) )
+            source_data = tokenize( torch.from_numpy( cdata), tok_size )
           
+            # token_infos uses center of the token: *last* datetime and center in space
             dates = self.ds['time'][ idxs_t ].astype(datetime)
-             #store only center of the token: 
-             #in time we store the *last* datetime in the token, not the center
-            dates = [(d.year, d.timetuple().tm_yday, d.hour) for d in dates][tok_size[0]-1::tok_size[0]]
-            lats_sidx = self.lats[lat_ran[sidx]][int(tok_size[1]/2)::tok_size[1]]
-            lons_sidx = self.lons[lon_ran[sidx]][int(tok_size[2]/2)::tok_size[2]]
-                       
-            tok_info += [[[[[ year, day, hour, vl, 
-                              lat, lon, vl, self.res[0]] for lon in lons_sidx] for lat in lats_sidx] for (year, day, hour) in dates]] 
+            cdates = dates[tok_size[0]-1::tok_size[0]]
+            dates = [(d.year, d.timetuple().tm_yday-1, d.hour) for d in cdates] #-1 is to start days from 0
+            lats_sidx = self.lats[lat_ran][ tok_size[1]//2 :: tok_size[1] ]
+            lons_sidx = self.lons[lon_ran][ tok_size[2]//2 :: tok_size[2] ]
+            # tensor product for token_infos
+            tok_info += [[[[[ year, day, hour, vl, lat, lon, vl, self.res[0]] for lon in lons_sidx]
+                                                                              for lat in lats_sidx]
+                                                                  for (year, day, hour) in dates]]
 
-          #level
-          source_lvl += [torch.stack(source_data, dim = 0)]
-          tok_info_lvl += [tok_info]
+            source_lvl += [ source_data ]
+            tok_info_lvl += [ torch.tensor(tok_info, dtype=torch.float32).flatten( 1, -2)]
 
-        #field
-        sources += [torch.stack(source_lvl, dim = 0)] #torch.Size([3, 16, 12, 6, 12, 3, 9, 9])
-        token_infos += [torch.Tensor(np.array(tok_info_lvl)).reshape(len(tok_info_lvl), len(tok_info_lvl[0]), -1, 8)] #torch.Size([3, 16, 864, 8])
+          sources[ifield] += [ torch.stack(source_lvl, 0) ]
+          token_infos[ifield] += [ torch.stack(tok_info_lvl, 0) ]
       
-      sources = self.pre_batch(sources,  
-                                token_infos )   
+      # concatenate batches
+      sources = [torch.stack(sources_field).transpose(1,0) for sources_field in sources]
+      token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
+      sources = self.pre_batch( sources, token_infos )
 
-      # TODO: implement targets
+      # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
       target_idxs = None
-      #this already goes back to trainer.py. 
-      #source_info needed to remove log_validate in trainer.py
+
       yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
+
+  ###################################################
+  def set_data( self, times_pos, batch_size = None) :
+    '''
+      times_pos = np.array( [ [year, month, day, hour, lat, lon], ...]  )
+        - lat \in [90,-90] = [90N, 90S]
+        - lon \in [0,360]
+        - (year,month) pairs should be a limited number since all data for these is loaded
+    '''
+    # generate all the data
+    self.idxs_perm = np.zeros( (len(times_pos), 2))
+    self.idxs_perm_t = []
+    for idx, item in enumerate( times_pos) :
+
+      assert item[2] >= 1 and item[2] <= 31
+      assert item[3] >= 0 and item[3] < int(24 / self.time_sampling)
+      assert item[4] >= -90. and item[4] <= 90.
+
+      tstamp = pd.to_datetime( f'{item[0]}-{item[1]}-{item[2]}-{item[3]}', format='%Y-%m-%d-%H')
+      
+      self.idxs_perm_t += [ np.where( self.times == tstamp)[0]+1 ] #The +1 assures that tsamp is included in the range
+
+      # work with mathematical lat coordinates from here on
+      self.idxs_perm[idx] = np.array( [90. - item[4], item[5]])
+   
+    self.idxs_perm_t = np.array(self.idxs_perm_t).squeeze()
+
+  ###################################################
+  def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
+    ''' generate patch/token positions for global grid '''
+    token_overlap = torch.tensor( token_overlap).to(torch.int64)
+
+    # assumed that sanity checking that field data is consistent has been done 
+    ifield = 0
+    field = self.fields[ifield]
+
+    res = self.res
+    side_len = torch.tensor( [field[3][1] * field[4][1]*res[0], field[3][2] * field[4][2]*res[1]] )
+    overlap =torch.tensor([token_overlap[0]*field[4][1]*res[0],token_overlap[1]*field[4][2]*res[1]])
+    side_len_2 = side_len / 2.
+    assert all( overlap <= side_len_2), 'token_overlap too large for #tokens, reduce if possible'
+
+    # generate tiles
+    times_pos = []
+    for ctime in times :
+
+      lat = side_len_2[0].item()
+      num_tiles_lat = 0
+      while (lat + side_len_2[0].item()) < 180. :
+        num_tiles_lat += 1
+        lon = side_len_2[1].item() - overlap[1].item()/2.
+        num_tiles_lon = 0
+        while (lon - side_len_2[1]) < 360. :
+          times_pos += [[*ctime, -lat + 90., np.mod(lon,360.) ]]
+          lon += side_len[1].item() - overlap[1].item()
+          num_tiles_lon += 1
+        lat += side_len[0].item() - overlap[0].item()
+
+      # add one additional row if no perfect tiling (sphere is toric in longitude so no special
+      # handling necessary but not in latitude)
+      # the added row is such that it goes exaclty down to the South pole and the offset North-wards
+      # is computed based on this
+      lat -= side_len[0] - overlap[0]
+      if lat - side_len_2[0] < 180. :
+        num_tiles_lat += 1
+        lat = 180. - side_len_2[0].item() + res[0]
+        lon = side_len_2[1].item() - overlap[1].item()/2.
+        while (lon - side_len_2[1]) < 360. :
+          times_pos += [[*ctime, -lat + 90., np.mod(lon,360.) ]]
+          lon += side_len[1].item() - overlap[1].item()
+
+    # adjust batch size if necessary so that the evaluations split up across batches of equal size
+    batch_size = num_tiles_lon
+
+    print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
+
+    print( f'\n\n{times_pos[-1]}\n\n', flush=True)
+    
+    self.set_data( times_pos, batch_size)
 
   ###################################################
   def __len__(self):
@@ -260,7 +331,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     if worker_info is None: 
       iter_start = 0
       iter_end = self.num_samples
-
+   
     else:  
       # split workload
       per_worker = len(self) // worker_info.num_workers

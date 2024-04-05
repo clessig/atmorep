@@ -180,7 +180,8 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
 
   # linear indices for masking
   num_tokens = source.shape[1]
-  idx = torch.cat( [idxs + num_tokens * i for i in range( source.shape[0] )] )
+  tokens_masked_idx_list = [idxs + num_tokens * i for i in range( source.shape[0] )]
+  idx = torch.cat( tokens_masked_idx_list)
 
   source_shape = source.shape
   # flatten along first two dimension to simplify linear indexing (which then requires an
@@ -197,7 +198,7 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
   # recover batch dimension which was flattend for easier indexing
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
  
-  return (source, token_info, target, idxs)
+  return (source, token_info, target, tokens_masked_idx_list)
 
 ####################################################################################################
 def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :

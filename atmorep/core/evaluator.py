@@ -98,10 +98,10 @@ class Evaluator( Trainer_BERT) :
     if not hasattr(cf, 'num_samples_per_epoch'):
       cf.num_samples_per_epoch = 1024
     if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 128
+      cf.num_samples_validate = 196 #128
     if not hasattr(cf, 'with_mixed_precision'):
-      cf.with_mixed_precision = True
-  
+      cf.with_mixed_precision = False
+    cf.batch_size_start = 14
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
 
@@ -142,7 +142,7 @@ class Evaluator( Trainer_BERT) :
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']
-
+    print("inside global forecast")
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
     evaluator.model.set_global( NetMode.test, np.array( dates))
     if 0 == cf.par_rank :

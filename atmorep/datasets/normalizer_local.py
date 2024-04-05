@@ -17,7 +17,7 @@
 import code
 import numpy as np
 import xarray as xr
-
+import pdb
 import atmorep.config.config as config
 
 class NormalizerLocal() :
@@ -74,13 +74,13 @@ class NormalizerLocal() :
     corr_data_ym = self.corr_data[ (year - self.year_base) * 12 + (month-1) ]
     mean = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='mean').values
     var = corr_data_ym.sel( lat=coords[0], lon=coords[1], data='var').values
-    # print("before", data.mean(), data.std())
+    #print("before", data.mean(), data.std())
     if len(data.shape) > 2 :
       for i in range( data.shape[0]) :
         data[i] = (data[i] * var) + mean
     else :
       data = (data * var) + mean
-    # print("after", data.mean(), data.std())
+    #print("after", data.mean(), data.std())
     return data
 
   

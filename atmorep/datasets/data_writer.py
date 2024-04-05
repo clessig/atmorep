@@ -53,7 +53,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources, sources_coords,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, [t[bidx] for t in sources_coords] )
+      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, sources_coords[fidx][bidx]) #[t[bidx] for t in sources_coords] )
       # ds_batch_item = ds_field.create_group( f'sample={sample:05d}' )
       # ds_batch_item.create_dataset( 'data', data=field[1][bidx])
       # ds_batch_item.create_dataset( 'ml', data=levels)
@@ -69,7 +69,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources, sources_coords,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, [t[bidx] for t in targets_coords] )
+      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) #[t[bidx] for t in targets_coords] )
       # ds_batch_item = ds_field.create_group( f'sample={sample:05d}' )
       # ds_batch_item.create_dataset( 'data', data=field[1][bidx])
       # ds_batch_item.create_dataset( 'ml', data=levels)
@@ -85,7 +85,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources, sources_coords,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, [t[bidx] for t in targets_coords] )
+      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) #[t[bidx] for t in targets_coords] )
       # ds_batch_item = ds_field.create_group( f'sample={sample:05d}' )
       # ds_batch_item.create_dataset( 'data', data=field[1][bidx])
       # ds_batch_item.create_dataset( 'ml', data=levels)
@@ -101,7 +101,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources, sources_coords,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, [t[bidx] for t in targets_coords] )
+      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) # [t[bidx] for t in targets_coords] )
       # ds_batch_item = ds_field.create_group( f'sample={sample:05d}' )
       # ds_batch_item.create_dataset( 'data', data=field[1][bidx])
       # ds_batch_item.create_dataset( 'ml', data=levels)

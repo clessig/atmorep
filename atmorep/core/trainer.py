@@ -246,6 +246,7 @@ class Trainer_Base() :
     self.optimizer.zero_grad()
     
     for batch_idx in range( model.len( NetMode.train)) :
+
       batch_data = self.model.next()
 
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
@@ -401,12 +402,12 @@ class Trainer_Base() :
           # store on cpu
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
-                           tmis_list )
-
+                           tmis_list)
+        
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
           batch_data = self.prepare_batch( batch_data)
           preds, atts = self.model( batch_data)
-        #breakpoint()
+        
         loss = torch.tensor( 0.)
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
@@ -416,7 +417,7 @@ class Trainer_Base() :
           self.test_loss( pred, target)
           # base line loss
           cur_loss = self.MSELoss( pred[0], target = target ).cpu().item()
-         # breakpoint()
+       
           loss += cur_loss 
           total_losses[ifield] += cur_loss
           ifield += 1
@@ -485,7 +486,6 @@ class Trainer_Base() :
           # keep on cpu since it will otherwise clog up GPU memory
           (sources, token_infos, targets, tmis_list) = batch_data[0]
           # targets
-          print("len(batch_data[1])", len(batch_data[1]))
           if len(batch_data[1]) > 0 :
             targets = []
             for target_field in batch_data[1] :
@@ -495,12 +495,11 @@ class Trainer_Base() :
           # TODO: is this still all needed with self.sources_idx
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                                 [target.detach().clone().cpu() for target in targets ],
-                                 tmis_list )
+                                 tmis_list)
         
         batch_data = self.prepare_batch( batch_data)
                           
         preds, atts = self.model( batch_data)
-        breakpoint()
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
 
@@ -557,7 +556,6 @@ class Trainer_Base() :
         loss_en = torch.tensor( 0., device=target.device)
         for en in torch.transpose( pred[2], 1, 0) :
           loss_en += self.MSELoss( en, target = target) 
-        # losses['mse_ensemble'].append( 50. * loss_en / pred[2].shape[1])
         losses['mse_ensemble'].append( loss_en / pred[2].shape[1])
 
       # Generalized cross entroy loss for continuous distributions
@@ -713,43 +711,20 @@ class Trainer_BERT( Trainer_Base) :
     # TODO, TODO: for 6h forecast we need to iterate over predicted token slices
 
     # save source: remains identical so just save ones
-    (sources, targets, _, _) = log_sources
+    (sources, targets, _) = log_sources
 
     sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ] 
-
+    batch_size = len(self.sources_info)  
     # reconstruct geo-coords (identical for all fields)
     forecast_num_tokens = 1
     if hasattr( cf, 'forecast_num_tokens') :
       forecast_num_tokens = cf.forecast_num_tokens
-    
-    num_tokens = cf.fields[0][3]
-    token_size = cf.fields[0][4]
-    # lat_d_h, lon_d_h = int(np.floor(token_size[1]/2.)), int(np.floor(token_size[2]/2.))
-    # lats, lons = [ ], [ ]
-
-    # for tinfo in token_infos[0] :
-    #   lat_min, lat_max = tinfo[0][4], tinfo[ num_tokens[1]*num_tokens[2]-1 ][4]
-    #   lon_min, lon_max = tinfo[0][5], tinfo[ num_tokens[1]*num_tokens[2]-1 ][5]
-    #   res = tinfo[0][-1]
-    #   lat = torch.arange( lat_min - lat_d_h*res, lat_max + lat_d_h*res + 0.001, res)
-    #   if lon_max < lon_min :
-    #     lon = torch.arange( lon_min - lon_d_h*res, 360. + lon_max + lon_d_h*res + 0.001, res)
-    #   else :
-    #     lon = torch.arange( lon_min - lon_d_h*res, lon_max + lon_d_h*res + 0.001, res) 
-    #   lats.append( lat.numpy())
-    #   lons.append( torch.remainder( lon, 360.).numpy())
-
-    # check that last token (bottom right corner) has the expected coords
-    # assert np.allclose( )
-
-    # extract dates for each token entry, constant for each batch and field
-    # dates_t = []
-    # for b_token_infos in token_infos[0] :
-    #   dates_t.append(utils.token_info_to_time(b_token_infos[0])-pd.Timedelta(hours=token_size[0]-1))
-
+  
     # TODO: check that last token matches first one
-
     # process input fields
+    sources_coords = []
+    targets_coords = []
+
     for fidx, field_info in enumerate(cf.fields) :
       # reshape from tokens to contiguous physical field
       num_levels = len(field_info[2])
@@ -757,19 +732,29 @@ class Trainer_BERT( Trainer_Base) :
       # recover tokenized shape
       target = detokenize( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
                                                                       forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
-      # TODO: check that geo-coords match to general ones that have been pre-determined
+     
+      coords_b, targ_coords_b = [], []
       for bidx in range(batch_size):
-        dates = self.sources_info[bidx][0]
-        lats  = self.sources_info[bidx][1]
-        lons  = self.sources_info[bidx][2]
+        dates   = self.sources_info[bidx][0]
+        lats    = self.sources_info[bidx][1]
+        lons    = self.sources_info[bidx][2]
+        dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+     
+        #TODO: add support for multiple months
         for vidx, _ in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( fidx, vidx).denormalize
-          date, coords = dates_t[bidx], [lats[bidx], lons[bidx]]
-          source[bidx,vidx] = denormalize( date.year, date.month, source[bidx,vidx], coords)
-          target[bidx,vidx] = denormalize( date.year, date.month, target[bidx,vidx], coords)
+          # breakpoint()
+          source[bidx,vidx] = denormalize( dates[0].year, dates[0].month, source[bidx,vidx], [lats, lons])
+          target[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, target[bidx,vidx], [lats, lons])
+      
+        coords_b += [[dates, 90.-lats, lons]]
+        targ_coords_b += [[dates_t, 90.-lats, lons]]
+
       # append
       sources_out.append( [field_info[0], source])
       targets_out.append( [field_info[0], target])
+      sources_coords.append(coords_b)
+      targets_coords.append(targ_coords_b)
 
     # process predicted fields
     for fidx, fn in enumerate(cf.fields_prediction) :
@@ -786,29 +771,27 @@ class Trainer_BERT( Trainer_Base) :
                                             forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(1, 2)).swapaxes(0,1)
       
       # denormalize
-      for bidx in range(token_infos[fidx].shape[0]) :
+      for bidx in range(batch_size) : 
+        lats  = self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
+        dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+       
+        #TODO: add support for multiple months
         for vidx, vl in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( self.fields_prediction_idx[fidx], vidx).denormalize
-          date, coords = dates_t[bidx], [lats[bidx], lons[bidx]]
-          pred[bidx,vidx] = denormalize( date.year, date.month, pred[bidx,vidx], coords)
-          ensemble[bidx,:,vidx] = denormalize(date.year, date.month, ensemble[bidx,:,vidx], coords) 
+          # breakpoint()
+          pred[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, pred[bidx,vidx], [lats, lons])
+          ensemble[bidx,:,vidx] = denormalize(dates_t[0].year, dates_t[0].month, ensemble[bidx,:,vidx], [lats, lons]) 
+          
       # append
       preds_out.append( [fn[0], pred])
       ensembles_out.append( [fn[0], ensemble])
 
-    # generate time range
-    dates_sources, dates_targets = [ ], [ ]
-    for bidx in range( source.shape[0]) :
-      r = pd.date_range( start=dates_t[bidx], periods=source.shape[2], freq='h')
-      dates_sources.append( r.to_pydatetime().astype( 'datetime64[s]') )
-      dates_targets.append( dates_sources[-1][ -forecast_num_tokens*token_size[0] : ] )
-
     levels = np.array(cf.fields[0][2])
-    lats = [90.-lat for lat in lats]
-
+    
     write_forecast( cf.wandb_id, epoch, batch_idx,
-                                 levels, sources_out, [dates_sources, lats, lons],
-                                 targets_out, [dates_targets, lats, lons],
+                                 levels, sources_out, sources_coords ,
+                                 targets_out, targets_coords, #[dates_targets, lats, lons],
                                  preds_out, ensembles_out )
   
   ###################################################
@@ -868,8 +851,8 @@ class Trainer_BERT( Trainer_Base) :
       coords_b = []
       for bidx in range(batch_size):
         dates = self.sources_info[bidx][0]
-        lats  = self.sources_info[bidx][1]
-        lons  = self.sources_info[bidx][2]
+        lats  = self.sources_info[bidx][1].numpy()
+        lons  = self.sources_info[bidx][2].numpy()
         
         # target etc are aliasing targets_b which simplifies bookkeeping below
         if is_predicted :

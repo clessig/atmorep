@@ -92,8 +92,9 @@ class AtmoRepData( torch.nn.Module) :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
+    print("ueh")
     dataset.set_data( times_pos, batch_size)
-
+    print("probably I should not be here..")
     self._set_data( dataset, mode, batch_size, num_loader_workers)
 
   ###################################################
@@ -164,10 +165,12 @@ class AtmoRepData( torch.nn.Module) :
   def mode( self, mode : NetMode) :
     
     if mode == NetMode.train :
-      self.data_loader_iter = iter(self.dataset_train) #iter(self.data_loader_train)
+      # self.data_loader_iter = iter(self.data_loader_train)
+      self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
-      self.data_loader_iter = iter(self.dataset_test) #iter(self.data_loader_test)
+      # self.data_loader_iter = iter(self.data_loader_test)
+      self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -448,7 +451,7 @@ class AtmoRep( torch.nn.Module) :
     # embedding
     cf = self.cf
     fields_embed = self.get_fields_embed(xin)
-   
+    
     # attention maps (if requested)
     atts = [ [] for _ in cf.fields ]
 

@@ -43,17 +43,17 @@ if __name__ == '__main__':
   
   # BERT masked token model
   #mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123, 137], 'attention' : False}
-  mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123], 'attention' : False}
+  #mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123], 'attention' : False}
   #mode, options = 'BERT', {'years_test' : [2021], 'attention' : False}
   # BERT forecast mode
   #mode, options = 'forecast', {'forecast_num_tokens' : 1} #, 'fields[0][2]' : [123, 137], 'attention' : False }
   
   # BERT forecast with patching to obtain global forecast
-  # mode, options = 'global_forecast', { 'fields[0][2]' : [123, 137],
-  #                                      'dates' : [[2021, 2, 10, 12]],
-  #                                      'token_overlap' : [0, 0],
-  #                                      'forecast_num_tokens' : 1,
-  #                                      'attention' : False }
+  mode, options = 'global_forecast', { 'fields[0][2]' : [123],
+                                       'dates' : [[2021, 2, 10, 12]],
+                                       'token_overlap' : [0, 0],
+                                       'forecast_num_tokens' : 1,
+                                       'attention' : False }
   now = time.time()
   Evaluator.evaluate( mode, model_id, options)
   print("time", time.time() - now)

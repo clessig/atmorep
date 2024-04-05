@@ -242,7 +242,7 @@ def train() :
   cf.test_initial = True
   cf.attention = False
 
-  cf.rng_seed = 0 #None 
+  cf.rng_seed = None 
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True
