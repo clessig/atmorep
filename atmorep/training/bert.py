@@ -107,7 +107,8 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   tokens_masked_idx_list = [ torch.tensor(rng.permutation(num_tokens)[:nms]) for nms in nums_masked]
   
   # linear indices for masking
-  idx = torch.cat( [tokens_masked_idx_list[i] + num_tokens * i for i in range(batch_dim)] )
+  tokens_masked_idx_list = [tokens_masked_idx_list[i] + num_tokens * i for i in range(batch_dim)]
+  idx = torch.cat( tokens_masked_idx_list)
 
   # flatten along first two dimension to simplify linear indexing (which then requires an
   # easily computable row offset)
