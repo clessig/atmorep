@@ -18,7 +18,6 @@ import torch
 import torchinfo
 import numpy as np
 import code
-# code.interact(local=locals())
 
 from pathlib import Path
 import os
@@ -640,10 +639,10 @@ class Trainer_BERT( Trainer_Base) :
       self.targets.append( targets[ifield].to( devs[cf.fields[ifield][1][3]], non_blocking=True ))
 
     # idxs of masked tokens
-    tmi_out = [[] for _ in range(len(fields_tokens_masked_idx_list))]
+    tmi_out = [ ]
     for i,tmi in enumerate(fields_tokens_masked_idx_list) :
       cdev = devs[cf.fields[i][1][3]]
-      tmi_out[i] = [torch.cat(tmi_l,0).to( cdev, non_blocking=True) for tmi_l in tmi] 
+      tmi_out += [ [torch.cat(tmi_l).to( cdev, non_blocking=True) for tmi_l in tmi] ]
     self.tokens_masked_idx = tmi_out
    
     # learnable class token (cannot be done in the data loader since this is running in parallel)
@@ -851,8 +850,8 @@ class Trainer_BERT( Trainer_Base) :
       coords_b = []
       for bidx in range(batch_size):
         dates = self.sources_info[bidx][0]
-        lats  = self.sources_info[bidx][1].numpy()
-        lons  = self.sources_info[bidx][2].numpy()
+        lats  = self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
         
         # target etc are aliasing targets_b which simplifies bookkeeping below
         if is_predicted :
@@ -865,36 +864,33 @@ class Trainer_BERT( Trainer_Base) :
 
           normalizer = self.model.normalizer( fidx, vidx)
           y, m = dates[0].year, dates[0].month
-          #breakpoint()
-          # print("-----lats source---")
-          # print(lats)
-          # print("-----lons source---")
-          # print(lons)
           sources_b[bidx,vidx] = normalizer.denormalize( y, m, sources_b[bidx,vidx], [lats, lons])
 
           if is_predicted :
+
             # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
             grid = np.flip(np.array( np.meshgrid( self.sources_info[bidx][2], self.sources_info[bidx][1])), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+
             # recover time dimension since idx assumes the full space-time cube
             grid = torch.from_numpy( np.array( np.broadcast_to( grid,
                                 shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
-            #breakpoint()
+            grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
+            grid_lons_toked = tokenize( grid[0], token_size).flatten( 0, 2)
+
+            idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-            lats_mskd = np.array([np.unique(t) for t in tokenize( grid[0], token_size).flatten( 0, 2)[ idx ].numpy()])
-            lons_mskd = np.array([np.unique(t) for t in tokenize( grid[1], token_size).flatten( 0, 2)[ idx ].numpy()])
+            lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lons_mskd = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
            
             #time: idx ranges from 0->863 12x6x12 
-            t_idx = (np.floor(idx / (num_tokens[1]*num_tokens[2])) * token_size[0]).int()
-            t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx]) #create range from t_idx-2 to t_idx
+            t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
+            #create range from t_idx-2 to t_idx
+            t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx])
             dates_mskd = self.sources_info[bidx][0][t_idx]
 
             for ii,(t,p,e,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
                                                     lats_mskd, lons_mskd)) :
-              # print("----la ----")
-              # print(la)
-              # print("----lo ----")
-              # print(lo)
               targets_b[vidx][bidx][ii]   = normalizer.denormalize( y, m, t, [la, lo])
               preds_mu_b[vidx][bidx][ii]  = normalizer.denormalize( y, m, p, [la, lo])
               preds_ens_b[vidx][bidx][ii] = normalizer.denormalize( y, m, e, [la, lo])
