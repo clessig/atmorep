@@ -130,6 +130,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
   ###################################################
   def shuffle( self) :
+
     rng = self.rng
     self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples]
     
@@ -149,7 +150,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # TODO: if we keep this then we should remove the rng_seed argument for the constuctor
     #self.rng = np.random.default_rng()
     #TODO: move shuffle outside iter to avoid param overwriting in global_forecast!!! NB. BERT does not work without shuffle!!
-    #self.shuffle()
+    self.shuffle()
 
     lats, lons = self.lats, self.lons
     #fields_idxs, levels_idxs = self.fields_idxs, self.levels_idxs
@@ -269,15 +270,16 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
     ''' generate patch/token positions for global grid '''
-    token_overlap = torch.tensor( token_overlap).to(torch.int64)
+
+    token_overlap = np.array( token_overlap).astype(np.int64)
 
     # assumed that sanity checking that field data is consistent has been done 
     ifield = 0
     field = self.fields[ifield]
 
     res = self.res
-    side_len = torch.tensor( [field[3][1] * field[4][1]*res[0], field[3][2] * field[4][2]*res[1]] )
-    overlap =torch.tensor([token_overlap[0]*field[4][1]*res[0],token_overlap[1]*field[4][2]*res[1]])
+    side_len = np.array( [field[3][1] * field[4][1]*res[0], field[3][2] * field[4][2]*res[1]] )
+    overlap = np.array([token_overlap[0]*field[4][1]*res[0],token_overlap[1]*field[4][2]*res[1]])
     side_len_2 = side_len / 2.
     assert all( overlap <= side_len_2), 'token_overlap too large for #tokens, reduce if possible'
 
@@ -315,8 +317,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
-    print( f'\n\n{times_pos[-1]}\n\n', flush=True)
-    
     self.set_data( times_pos, batch_size)
 
   ###################################################
