@@ -18,6 +18,7 @@ import numpy as np
 
 import atmorep.config.config as config
 import pdb
+
 class NormalizerGlobal() :
 
   def __init__(self, field_info, vlevel, file_shape, data_type = 'era5', level_type = 'ml') :
@@ -34,6 +35,7 @@ class NormalizerGlobal() :
     #breakpoint()
     corr_data_ym = self.corr_data[ np.where(np.logical_and(self.corr_data[:,0] == float(year),
                                             self.corr_data[:,1] == float(month))) , 2:].flatten()
+    #breakpoint()                                        
     data_temp = (data - corr_data_ym[0]) / corr_data_ym[1]
     # print(data_temp.mean(), data_temp.std())
     return (data - corr_data_ym[0]) / corr_data_ym[1]

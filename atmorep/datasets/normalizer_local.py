@@ -61,6 +61,7 @@ class NormalizerLocal() :
       print( f'var == 0 :: ym : {year} / {month}')
       assert False
     # print("before", data.mean(), data.std())
+    #breakpoint()
     if len(data.shape) > 2 :
       for i in range( data.shape[0]) :
         data[i] = (data[i] - mean) / var

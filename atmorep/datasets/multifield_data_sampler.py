@@ -209,7 +209,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
             # extract data, normalize and tokenize
             cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
-            # breakpoint()
+            #breakpoint()
             cdata = nf( year, month, cdata, (lats[lat_ran], lons[lon_ran]) )
             source_data = tokenize( torch.from_numpy( cdata), tok_size )
           
@@ -238,7 +238,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
       target_idxs = None
-
+      #breakpoint()
       yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
 
   ###################################################

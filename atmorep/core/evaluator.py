@@ -91,17 +91,17 @@ class Evaluator( Trainer_BERT) :
 
     cf.num_loader_workers = cf.loader_num_workers
     cf.data_dir = './data/'
-    cf.rng_seed = 0 #None 
+    cf.rng_seed = None 
+    
     #backward compatibility
     if not hasattr( cf, 'n_size'):
-      cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
+      #cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+      cf.n_size = [36, 0.25*27*2, 0.25*27*4] 
     if not hasattr(cf, 'num_samples_per_epoch'):
       cf.num_samples_per_epoch = 1024
-    if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 196 #128
     if not hasattr(cf, 'with_mixed_precision'):
       cf.with_mixed_precision = False
-    cf.batch_size_start = 14
+    # cf.batch_size_start = 14
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
 
@@ -112,7 +112,8 @@ class Evaluator( Trainer_BERT) :
     cf.lat_sampling_weighted = False
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
-
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 128
     Evaluator.parse_args( cf, args)
 
     Evaluator.run( cf, model_id, model_epoch, devices)
@@ -125,7 +126,8 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'forecast'
     cf.log_test_num_ranks = 4
     cf.forecast_num_tokens = 1  # will be overwritten when user specified
-
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 128 
     Evaluator.parse_args( cf, args)
     
     Evaluator.run( cf, model_id, model_epoch, devices)
@@ -138,7 +140,9 @@ class Evaluator( Trainer_BERT) :
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
     cf.log_test_num_ranks = 1
-
+    cf.batch_size_start = 14
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 196 
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']
@@ -161,7 +165,10 @@ class Evaluator( Trainer_BERT) :
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
     cf.log_test_num_ranks = 1
-    
+    cf.batch_size_start = 14
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 196 
+
     Evaluator.parse_args( cf, args)
 
     if 0 == cf.par_rank :

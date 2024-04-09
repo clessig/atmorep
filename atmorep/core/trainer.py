@@ -245,9 +245,9 @@ class Trainer_Base() :
     self.optimizer.zero_grad()
     
     for batch_idx in range( model.len( NetMode.train)) :
-
+      
       batch_data = self.model.next()
-
+      
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
@@ -386,7 +386,7 @@ class Trainer_Base() :
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
           (sources, token_infos, targets, tmis_list) = batch_data[0]
-
+         # breakpoint()
           # targets
           #TO-DO: implement target
           # if len(batch_data[1]) > 0 :
@@ -617,12 +617,12 @@ class Trainer_BERT( Trainer_Base) :
 
     cf = self.cf
     devs = self.devices
-
+    
     # unpack loader output
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx_list) = xin[0]
     (self.sources_idxs, self.sources_info) = xin[2]
-
+    
     # network input
     batch_data = [ ( sources[i].to( devs[ cf.fields[i][1][3] ], non_blocking=True), 
                     self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
@@ -652,7 +652,7 @@ class Trainer_BERT( Trainer_Base) :
         assert len(cf.fields[ifield][2]) == 1
         tmidx = self.tokens_masked_idx[ifield][0]
         source[ tmidx ] = self.model.net.masks[ifield].to( source.device)
-
+#    breakpoint()
     return batch_data
 
   ###################################################

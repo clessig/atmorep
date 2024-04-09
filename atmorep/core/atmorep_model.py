@@ -450,6 +450,7 @@ class AtmoRep( torch.nn.Module) :
 
     # embedding
     cf = self.cf
+    
     fields_embed = self.get_fields_embed(xin)
     
     # attention maps (if requested)
