@@ -16,19 +16,10 @@
 
 import torch
 import numpy as np
-import math
-import itertools
-import code
-# code.interact(local=locals())
 import zarr
 import pandas as pd
-import pdb
-import code
-from atmorep.utils.utils import days_until_month_in_year
-from atmorep.utils.utils import days_in_month
 from datetime import datetime
-
-import atmorep.config.config as config
+import time
 
 from atmorep.datasets.normalizer_global import NormalizerGlobal
 from atmorep.datasets.normalizer_local import NormalizerLocal
@@ -38,8 +29,8 @@ from atmorep.utils.utils import tokenize
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
-  def __init__( self, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch,
-                rng_seed = None, time_sampling = 1, with_source_idxs = False,
+  def __init__( self, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch, 
+                with_shuffle = False, time_sampling = 1, with_source_idxs = False,
                 fields_targets = None, pre_batch_targets = None ) :
     '''
       Data set for single dynamic field at an arbitrary number of vertical levels
@@ -53,6 +44,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.n_size = n_size
     self.num_samples = num_samples_per_epoch
     self.with_source_idxs = with_source_idxs
+    self.with_shuffle = with_shuffle
 
     self.pre_batch = pre_batch
     
@@ -91,7 +83,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.range_lon = np.array( self.lons[ [0,-1] ])
 
     self.res = np.zeros( 2)
-    self.res[0] = self.ds.attrs['resol'][0] 
+    self.res[0] = [0] 
     self.res[1] = self.ds.attrs['resol'][1] 
     
     # ensure neighborhood does not exceed domain (either at pole or for finite domains)
@@ -99,13 +91,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # lon: no change for periodic case
     if self.ds_global < 1.:
       self.range_lon += np.array([n_size[2]/2., -n_size[2]/2.])
-
-    # ensure all data loaders use same rng_seed and hence generate consistent data
-    if not rng_seed :
-      rng_seed = np.random.randint( 0, 100000, 1)[0]
-      self.rng = np.random.default_rng( rng_seed)
-    else:
-      self.rng = rng_seed
 
     # data normalizers
     self.normalizers = []
@@ -131,7 +116,12 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def shuffle( self) :
 
-    rng = self.rng
+    worker_info = torch.utils.data.get_worker_info()
+    rng_seed = None
+    if worker_info is not None :
+      rng_seed = int(time.time()) // (worker_info.id+1) + worker_info.id
+
+    rng = np.random.default_rng( rng_seed)
     self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples]
     
     lats = rng.random(self.num_samples) * (self.range_lat[1] - self.range_lat[0]) +self.range_lat[0]
@@ -147,13 +137,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def __iter__(self):
 
-    # TODO: if we keep this then we should remove the rng_seed argument for the constuctor
-    #self.rng = np.random.default_rng()
-    #TODO: move shuffle outside iter to avoid param overwriting in global_forecast!!! NB. BERT does not work without shuffle!!
-    self.shuffle()
+    if self.with_shuffle :
+      self.shuffle()
 
     lats, lons = self.lats, self.lons
-    #fields_idxs, levels_idxs = self.fields_idxs, self.levels_idxs
     ts, n_size = self.time_sampling, self.n_size
     ns_2 = np.array(self.n_size) / 2.
     res = self.res
@@ -192,7 +179,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         year, month = self.times[ idxs_t[-1] ].year, self.times[ idxs_t[-1] ].month
         for ifield, field_info in enumerate(self.fields):
 
-          source_lvl, source_info_lvl, tok_info_lvl  = [], [], []
+          source_lvl, tok_info_lvl  = [], []
           tok_size = field_info[4]
           for ilevel, vl in enumerate(field_info[2]):
 

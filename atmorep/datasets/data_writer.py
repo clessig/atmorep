@@ -26,8 +26,8 @@ def write_item(ds_field, name_idx, data, levels, coords, name  = 'sample' ):
   ds_batch_item.create_dataset( 'data', data=data)
   ds_batch_item.create_dataset( 'ml', data=levels)
   ds_batch_item.create_dataset( 'datetime', data=coords[0].astype(np.datetime64))
-  ds_batch_item.create_dataset( 'lat', data=coords[1].astype(np.float32))
-  ds_batch_item.create_dataset( 'lon', data=coords[2].astype(np.float32))
+  ds_batch_item.create_dataset( 'lat', data=np.array(coords[1]).astype(np.float32))
+  ds_batch_item.create_dataset( 'lon', data=np.array(coords[2]).astype(np.float32))
   return ds_batch_item
 
 ####################################################################################################

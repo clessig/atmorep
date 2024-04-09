@@ -54,35 +54,6 @@ class AtmoRepData( torch.nn.Module) :
     self.rng_seed = net.cf.rng_seed 
     if not self.rng_seed :
       self.rng_seed = int(torch.randint( 100000000, (1,))) 
- 
-  ###################################################
-  def load_data( self, mode : NetMode, batch_size = -1, num_loader_workers = -1) :
-    '''Load data'''
-
-    cf = self.net.cf
-    
-    if batch_size < 0 :
-      batch_size = cf.batch_size_max
-    if num_loader_workers < 0 :
-      num_loader_workers = cf.num_loader_workers
-
-    if mode == NetMode.train :
-      self.data_loader_train = self._load_data( self.dataset_train, batch_size, num_loader_workers)
-    elif mode == NetMode.test :
-      batch_size = cf.batch_size_test
-      self.data_loader_test = self._load_data( self.dataset_test, batch_size, num_loader_workers)
-    else : 
-      assert False
-
-  ###################################################
-  def _load_data( self, dataset, batch_size, num_loader_workers) :
-    '''Private implementation for load'''
-
-    loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
-                      'num_workers': num_loader_workers, 'pin_memory': True}
-    data_loader = torch.utils.data.DataLoader( dataset, **loader_params, sampler = None) 
-
-    return data_loader
 
   ###################################################
   def set_data( self, mode : NetMode, times_pos, batch_size = -1, num_loader_workers = -1) :
@@ -92,9 +63,8 @@ class AtmoRepData( torch.nn.Module) :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
-    print("ueh")
     dataset.set_data( times_pos, batch_size)
-    print("probably I should not be here..")
+    
     self._set_data( dataset, mode, batch_size, num_loader_workers)
 
   ###################################################
@@ -154,7 +124,6 @@ class AtmoRepData( torch.nn.Module) :
 
     elif isinstance( field, int) :
       normalizer = self.dataset_train.normalizers[field][vl_idx]
-#      normalizer = self.dataset_train.datasets[field][vl_idx].normalizer
 
     else :
       assert False, 'invalid argument type (has to be index to cf.fields or field name)'
@@ -165,12 +134,12 @@ class AtmoRepData( torch.nn.Module) :
   def mode( self, mode : NetMode) :
     
     if mode == NetMode.train :
-      # self.data_loader_iter = iter(self.data_loader_train)
-      self.data_loader_iter = iter(self.dataset_train)
+      self.data_loader_iter = iter(self.data_loader_train)
+      # self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
-      # self.data_loader_iter = iter(self.data_loader_test)
-      self.data_loader_iter = iter(self.dataset_test)
+      self.data_loader_iter = iter(self.data_loader_test)
+      # self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -196,8 +165,8 @@ class AtmoRepData( torch.nn.Module) :
     return pred
 
   ###################################################
-  def get_attention( self, xin): #, field_idx) :
-    attn = self.net.get_attention( xin) #, field_idx)
+  def get_attention( self, xin) :
+    attn = self.net.get_attention( xin)
     return attn
 
   ###################################################
@@ -211,14 +180,23 @@ class AtmoRepData( torch.nn.Module) :
     self.pre_batch_targets = pre_batch_targets
 
     cf = self.net.cf
+    loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
+                      'num_workers': cf.num_loader_workers, 'pin_memory': True}
+
     self.dataset_train = MultifieldDataSampler( cf.fields, cf.years_train,
                                                 cf.batch_size_start,
-                                                pre_batch, cf.n_size, cf.num_samples_per_epoch )
-                                      
+                                                pre_batch, cf.n_size, cf.num_samples_per_epoch,
+                                              with_shuffle = cf.BERT_strategy != 'global_forecast' )
+    self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
+                                                          sampler = None)
+
     self.dataset_test = MultifieldDataSampler( cf.fields, cf.years_test,
                                                cf.batch_size_start,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
+                                              with_shuffle = cf.BERT_strategy != 'global_forecast',
                                                with_source_idxs = True )
+    self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
+                                                          sampler = None)
 
     return self
 

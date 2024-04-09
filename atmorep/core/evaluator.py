@@ -57,7 +57,6 @@ class Evaluator( Trainer_BERT) :
 
     # set/over-write options as desired
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.load_data( NetMode.test) 
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
