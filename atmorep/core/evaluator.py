@@ -112,7 +112,7 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
     if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 128
+      cf.num_samples_validate = 1472 #128
     Evaluator.parse_args( cf, args)
 
     Evaluator.run( cf, model_id, model_epoch, devices)
@@ -135,7 +135,7 @@ class Evaluator( Trainer_BERT) :
   @staticmethod
   def global_forecast( cf, model_id, model_epoch, devices, args = {}) :
 
-    cf.BERT_strategy = 'forecast'
+    cf.BERT_strategy = 'global_forecast'
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
     cf.log_test_num_ranks = 1
@@ -158,7 +158,7 @@ class Evaluator( Trainer_BERT) :
   def global_forecast_range( cf, model_id, model_epoch, devices, args = {}) :
 
     cf.forecast_num_tokens = 2
-    cf.BERT_strategy = 'forecast'
+    cf.BERT_strategy = 'global_forecast'
     cf.token_overlap = [2, 6]
 
     cf.batch_size_test = 24

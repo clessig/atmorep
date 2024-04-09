@@ -34,6 +34,8 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data,
 
   if BERT_strategy == 'BERT' :
     bert_f = prepare_batch_BERT_field
+  elif BERT_strategy == 'global_forecast' :
+    bert_f = prepare_batch_BERT_forecast_field
   elif BERT_strategy == 'forecast' :
     bert_f = prepare_batch_BERT_forecast_field
   elif BERT_strategy == 'temporal_interpolation' :

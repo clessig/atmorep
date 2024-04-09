@@ -21,9 +21,8 @@ import pdb
 
 class NormalizerGlobal() :
 
-  def __init__(self, field_info, vlevel, file_shape, data_type = 'era5', level_type = 'ml') :
+  def __init__(self, field_info, vlevel, data_type = 'era5', level_type = 'ml') :
    
-    # TODO: use path from config and pathlib.Path()
     fname_base = '{}/{}/normalization/{}/global_normalization_mean_var_{}_{}{}.bin'
     
     fn = field_info[0]
@@ -32,18 +31,14 @@ class NormalizerGlobal() :
  
 
   def normalize( self, year, month, data, coords = None) :
-    #breakpoint()
     corr_data_ym = self.corr_data[ np.where(np.logical_and(self.corr_data[:,0] == float(year),
-                                            self.corr_data[:,1] == float(month))) , 2:].flatten()
-    #breakpoint()                                        
+                                            self.corr_data[:,1] == float(month))) , 2:].flatten()                                      
     data_temp = (data - corr_data_ym[0]) / corr_data_ym[1]
-    # print(data_temp.mean(), data_temp.std())
     return (data - corr_data_ym[0]) / corr_data_ym[1]
 
   def denormalize( self, year, month, data, coords = None) :
     corr_data_ym = self.corr_data[ np.where(np.logical_and(self.corr_data[:,0] == float(year),
                                             self.corr_data[:,1] == float(month))) , 2:].flatten()
-    data_temp = (data * corr_data_ym[1]) + corr_data_ym[0]
-    #print("after denorm", data_temp.mean(), data_temp.std())                   
+    data_temp = (data * corr_data_ym[1]) + corr_data_ym[0]                 
     return (data * corr_data_ym[1]) + corr_data_ym[0]
   

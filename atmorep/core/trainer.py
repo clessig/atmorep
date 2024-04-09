@@ -692,9 +692,9 @@ class Trainer_BERT( Trainer_Base) :
     if not hasattr( self.cf, 'wandb_id') :
       return
 
-    if 'forecast' == self.cf.BERT_strategy :
+    if 'forecast' in self.cf.BERT_strategy :
       self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
-    elif 'BERT' == self.cf.BERT_strategy :
+    elif 'BERT' in self.cf.BERT_strategy :
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     else :
       assert False
@@ -719,11 +719,7 @@ class Trainer_BERT( Trainer_Base) :
     if hasattr( cf, 'forecast_num_tokens') :
       forecast_num_tokens = cf.forecast_num_tokens
   
-    # TODO: check that last token matches first one
-    # process input fields
-    sources_coords = []
-    targets_coords = []
-
+    coords = []
     for fidx, field_info in enumerate(cf.fields) :
       # reshape from tokens to contiguous physical field
       num_levels = len(field_info[2])
@@ -746,14 +742,12 @@ class Trainer_BERT( Trainer_Base) :
           source[bidx,vidx] = denormalize( dates[0].year, dates[0].month, source[bidx,vidx], [lats, lons])
           target[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, target[bidx,vidx], [lats, lons])
       
-        coords_b += [[dates, 90.-lats, lons]]
-        targ_coords_b += [[dates_t, 90.-lats, lons]]
+        coords_b += [[dates, 90.-lats, lons, dates_t]]
 
       # append
       sources_out.append( [field_info[0], source])
       targets_out.append( [field_info[0], target])
-      sources_coords.append(coords_b)
-      targets_coords.append(targ_coords_b)
+      coords.append(coords_b)
 
     # process predicted fields
     for fidx, fn in enumerate(cf.fields_prediction) :
@@ -789,9 +783,9 @@ class Trainer_BERT( Trainer_Base) :
     levels = np.array(cf.fields[0][2])
     
     write_forecast( cf.wandb_id, epoch, batch_idx,
-                                 levels, sources_out, sources_coords ,
-                                 targets_out, targets_coords, #[dates_targets, lats, lons],
-                                 preds_out, ensembles_out )
+                                 levels, sources_out,
+                                 targets_out, preds_out,
+                                 ensembles_out, coords)
   
   ###################################################
   
@@ -867,8 +861,6 @@ class Trainer_BERT( Trainer_Base) :
           sources_b[bidx,vidx] = normalizer.denormalize( y, m, sources_b[bidx,vidx], [lats, lons])
 
           if is_predicted :
-
-            # TODO: make sure normalizer_local / normalizer_global is used in data_loader
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
             grid = np.flip(np.array( np.meshgrid( self.sources_info[bidx][2], self.sources_info[bidx][1])), axis = 0) #flip to have lat on pos 0 and lon on pos 1
 
