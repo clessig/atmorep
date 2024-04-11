@@ -21,8 +21,9 @@ import atmorep.config.config as config
 
 class NormalizerLocal() :
 
-  def __init__(self, field_info, vlevel, data_type = 'era5', level_type = 'ml') :
-
+ # def __init__(self, field_info, vlevel, range_lat, range_lon, res, is_global, data_type= 'era5', level_type = 'ml') : 
+  def __init__(self, field_info, vlevel,  data_type = 'era5', level_type = 'ml') :
+    
     fname_base = './data/{}/normalization/{}/normalization_mean_var_{}_y{}_m{:02d}_{}{}.bin'
     self.year_base = config.datasets[data_type]['extent'][0][0]
     self.year_last = config.datasets[data_type]['extent'][0][1]

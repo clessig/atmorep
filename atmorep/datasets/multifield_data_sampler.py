@@ -62,12 +62,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     print( f'self.lons : {self.lons.shape}', flush=True)
     self.fields_idxs = []
 
-    # TODO
-    # # create (target) fields 
-    # self.datasets_targets = self.create_loaders( fields_targets)
-    # self.fields_targets = fields_targets
-    # self.pre_batch_targets = pre_batch_targets
-
     self.time_sampling = time_sampling
     self.range_lat = np.array( self.lats[ [0,-1] ])
     self.range_lon = np.array( self.lons[ [0,-1] ])
@@ -87,7 +81,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       ner = NormalizerGlobal if corr_type == 'global' else NormalizerLocal
       for vl in field_info[2]: 
         data_type = 'data_sfc' if vl == 0 else 'data' #surface field
-        self.normalizers[-1] += [ ner( field_info, vl ) ]
+        self.normalizers[-1] += [ ner( field_info, vl)] #, self.range_lat, self.range_lon, self.res, self.ds_global ) ]
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
     self.idxs_years = np.arange( self.ds_len)
@@ -216,6 +210,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # generate all the data
     self.idxs_perm = np.zeros( (len(times_pos), 2))
     self.idxs_perm_t = []
+    self.num_samples = len(times_pos)
     for idx, item in enumerate( times_pos) :
 
       assert item[2] >= 1 and item[2] <= 31
@@ -278,7 +273,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
     batch_size = num_tiles_lon
-
+ 
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
     self.set_data( times_pos, batch_size)

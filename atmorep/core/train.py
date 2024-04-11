@@ -185,7 +185,7 @@ def train() :
   cf.batch_size_max = 32
   cf.batch_size_delta = 8
   cf.num_epochs = 128
-  # cf.num_loader_workers = 1#8
+  
   # additional infos
   cf.size_token_info = 8
   cf.size_token_info_net = 16
@@ -252,7 +252,6 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
-  #cf.levels = [114, 123, 137]
   cf.with_mixed_precision = True
   # cf.n_size = [36, 1*9*6, 1.*9*12]
   # in steps x lat_degrees x lon_degrees
@@ -261,9 +260,6 @@ def train() :
   cf.num_samples_per_epoch = 1024
   cf.num_samples_validate = 128
   cf.num_loader_workers = 1 #8
-
-  cf.years_train = [2021] # list( range( 1980, 2018))
-  cf.years_test = [2021]  #[2018] 
 
   trainer = Trainer_BERT( cf, device).create()
   trainer.run()

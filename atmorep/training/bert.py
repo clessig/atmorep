@@ -18,8 +18,6 @@ import torch
 import numpy as np
 from functools import partial
 import code
-import pdb
-# from atmorep.utils.utils import tokenize
 
 ####################################################################################################
 def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data, fields_infos) :
@@ -40,12 +38,6 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data,
     bert_f = prepare_batch_BERT_forecast_field
   elif BERT_strategy == 'temporal_interpolation' :
     bert_f = prepare_batch_BERT_temporal_field
-  elif BERT_strategy == 'forecast_1shot' :
-    bert_f = prepare_batch_BERT_forecast_field_1shot
-  elif BERT_strategy == 'identity' :
-    bert_f = prepare_batch_BERT_identity_field
-  elif BERT_strategy == 'totalmask' :
-    bert_f = prepare_batch_BERT_totalmask_field
   else :
     assert False
 
@@ -158,11 +150,6 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
     # unsqueeze(usq()) is required since channel dimension is expected
     temp = mr( mr( usq( source[ idx[idx_mr_cond] ].reshape( (-1,ts[0],ts[1],ts[2])), 1), mrs), ts) 
     source[ idx[idx_mr_cond] ] = sq( fl( temp, -3, -1))
-    # adjust resolution parameter in token_info
-    # token_info_shape = token_info.shape
-    # token_info = token_info.flatten( 0, 1)
-    # token_info[ idx[idx_mr_cond] ][-1] *= (mrs[1] + mrs[2]) / 2.  #TODO: anisotropic resolution
-    # token_info = token_info.reshape( token_info_shape)
 
   # recover batch dimension which was flattend for easier indexing and also token dimensions
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
@@ -210,7 +197,7 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
   num_tokens_space = num_tokens[1] * num_tokens[2] 
   idx_time_mask = int( np.floor(num_tokens[0] / 2.))  # TODO: masking of multiple time steps
   idxs = idx_time_mask * num_tokens_space + torch.arange(num_tokens_space)
-
+  
   # collapse token dimensions 
   source_shape0 = source.shape
   source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
@@ -218,8 +205,7 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
   # linear indices for masking
   num_tokens = source.shape[1]
   idx = torch.cat( [idxs + num_tokens * i for i in range( source.shape[0] )] )
-  tokens_masked_idx = idx
-
+  tokens_masked_idx_list = [idxs + num_tokens * i for i in range( source.shape[0] )]
   source_shape = source.shape
   # flatten along first two dimension to simplify linear indexing (which then requires an
   # easily computable row offset)
@@ -235,77 +221,4 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
   # recover batch dimension which was flattend for easier indexing
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
  
-  return (source, token_info, target, tokens_masked_idx, idxs)
-
-####################################################################################################
-def prepare_batch_BERT_forecast_field_1shot( cf, ifield, source, token_info, rng) :
-
-  nt = 1  # TODO: specify this in config
-  num_tokens = source.shape[-6:-3]
-  num_tokens_space = num_tokens[1] * num_tokens[2] 
-  idxs = (num_tokens[0]-nt) * num_tokens_space + torch.arange(num_tokens_space)
-
-  # collapse token dimensions 
-  source_shape0 = source.shape
-  source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
-
-  # linear indices for masking
-  num_tokens = source.shape[1]
-  # mask only every second neighborhood: 1 shot setting
-  idx = torch.cat( [idxs + num_tokens * i for i in range( 1, source.shape[0], 2 )] )
-  tokens_masked_idx = idx
-
-  source_shape = source.shape
-  # flatten along first two dimension to simplify linear indexing (which then requires an
-  # easily computable row offset)
-  source = torch.flatten( source, 0, 1)
-
-  # keep masked tokens for loss computation
-  target = source[idx].clone()
-
-  # masking
-  global_mean = 0. * torch.mean(source, 0)
-  source[ idx ] = global_mean
-
-  # recover batch dimension which was flattend for easier indexing
-  source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
-
-  return (source, token_info, target, tokens_masked_idx, idxs)
-
-####################################################################################################
-def prepare_batch_BERT_totalmask_field( cf, ifield, source, token_info, rng) :
- 
-  num_tokens = source.shape[-6:-3]
-  num_tokens_space = num_tokens[1] * num_tokens[2] 
-  idxs = torch.arange(num_tokens[0] * num_tokens_space)
-
-  # collapse token dimensions 
-  source_shape0 = source.shape
-  source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
-
-  # linear indices for masking
-  num_tokens = source.shape[1]
-  idx = torch.cat( [idxs + num_tokens * i for i in range( source.shape[0] )] )
-  tokens_masked_idx = idx
-
-  source_shape = source.shape
-  # flatten along first two dimension to simplify linear indexing (which then requires an
-  # easily computable row offset)
-  source = torch.flatten( source, 0, 1)
- 
-  # keep masked tokens for loss computation
-  target = source[idx].clone()
-
-  # masking
-  global_mean = 0. * torch.mean(source, 0)
-  source[ idx ] = global_mean
- 
-  # recover batch dimension which was flattend for easier indexing
-  source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
- 
-  return (source, token_info, target, tokens_masked_idx)
-
-####################################################################################################
-def prepare_batch_BERT_identity_field( cf, ifield, source, token_info, rng) :
-
-  return (source, token_info, None, None, None)
+  return (source, token_info, target, tokens_masked_idx_list)

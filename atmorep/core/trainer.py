@@ -24,7 +24,6 @@ import os
 import datetime
 from typing import TypeVar
 import functools
-import pdb
 import pandas as pd
 
 import wandb
@@ -168,9 +167,6 @@ class Trainer_Base() :
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
       print( f'Number of trainable parameters: {num_params:,}')
-
-    # test at the beginning as reference
-    self.model.load_data( NetMode.test, batch_size=cf.batch_size_test)
   
     if cf.test_initial :
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
@@ -186,7 +182,7 @@ class Trainer_Base() :
       lr = learn_rates[epoch]
       for g in self.optimizer.param_groups:
         g['lr'] = lr
-      self.model.load_data( NetMode.train, batch_size = cf.batch_size_max)
+
       self.profile()
 
     # training loop
@@ -204,7 +200,6 @@ class Trainer_Base() :
       tstr = datetime.datetime.now().strftime("%H:%M:%S")
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, batch_size, lr) )
 
-      self.model.load_data( NetMode.train, batch_size = batch_size)
       self.train( epoch)
 
       if cf.with_wandb and 0 == cf.par_rank :
@@ -368,7 +363,7 @@ class Trainer_Base() :
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
-
+   
     cf = self.cf
     BERT_strategy_train = cf.BERT_strategy
     cf.BERT_strategy = BERT_test_strategy
@@ -386,19 +381,7 @@ class Trainer_Base() :
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
           (sources, token_infos, targets, tmis_list) = batch_data[0]
-         # breakpoint()
-          # targets
-          #TO-DO: implement target
-          # if len(batch_data[1]) > 0 :
-          #   print("len(batch_data[1])", len(batch_data[1]))
-          #   if type(batch_data[1][0][0]) is list :
-          #     targets = [batch_data[1][i][0][0] for i in range( len(batch_data[1]))]
-          #   else :
-          #     targets = batch_data[1][0]
-            # targets = []
-            # for target_field in batch_data[1] :
-            #   targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
-          # store on cpu
+    
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
                            tmis_list)
@@ -463,68 +446,6 @@ class Trainer_Base() :
     self.mode_test = False
     
     return total_loss
-
-  ###################################################
-  def evaluate( self, data_idx = 0, log = True):
-
-    cf = self.cf
-    self.model.mode( NetMode.test)
-    
-    log_sources = []
-    test_len = 0
-
-    # evaluate
-    loss = torch.tensor( 0.)
-    
-    with torch.no_grad() : 
-      for it in range( self.model.len( NetMode.test)) :
-
-        batch_data = self.model.next()
-
-        if cf.par_rank < cf.log_test_num_ranks :
-          # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis_list) = batch_data[0]
-          # targets
-          if len(batch_data[1]) > 0 :
-            targets = []
-            for target_field in batch_data[1] :
-              targets.append(torch.cat([target_vl[0].unsqueeze(1) for target_vl in target_field],1))
-
-          # store on cpu
-          # TODO: is this still all needed with self.sources_idx
-          log_sources = ( [source.detach().clone().cpu() for source in sources ],
-                                [target.detach().clone().cpu() for target in targets ],
-                                 tmis_list)
-        
-        batch_data = self.prepare_batch( batch_data)
-                          
-        preds, atts = self.model( batch_data)
-        ifield = 0
-        for pred, idx in zip( preds, self.fields_prediction_idx) :
-
-          target = self.targets[idx]
-          cur_loss = self.MSELoss( pred[0], target = target ).cpu()
-          loss += cur_loss
-          ifield += 1
-
-        test_len += 1
-
-        # logging
-        if cf.par_rank < cf.log_test_num_ranks :
-          self.log_validate( data_idx, it, log_sources, preds)
-          
-          if cf.attention:
-            self.log_attention( data_idx , it, atts)
-
-    # average over all nodes
-    loss /= test_len * len(self.cf.fields_prediction)
-    if cf.with_ddp :
-      loss_cuda = loss.cuda()
-      dist.all_reduce( loss_cuda, op=torch.distributed.ReduceOp.AVG )
-      loss = loss_cuda.cpu()
-
-    if 0 == cf.par_rank :
-      print( 'Loss {}'.format( loss))
 
   ###################################################
   def test_loss( self, pred, target) :
@@ -652,7 +573,7 @@ class Trainer_BERT( Trainer_Base) :
         assert len(cf.fields[ifield][2]) == 1
         tmidx = self.tokens_masked_idx[ifield][0]
         source[ tmidx ] = self.model.net.masks[ifield].to( source.device)
-#    breakpoint()
+
     return batch_data
 
   ###################################################
@@ -694,7 +615,7 @@ class Trainer_BERT( Trainer_Base) :
 
     if 'forecast' in self.cf.BERT_strategy :
       self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
-    elif 'BERT' in self.cf.BERT_strategy :
+    elif 'BERT' in self.cf.BERT_strategy or 'temporal_interpolation' == self.cf.BERT_strategy :
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     else :
       assert False
@@ -702,12 +623,8 @@ class Trainer_BERT( Trainer_Base) :
   ###################################################
   def log_validate_forecast( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=forecast.'''
-    
-    # TODO, TODO: use sources_idx
 
     cf = self.cf
-
-    # TODO, TODO: for 6h forecast we need to iterate over predicted token slices
 
     # save source: remains identical so just save ones
     (sources, targets, _) = log_sources
@@ -726,7 +643,7 @@ class Trainer_BERT( Trainer_Base) :
       source = detokenize( sources[fidx].cpu().detach().numpy())
       # recover tokenized shape
       target = detokenize( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
-                                                                      forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
+                           forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
      
       coords_b, targ_coords_b = [], []
       for bidx in range(batch_size):
@@ -738,7 +655,6 @@ class Trainer_BERT( Trainer_Base) :
         #TODO: add support for multiple months
         for vidx, _ in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( fidx, vidx).denormalize
-          # breakpoint()
           source[bidx,vidx] = denormalize( dates[0].year, dates[0].month, source[bidx,vidx], [lats, lons])
           target[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, target[bidx,vidx], [lats, lons])
       
@@ -772,7 +688,6 @@ class Trainer_BERT( Trainer_Base) :
         #TODO: add support for multiple months
         for vidx, vl in enumerate(field_info[2]) :
           denormalize = self.model.normalizer( self.fields_prediction_idx[fidx], vidx).denormalize
-          # breakpoint()
           pred[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, pred[bidx,vidx], [lats, lons])
           ensemble[bidx,:,vidx] = denormalize(dates_t[0].year, dates_t[0].month, ensemble[bidx,:,vidx], [lats, lons]) 
           

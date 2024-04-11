@@ -94,13 +94,12 @@ class Evaluator( Trainer_BERT) :
     
     #backward compatibility
     if not hasattr( cf, 'n_size'):
-      #cf.n_size = [36, 0.25*9*6, 0.25*9*12]
-      cf.n_size = [36, 0.25*27*2, 0.25*27*4] 
+      cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+      #cf.n_size = [36, 0.25*27*2, 0.25*27*4] 
     if not hasattr(cf, 'num_samples_per_epoch'):
       cf.num_samples_per_epoch = 1024
     if not hasattr(cf, 'with_mixed_precision'):
       cf.with_mixed_precision = False
-    # cf.batch_size_start = 14
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
 
@@ -112,7 +111,7 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
     if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 1472 #128
+      cf.num_samples_validate = 128 #1472 
     Evaluator.parse_args( cf, args)
 
     Evaluator.run( cf, model_id, model_epoch, devices)
@@ -145,7 +144,6 @@ class Evaluator( Trainer_BERT) :
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']
-    print("inside global forecast")
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
     evaluator.model.set_global( NetMode.test, np.array( dates))
     if 0 == cf.par_rank :
@@ -159,7 +157,7 @@ class Evaluator( Trainer_BERT) :
 
     cf.forecast_num_tokens = 2
     cf.BERT_strategy = 'global_forecast'
-    cf.token_overlap = [2, 6]
+    cf.token_overlap = [0, 0]
 
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
@@ -195,7 +193,9 @@ class Evaluator( Trainer_BERT) :
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
     cf.log_test_num_ranks = 4
-
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 128
+    Evaluator.parse_args( cf, args)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################

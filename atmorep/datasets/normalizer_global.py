@@ -15,9 +15,7 @@
 ####################################################################################################
 
 import numpy as np
-
 import atmorep.config.config as config
-import pdb
 
 class NormalizerGlobal() :
 
