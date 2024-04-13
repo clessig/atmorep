@@ -90,7 +90,7 @@ class Evaluator( Trainer_BERT) :
       print( 'Running Evaluate.evaluate with mode =', mode)
 
     cf.num_loader_workers = cf.loader_num_workers
-    cf.data_dir = './data/'
+    cf.data_dir = config.path_data
 
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
