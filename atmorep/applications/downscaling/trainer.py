@@ -36,6 +36,8 @@ from atmorep.core.trainer import Trainer_Base
 from atmorep.core.atmorep_model import AtmoRep
 from atmorep.core.atmorep_model import AtmoRepData
 
+import atmorep.config.config as config
+
 from atmorep.applications.downscaling.atmorep_downscaling import AtmoRepDownscaling
 
 from atmorep.training.bert import prepare_batch_BERT_multifield
@@ -281,7 +283,7 @@ class Trainer_Downscaling( Trainer_Base) :
 
     s2s = shape_to_str
 
-    fname_base = './results/id{}/test_id{}_rank{}_epoch{:0>5}_batch{:0>5}'
+    fname_base = config.path_results + '/id{}/test_id{}_rank{}_epoch{:0>5}_batch{:0>5}'
     fname_base = fname_base.format( cf.wandb_id, cf.wandb_id, cf.hvd_rank, epoch, bidx) 
     fname_base += '_{}_{}_{}.dat'
   
