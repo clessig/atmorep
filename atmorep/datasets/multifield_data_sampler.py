@@ -82,9 +82,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.range_lat = np.array( self.lats[ [0,-1] ])
     self.range_lon = np.array( self.lons[ [0,-1] ])
 
-    self.res = np.zeros( 2)
-    self.res[0] = [0] 
-    self.res[1] = self.ds.attrs['resol'][1] 
+    self.res = np.array(self.ds.attrs['resol'])
     
     # ensure neighborhood does not exceed domain (either at pole or for finite domains)
     self.range_lat += np.array([n_size[1] / 2., -n_size[1] / 2.])

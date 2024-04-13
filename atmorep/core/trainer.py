@@ -168,9 +168,6 @@ class Trainer_Base() :
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
       print( f'Number of trainable parameters: {num_params:,}')
-
-    # test at the beginning as reference
-    self.model.load_data( NetMode.test, batch_size=cf.batch_size_test)
   
     if cf.test_initial :
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
@@ -204,7 +201,6 @@ class Trainer_Base() :
       tstr = datetime.datetime.now().strftime("%H:%M:%S")
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, batch_size, lr) )
 
-      self.model.load_data( NetMode.train, batch_size = batch_size)
       self.train( epoch)
 
       if cf.with_wandb and 0 == cf.par_rank :
