@@ -25,7 +25,6 @@ from atmorep.datasets.normalizer_global import NormalizerGlobal
 from atmorep.datasets.normalizer_local import NormalizerLocal
 from atmorep.utils.utils import tokenize
 
-
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
@@ -48,19 +47,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     self.pre_batch = pre_batch
     
-    # create (source) fields
-    # config.path_data
-    fname_source = '/p/scratch/atmo-rep/era5_res0025_1979.zarr'
-    fname_source = '/p/scratch/atmo-rep/era5_res0025_2021.zarr'
     fname_source = '/p/scratch/atmo-rep/data/era5_1deg/era5_res0025_2021_final.zarr'
-    # fname_source = '/p/scratch/atmo-rep/era5_res0100_2021_t5.zarr'
     self.ds = zarr.open( fname_source)
     self.ds_global = self.ds.attrs['is_global']
     self.ds_len = self.ds['data'].shape[0]
-
-    # sanity checking
-    # assert self.ds['data'].shape[0] == self.ds['time'].shape[0]
-    # assert self.ds_len >= num_samples_per_epoch
 
     self.lats = np.array( self.ds['lats'])
     self.lons = np.array( self.ds['lons'])
@@ -72,16 +62,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     print( f'self.lons : {self.lons.shape}', flush=True)
     self.fields_idxs = []
 
-    # TODO
-    # # create (target) fields 
-    # self.datasets_targets = self.create_loaders( fields_targets)
-    # self.fields_targets = fields_targets
-    # self.pre_batch_targets = pre_batch_targets
-
     self.time_sampling = time_sampling
     self.range_lat = np.array( self.lats[ [0,-1] ])
     self.range_lon = np.array( self.lons[ [0,-1] ])
-
     self.res = np.array(self.ds.attrs['resol'])
     
     # ensure neighborhood does not exceed domain (either at pole or for finite domains)
@@ -98,17 +81,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       ner = NormalizerGlobal if corr_type == 'global' else NormalizerLocal
       for vl in field_info[2]: 
         data_type = 'data_sfc' if vl == 0 else 'data' #surface field
-        self.normalizers[-1] += [ ner( field_info, vl, 
-                                  np.array(self.ds[data_type].shape)[[0,-2,-1]]) ]
+        self.normalizers[-1] += [ ner( field_info, vl)] #, self.range_lat, self.range_lon, self.res, self.ds_global ) ]
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
-    # idxs = np.zeros( self.ds['time'].shape[0], dtype=np.bool_)
-    # self.idxs_years = np.array( [])
-    # for year in years :
-    #   idxs = np.where( (self.times >= f'{year}-1-1') & (self.times <= f'{year}-12-31'))[0]
-    #   assert idxs.shape[0] > 0, f'Requested year is not in dataset {fname_source}. Aborting.'
-    #   self.idxs_years = np.append( self.idxs_years, idxs[::self.time_sampling])
-    # TODO, TODO, TODO:
     self.idxs_years = np.arange( self.ds_len)
 
   ###################################################
@@ -194,7 +169,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
             # extract data, normalize and tokenize
             cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
-            #breakpoint()
             cdata = nf( year, month, cdata, (lats[lat_ran], lons[lon_ran]) )
             source_data = tokenize( torch.from_numpy( cdata), tok_size )
           
@@ -223,7 +197,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
       target_idxs = None
-      #breakpoint()
       yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
 
   ###################################################
@@ -237,6 +210,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # generate all the data
     self.idxs_perm = np.zeros( (len(times_pos), 2))
     self.idxs_perm_t = []
+    self.num_samples = len(times_pos)
     for idx, item in enumerate( times_pos) :
 
       assert item[2] >= 1 and item[2] <= 31
@@ -299,7 +273,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
     batch_size = num_tiles_lon
-
+ 
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
     self.set_data( times_pos, batch_size)
