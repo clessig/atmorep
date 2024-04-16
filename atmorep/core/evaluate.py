@@ -19,10 +19,10 @@ import time
 if __name__ == '__main__':
 
   # models for individual fields
-  #model_id = '4nvwbetz'     # vorticity
+  model_id = '4nvwbetz'     # vorticity
   #model_id = 'oxpycr7w'     # divergence
   # model_id = '1565pb1f'     # specific_humidity
-  # model_id = '3kdutwqb'     # total precip
+  #model_id = '3kdutwqb'     # total precip
   #model_id = 'dys79lgw'     # velocity_u
   #model_id = '22j6gysw'     # velocity_v
   # model_id = '15oisw8d'     # velocity_z
@@ -30,7 +30,7 @@ if __name__ == '__main__':
   #model_id = '2147fkco'     # temperature (also 2147fkco)
 
   # multi-field configurations with either velocity or voritcity+divergence
-  model_id = '1jh2qvrx'     # multiformer, velocity
+  # model_id = '1jh2qvrx'     # multiformer, velocity
   # model_id = 'wqqy94oa'     # multiformer, vorticity
   # model_id = '3cizyl1q'     # 3 field config: u,v,T
   # model_id = '1v4qk0qx'     # pre-trained, 3h forecasting
@@ -46,15 +46,15 @@ if __name__ == '__main__':
   #mode, options = 'BERT', {'years_test' : [2021], 'fields[0][2]' : [123], 'attention' : False}
   #mode, options = 'BERT', {'years_test' : [2021], 'attention' : False}
   # BERT forecast mode
-  mode, options = 'forecast', {'forecast_num_tokens' : 2, 'fields[0][2]' : [123], 'attention' : False }
-  
+  #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'fields[0][2]' : [123], 'attention' : False }
+  #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'attention' : False }
   #temporal interpolation 
-  #mode, options = 'temporal_interpolation', {'fields[0][2]' : [123], 'attention' : False }
+  mode, options = 'temporal_interpolation', {'fields[0][2]' : [123], 'attention' : False }
 
   # BERT forecast with patching to obtain global forecast
   # mode, options = 'global_forecast', { 'fields[0][2]' : [114], #[123, 137], #[105, 137],
   #                                      'dates' : [[2021, 1, 10, 18]], #[[2021, 2, 10, 12]],
-  #                                      'token_overlap' : [2, 6],
+  #                                      'token_overlap' : [0, 0],
   #                                      'forecast_num_tokens' : 2,
   #                                      'attention' : False }
   now = time.time()

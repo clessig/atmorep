@@ -21,14 +21,15 @@ import pandas as pd
 from datetime import datetime
 import time
 
-from atmorep.datasets.normalizer_global import NormalizerGlobal
-from atmorep.datasets.normalizer_local import NormalizerLocal
+# from atmorep.datasets.normalizer_global import NormalizerGlobal
+# from atmorep.datasets.normalizer_local import NormalizerLocal
+from atmorep.datasets.normalizer import normalize
 from atmorep.utils.utils import tokenize
 
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
-  def __init__( self, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch, 
+  def __init__( self, file_path, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch, 
                 with_shuffle = False, time_sampling = 1, with_source_idxs = False,
                 fields_targets = None, pre_batch_targets = None ) :
     '''
@@ -47,16 +48,16 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     self.pre_batch = pre_batch
     
-    fname_source = '/p/scratch/atmo-rep/data/era5_1deg/era5_res0025_2021_final.zarr'
-    self.ds = zarr.open( fname_source)
+    #fname_source = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_final.zarr'
+    self.ds = zarr.open( file_path) 
     self.ds_global = self.ds.attrs['is_global']
-    self.ds_len = self.ds['data'].shape[0]
 
     self.lats = np.array( self.ds['lats'])
     self.lons = np.array( self.ds['lons'])
     
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
+    self.ds_len = st[0] #self.ds['data'].shape[2]
     print( f'self.ds[\'data\'] : {sh} :: {st}')
     print( f'self.lats : {self.lats.shape}', flush=True)
     print( f'self.lons : {self.lons.shape}', flush=True)
@@ -65,8 +66,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.time_sampling = time_sampling
     self.range_lat = np.array( self.lats[ [0,-1] ])
     self.range_lon = np.array( self.lons[ [0,-1] ])
-    self.res = np.array(self.ds.attrs['resol'])
-
+    self.res = np.array(self.ds.attrs['res'])
+    self.year_base = self.ds['time'][0].astype(datetime).year
     # ensure neighborhood does not exceed domain (either at pole or for finite domains)
     self.range_lat += np.array([n_size[1] / 2., -n_size[1] / 2.])
     # lon: no change for periodic case
@@ -75,13 +76,19 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     # data normalizers
     self.normalizers = []
-    for _, field_info in enumerate(fields) :
-      self.normalizers.append( [])
+    for ifield, field_info in enumerate(fields) :
       corr_type = 'global' if len(field_info) <= 6 else field_info[6]
-      ner = NormalizerGlobal if corr_type == 'global' else NormalizerLocal
+      nf_name = 'global_norm' if corr_type == 'global' else 'norm'
+      self.normalizers.append( [] )
       for vl in field_info[2]: 
-        data_type = 'data_sfc' if vl == 0 else 'data' #surface field
-        self.normalizers[-1] += [ ner( field_info, vl)] #, self.range_lat, self.range_lon, self.res, self.ds_global ) ]
+        if vl == 0:
+          field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
+          self.normalizers[ifield] += [self.ds[f'normalization/{nf_name}_sfc'].oindex[ :, :, field_idx]] 
+        else:
+          vl_idx = self.ds.attrs['levels'].index(vl)
+          field_idx = self.ds.attrs['fields'].index( field_info[0])
+          self.normalizers[ifield] += [self.ds[f'normalization/{nf_name}'].oindex[ :, :, field_idx, vl_idx]] 
+
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
     self.idxs_years = np.arange( self.ds_len)
@@ -153,23 +160,28 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         for ifield, field_info in enumerate(self.fields):
 
           source_lvl, tok_info_lvl  = [], []
-          tok_size = field_info[4]
+          tok_size  = field_info[4]
+          corr_type = 'global' if len(field_info) <= 6 else field_info[6]
+        
           for ilevel, vl in enumerate(field_info[2]):
 
             if vl == 0 : #surface level
               field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-              data_t = self.ds['data_sfc'].oindex[ idxs_t, field_idx]
+              data_t = self.ds['data_sfc'].oindex[field_idx,  idxs_t]
             else :
               field_idx = self.ds.attrs['fields'].index( field_info[0])
               vl_idx = self.ds.attrs['levels'].index(vl)
-              data_t = self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]
-
-            nf = self.normalizers[ifield][ilevel].normalize
+              data_t = self.ds['data'].oindex[ field_idx, vl_idx, idxs_t]
+          
             source_data, tok_info = [], []
-
             # extract data, normalize and tokenize
             cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
-            cdata = nf( year, month, cdata, (lats[lat_ran], lons[lon_ran]) )
+            
+            normalizer = self.normalizers[ifield][ilevel]
+            if corr_type != 'global':   
+              normalizer = np.take( np.take( normalizer, lat_ran, -2), lon_ran, -1)
+
+            cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
             source_data = tokenize( torch.from_numpy( cdata), tok_size )
           
             # token_infos uses center of the token: *last* datetime and center in space

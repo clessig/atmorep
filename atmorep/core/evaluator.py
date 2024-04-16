@@ -82,14 +82,14 @@ class Evaluator( Trainer_BERT) :
     cf.par_rank = par_rank
     cf.par_size = par_size
     # overwrite old config
-    cf.data_dir = str(config.path_data)
+    cf.file_path = str(config.path_data)
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
 
     cf.num_loader_workers = cf.loader_num_workers
-    cf.data_dir = './data/'
+    #cf.data_dir = './data/'
     cf.rng_seed = None 
     
     #backward compatibility
