@@ -691,7 +691,7 @@ class Trainer_BERT( Trainer_Base) :
         for vidx, vl in enumerate(field_info[2]) :
           normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
           pred[bidx,vidx] = denormalize( pred[bidx,vidx], normalizer, dates_t, year_base)
-          ensemble[bidx,:,vidx] = denormalize(ensemble[bidx,:,vidx].swapaxes(0,1), normalizer, dates_t, year_base).swapaxes(0,1)
+          ensemble[bidx,:,vidx] = denormalize(ensemble[bidx,:,vidx], normalizer, dates_t, year_base)
           
       # append
       preds_out.append( [fn[0], pred])
