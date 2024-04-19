@@ -194,9 +194,14 @@ def prepare_batch_BERT_forecast_field( cf, ifield, source, token_info, rng) :
 def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
  
   num_tokens = source.shape[-6:-3]
-  num_tokens_space = num_tokens[1] * num_tokens[2] 
-  idx_time_mask = int( np.floor(num_tokens[0] / 2.))  # TODO: masking of multiple time steps
-  idxs = idx_time_mask * num_tokens_space + torch.arange(num_tokens_space)
+  num_tokens_space = num_tokens[1] * num_tokens[2]
+  
+  #backward compatibility: mask only middle token
+  if not hasattr( cf, 'idx_time_mask'):
+    idx_time_mask = int( np.floor(num_tokens[0] / 2.)) 
+    idxs = idx_time_mask * num_tokens_space + torch.arange(num_tokens_space)
+  else: #list of idx_time_mask
+    idxs = torch.concat([i*num_tokens_space + torch.arange(num_tokens_space) for i in cf.idx_time_mask])
   
   # collapse token dimensions 
   source_shape0 = source.shape

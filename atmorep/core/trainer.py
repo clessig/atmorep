@@ -656,7 +656,6 @@ class Trainer_BERT( Trainer_Base) :
         lats_idx = self.sources_idxs[bidx][1]
         lons_idx = self.sources_idxs[bidx][2]
 
-        #TODO: add support for multiple months
         for vidx, _ in enumerate(field_info[2]) :
           normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx) 
           source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)

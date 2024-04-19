@@ -47,8 +47,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.with_shuffle = with_shuffle
 
     self.pre_batch = pre_batch
-    
-    #fname_source = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_final.zarr'
     self.ds = zarr.open( file_path) 
     self.ds_global = self.ds.attrs['is_global']
 
@@ -57,7 +55,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
-    self.ds_len = st[0] #self.ds['data'].shape[2]
+    self.ds_len = st[0] 
     print( f'self.ds[\'data\'] : {sh} :: {st}')
     print( f'self.lats : {self.lats.shape}', flush=True)
     print( f'self.lons : {self.lons.shape}', flush=True)
