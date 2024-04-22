@@ -114,9 +114,10 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  # cf.fields = [ [ 'vorticity', [ 1, 2048, [ ], 0 ], 
-  #                              [ 123 ], 
-  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  cf.fields = [ [ 'vorticity', [ 1, 2048, [ ], 0 ], 
+                               [ 123 ], 
+                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
   # cf.fields = [ [ 'velocity_u', [ 1, 2048, [ ], 0], 
   #                               [ 96, 105, 114, 123, 137 ], 
@@ -150,20 +151,22 @@ def train() :
   # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0], 
   #                               [ 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
-  cf.fields = [
-                [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
-                                [ 114, 123, 137 ], 
-                                [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ],
-                [ 'total_precip', [ 1, 1536, [ ], 3 ],
-                                  [ 0 ], 
-                                  [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
+  # cf.fields = [
+  #               [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+  #                               [ 114, 123, 137 ], 
+  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ],
+  #               [ 'total_precip', [ 1, 1536, [ ], 3 ],
+  #                                 [ 0 ], 
+  #                                 [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
   #cf.fields_prediction = [ [cf.fields[0][0], 0.33],  [cf.fields[1][0], 0.33],  [cf.fields[2][0], 0.33]]
   # cf.fields = [ 
   #               [ 'total_precip', [ 1, 1536, [ ], 3 ],
   #                                 [ 0 ], 
   #                                 [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]                
-  cf.fields_prediction = [ [cf.fields[0][0], 0.5],[cf.fields[1][0], 0.5]  ] 
+  # cf.fields_prediction = [ [cf.fields[0][0], 0.5],[cf.fields[1][0], 0.5]  ] 
+  
   cf.fields_targets = []
+
   cf.years_train = [2021] # list( range( 1980, 2018))
   cf.years_test = [2021]  #[2018] 
   cf.month = None
@@ -180,9 +183,8 @@ def train() :
   # random seeds
   cf.torch_seed = torch.initial_seed()
   # training params
-  cf.batch_size_test = 64
-  cf.batch_size_start = 16
-  cf.batch_size_max = 32
+  cf.batch_size_validation = 64
+  cf.batch_size = 32
   cf.batch_size_delta = 8
   cf.num_epochs = 128
   
@@ -198,12 +200,12 @@ def train() :
   cf.learnable_mask = False
   cf.with_qk_lnorm = True
   # encoder
-  cf.encoder_num_layers = 10
+  cf.encoder_num_layers = 4
   cf.encoder_num_heads = 16
   cf.encoder_num_mlp_layers = 2
   cf.encoder_att_type = 'dense'
   # decoder
-  cf.decoder_num_layers = 10
+  cf.decoder_num_layers = 4
   cf.decoder_num_heads = 16
   cf.decoder_num_mlp_layers = 2
   cf.decoder_self_att = False
