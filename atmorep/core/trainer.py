@@ -51,6 +51,7 @@ from atmorep.utils.utils import NetMode
 from atmorep.utils.utils import sgn_exp
 from atmorep.utils.utils import tokenize, detokenize
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
+from atmorep.datasets.normalizer import denormalize
 
 ####################################################################################################
 class Trainer_Base() :
@@ -651,12 +652,14 @@ class Trainer_BERT( Trainer_Base) :
         lats    = self.sources_info[bidx][1]
         lons    = self.sources_info[bidx][2]
         dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
-     
-        #TODO: add support for multiple months
+        
+        lats_idx = self.sources_idxs[bidx][1]
+        lons_idx = self.sources_idxs[bidx][2]
+
         for vidx, _ in enumerate(field_info[2]) :
-          denormalize = self.model.normalizer( fidx, vidx).denormalize
-          source[bidx,vidx] = denormalize( dates[0].year, dates[0].month, source[bidx,vidx], [lats, lons])
-          target[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, target[bidx,vidx], [lats, lons])
+          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx) 
+          source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)
+          target[bidx,vidx] = denormalize( target[bidx,vidx], normalizer, dates_t, year_base)
       
         coords_b += [[dates, 90.-lats, lons, dates_t]]
 
@@ -667,7 +670,6 @@ class Trainer_BERT( Trainer_Base) :
 
     # process predicted fields
     for fidx, fn in enumerate(cf.fields_prediction) :
-      #
       field_info = cf.fields[ self.fields_prediction_idx[fidx] ]
       num_levels = len(field_info[2])
       # predictions
@@ -685,11 +687,10 @@ class Trainer_BERT( Trainer_Base) :
         lons  = self.sources_info[bidx][2]
         dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
        
-        #TODO: add support for multiple months
         for vidx, vl in enumerate(field_info[2]) :
-          denormalize = self.model.normalizer( self.fields_prediction_idx[fidx], vidx).denormalize
-          pred[bidx,vidx] = denormalize( dates_t[0].year, dates_t[0].month, pred[bidx,vidx], [lats, lons])
-          ensemble[bidx,:,vidx] = denormalize(dates_t[0].year, dates_t[0].month, ensemble[bidx,:,vidx], [lats, lons]) 
+          normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
+          pred[bidx,vidx] = denormalize( pred[bidx,vidx], normalizer, dates_t, year_base)
+          ensemble[bidx,:,vidx] = denormalize(ensemble[bidx,:,vidx], normalizer, dates_t, year_base)
           
       # append
       preds_out.append( [fn[0], pred])
@@ -761,7 +762,10 @@ class Trainer_BERT( Trainer_Base) :
         dates = self.sources_info[bidx][0]
         lats  = self.sources_info[bidx][1]
         lons  = self.sources_info[bidx][2]
-        
+
+        lats_idx = self.sources_idxs[bidx][1]
+        lons_idx = self.sources_idxs[bidx][2]
+
         # target etc are aliasing targets_b which simplifies bookkeeping below
         if is_predicted :
           target   = [targets_b[vidx][bidx] for vidx in range(num_levels)]
@@ -771,36 +775,42 @@ class Trainer_BERT( Trainer_Base) :
         coords_mskd_l = []
         for vidx, _ in enumerate(field_info[2]) :
 
-          normalizer = self.model.normalizer( fidx, vidx)
-          y, m = dates[0].year, dates[0].month
-          sources_b[bidx,vidx] = normalizer.denormalize( y, m, sources_b[bidx,vidx], [lats, lons])
+          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx)
+          sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
 
           if is_predicted :
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
-            grid = np.flip(np.array( np.meshgrid( self.sources_info[bidx][2], self.sources_info[bidx][1])), axis = 0) #flip to have lat on pos 0 and lon on pos 1
-
+            grid = np.flip(np.array( np.meshgrid( lons, lats)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+            grid_idx = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+       
             # recover time dimension since idx assumes the full space-time cube
             grid = torch.from_numpy( np.array( np.broadcast_to( grid,
                                 shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
             grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
-            grid_lons_toked = tokenize( grid[0], token_size).flatten( 0, 2)
-
+            grid_lons_toked = tokenize( grid[1], token_size).flatten( 0, 2)
+            
             idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
             lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
             lons_mskd = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
-           
+
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
             #create range from t_idx-2 to t_idx
             t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx])
-            dates_mskd = self.sources_info[bidx][0][t_idx]
+            dates_mskd = dates[t_idx]
+            
+            for ii,(t,p,e,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
+                                                    dates_mskd, lats_mskd, lons_mskd)) :
+              normalizer_ii = normalizer
+              if len(normalizer.shape) > 2: #local normalization                                     
+                lats_mskd_idx = np.where(np.isin(lats,la))[0]
+                lons_mskd_idx = np.where(np.isin(lons,lo))[0]
+                normalizer_ii = normalizer[:, :, lats_mskd_idx, lons_mskd_idx]
 
-            for ii,(t,p,e,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
-                                                    lats_mskd, lons_mskd)) :
-              targets_b[vidx][bidx][ii]   = normalizer.denormalize( y, m, t, [la, lo])
-              preds_mu_b[vidx][bidx][ii]  = normalizer.denormalize( y, m, p, [la, lo])
-              preds_ens_b[vidx][bidx][ii] = normalizer.denormalize( y, m, e, [la, lo])
+              targets_b[vidx][bidx][ii]   = denormalize(t, normalizer_ii, da, year_base)  
+              preds_mu_b[vidx][bidx][ii]  = denormalize(p, normalizer_ii, da, year_base) 
+              preds_ens_b[vidx][bidx][ii] = denormalize(e, normalizer_ii, da, year_base)
             
             coords_mskd_l += [[dates_mskd, 90.-lats_mskd, lons_mskd] ]
        
