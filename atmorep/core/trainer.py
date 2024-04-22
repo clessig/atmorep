@@ -17,6 +17,7 @@
 import torch
 import torchinfo
 import numpy as np
+import time
 import code
 
 from pathlib import Path
@@ -176,13 +177,10 @@ class Trainer_Base() :
       test_loss = np.array( [1.0]) 
     epoch += 1
    
-    batch_size = cf.batch_size_start - cf.batch_size_delta
-
     if cf.profile :
       lr = learn_rates[epoch]
       for g in self.optimizer.param_groups:
         g['lr'] = lr
-
       self.profile()
 
     # training loop
@@ -195,10 +193,8 @@ class Trainer_Base() :
       for g in self.optimizer.param_groups:
         g['lr'] = lr
 
-      batch_size = min( cf.batch_size_max, batch_size + cf.batch_size_delta)
-      
       tstr = datetime.datetime.now().strftime("%H:%M:%S")
-      print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, batch_size, lr) )
+      print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
 
       self.train( epoch)
 
@@ -238,6 +234,7 @@ class Trainer_Base() :
     ctr = 0
 
     self.optimizer.zero_grad()
+    time_start = time.time()
     
     for batch_idx in range( model.len( NetMode.train)) :
       
@@ -261,7 +258,7 @@ class Trainer_Base() :
 
       # logging
 
-      if int((batch_idx * cf.batch_size_max) / 4) > ctr :
+      if int((batch_idx * cf.batch_size) / 4) > ctr :
         
         # wandb logging
         if cf.with_wandb and (0 == cf.par_rank) :
@@ -279,14 +276,16 @@ class Trainer_Base() :
           wandb.log( loss_dict )
       
           # console output
-          print('train epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f}'.format(
-              epoch, batch_idx, model.len( NetMode.train),
-              100. * batch_idx/model.len(NetMode.train), 
-              torch.mean( torch.tensor( grad_loss_total)), torch.mean(torch.tensor(mse_loss_total)),
-              torch.mean( preds[0][1]) ), flush=True)
+          samples_sec = cf.batch_size / (time.time() - time_start)
+          str = 'epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
+          print( str.format( epoch, batch_idx, model.len( NetMode.train),
+                            100. * batch_idx/model.len(NetMode.train), 
+                            torch.mean( torch.tensor( grad_loss_total)), 
+                            torch.mean(torch.tensor(mse_loss_total)),
+                            torch.mean( preds[0][1]), samples_sec ), flush=True)
     
           # save model (use -2 as epoch to indicate latest, stored without epoch specification)
-          # self.save( -2)
+          self.save( -2)
 
         # reset
         loss_total = [[] for i in range(len(cf.losses)) ]
@@ -295,6 +294,7 @@ class Trainer_Base() :
         std_dev_total = [[] for i in range(len(self.fields_prediction_idx)) ]
         
         ctr += 1
+        time_start = time.time()
 
     # save gradients
     if cf.save_grads and cf.with_wandb and (0 == cf.par_rank) :
@@ -353,8 +353,8 @@ class Trainer_Base() :
         loss, mse_loss, losses = self.loss( preds, batch_idx)
 
         self.optimizer.zero_grad()
-        # loss.backward()
-        # self.optimizer.step()
+        loss.backward()
+        self.optimizer.step()
 
         prof.step()
 
