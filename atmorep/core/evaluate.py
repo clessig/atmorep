@@ -30,7 +30,7 @@ if __name__ == '__main__':
   # model_id = '2147fkco'     # temperature (also 2147fkco)
 
   # multi-field configurations with either velocity or voritcity+divergence
-  # model_id = '1jh2qvrx'     # multiformer, velocity
+  model_id = '1jh2qvrx'     # multiformer, velocity
   # model_id = 'wqqy94oa'     # multiformer, vorticity
   # model_id = '3cizyl1q'     # 3 field config: u,v,T
   # model_id = '1v4qk0qx'     # pre-trained, 3h forecasting

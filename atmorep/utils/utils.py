@@ -107,11 +107,15 @@ class Config :
     try :
       with open(fname, 'r') as f :
         json_str = f.readlines() 
-    except IOError :
+    except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
-      fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format( wandb_id, wandb_id))
-      with open(fname, 'r') as f :
-        json_str = f.readlines()
+      try :
+        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        with open(fname, 'r') as f :
+          json_str = f.readlines()
+      except (OSError, IOError) as e:
+        print( f'Could not find fname due to {e}. Aborting.')
+        quit()
 
     self.__dict__ = json.loads( json_str[0])
 
