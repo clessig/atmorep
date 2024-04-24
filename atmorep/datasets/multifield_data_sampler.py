@@ -30,8 +30,8 @@ from atmorep.utils.utils import tokenize
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
-  def __init__( self, file_path, fields, years, batch_size, pre_batch, n_size, num_samples_per_epoch, 
-                with_shuffle = False, time_sampling = 1, with_source_idxs = False,
+  def __init__( self, file_path, fields, years, batch_size, pre_batch, n_size,
+                num_samples, with_shuffle = False, time_sampling = 1, with_source_idxs = False,
                 fields_targets = None, pre_batch_targets = None ) :
     '''
       Data set for single dynamic field at an arbitrary number of vertical levels
@@ -43,7 +43,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.fields = fields
     self.batch_size = batch_size
     self.n_size = n_size
-    self.num_samples = num_samples_per_epoch
+    self.num_samples = num_samples
     self.with_source_idxs = with_source_idxs
     self.with_shuffle = with_shuffle
 
@@ -96,7 +96,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       idxs_years = np.logical_and( idxs_years, self.times.year == year)
     self.idxs_years = np.where( idxs_years)[0]
     logging.getLogger('atmorep').info( f'Dataset size for years {years}: {len(self.idxs_years)}.')
-    # self.idxs_years = np.arange( self.ds_len)
 
   ###################################################
   def shuffle( self) :
@@ -161,7 +160,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
 
         # extract data
-        year, month = self.times[ idxs_t[-1] ].year, self.times[ idxs_t[-1] ].month
         for ifield, field_info in enumerate(self.fields):
 
           source_lvl, tok_info_lvl  = [], []
@@ -172,11 +170,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
             if vl == 0 : #surface level
               field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-              data_t = self.ds['data_sfc'].oindex[field_idx,  idxs_t]
+              data_t = self.ds['data_sfc'].oindex[idxs_t, field_idx]
             else :
               field_idx = self.ds.attrs['fields'].index( field_info[0])
               vl_idx = self.ds.attrs['levels'].index(vl)
-              data_t = self.ds['data'].oindex[ field_idx, vl_idx, idxs_t]
+              data_t = self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]
           
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
