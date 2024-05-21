@@ -348,14 +348,15 @@ class Trainer_Base() :
 
         batch_data = self.model.next()
 
-        batch_data = self.prepare_batch( batch_data)
-        preds, _ = self.model_ddp( batch_data)
+        with torch.autocast(device_type='cuda',dtype=torch.float16, enabled=cf.with_mixed_precision):
+          batch_data = self.prepare_batch( batch_data)
+          preds, _ = self.model_ddp( batch_data)
+          loss, mse_loss, losses = self.loss( preds, batch_idx)
 
-        loss, mse_loss, losses = self.loss( preds, batch_idx)
-
+        self.grad_scaler.scale(loss).backward()
+        self.grad_scaler.step(self.optimizer)
+        self.grad_scaler.update()
         self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
 
         prof.step()
 

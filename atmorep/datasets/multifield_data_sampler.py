@@ -106,7 +106,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       rng_seed = int(time.time()) // (worker_info.id+1) + worker_info.id
 
     rng = np.random.default_rng( rng_seed)
-    self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples]
+    self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples // self.batch_size]
     
     lats = rng.random(self.num_samples) * (self.range_lat[1] - self.range_lat[0]) +self.range_lat[0]
     lons = rng.random(self.num_samples) * (self.range_lon[1] - self.range_lon[0]) +self.range_lon[0]
@@ -136,9 +136,15 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
       sources_infos, source_idxs = [], []
   
+      i_bidx = self.idxs_perm_t[bidx]
+      idxs_t = list(np.arange( bidx - n_size[0]*ts, bidx, ts, dtype=np.int64))
+      data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
+      data_tt = self.ds['data'].oindex[idxs_t]
+
       for sidx in range(self.batch_size) :
-        i_bidx = self.idxs_perm_t[bidx]
-        idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
+
+        # i_bidx = self.idxs_perm_t[bidx]
+        # idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
 
         idx = self.idxs_perm[bidx*self.batch_size+sidx]
         # slight asymetry with offset by res/2 is required to match desired token count
@@ -170,11 +176,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
             if vl == 0 : #surface level
               field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-              data_t = self.ds['data_sfc'].oindex[idxs_t, field_idx]
+              data_t = data_tt_sfc[ :, field_idx ]
             else :
               field_idx = self.ds.attrs['fields'].index( field_info[0])
               vl_idx = self.ds.attrs['levels'].index(vl)
-              data_t = self.ds['data'].oindex[ idxs_t, field_idx, vl_idx]
+              data_t = data_tt[ :, field_idx, vl_idx ]
           
             source_data, tok_info = [], []
             # extract data, normalize and tokenize

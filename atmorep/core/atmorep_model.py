@@ -189,14 +189,14 @@ class AtmoRepData( torch.nn.Module) :
     self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
-                                              with_shuffle = (cf.BERT_strategy != 'global_forecast') )
+                                          with_shuffle = (cf.BERT_strategy != 'global_forecast') )
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
     self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_test,
                                                cf.batch_size_validation,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
-                                              with_shuffle = (cf.BERT_strategy != 'global_forecast'),
+                                          with_shuffle = (cf.BERT_strategy != 'global_forecast'),
                                                with_source_idxs = True )
     self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
                                                           sampler = None)
