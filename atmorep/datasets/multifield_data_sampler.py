@@ -22,6 +22,8 @@ from datetime import datetime
 import time
 import logging
 
+import code
+
 # from atmorep.datasets.normalizer_global import NormalizerGlobal
 # from atmorep.datasets.normalizer_local import NormalizerLocal
 from atmorep.datasets.normalizer import normalize
@@ -93,9 +95,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.times = pd.DatetimeIndex( self.ds['time'])
     idxs_years = self.times.year == years[0]
     for year in years[1:] :
-      idxs_years = np.logical_and( idxs_years, self.times.year == year)
+      idxs_years = np.logical_or( idxs_years, self.times.year == year)
     self.idxs_years = np.where( idxs_years)[0]
-    logging.getLogger('atmorep').info( f'Dataset size for years {years}: {len(self.idxs_years)}.')
+    # logging.getLogger('atmorep').info( f'Dataset size for years {years}: {len(self.idxs_years)}.')
+    print( f'Dataset size for years {years}: {len(self.idxs_years)}.', flush=True)
 
   ###################################################
   def shuffle( self) :
