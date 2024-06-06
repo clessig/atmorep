@@ -235,11 +235,12 @@ class MultiInterAttentionHead(torch.nn.Module):
 
     # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
     # collapse three space and time dimensions for dense space-time attention
+    #proj_heads: torch.Size([3, 16, 128, 2048])
     field_proj = self.proj_heads( fields_lnormed[0].flatten(1,-2))
     s = [ *field_proj.shape[:-1], self.num_heads_self, -1 ]
     qs, ks, vs = torch.tensor_split( field_proj.reshape(s).transpose(-3,-2), 3, dim=-1)
+    breakpoint()  
     qs, ks = self.ln_qk[0]( qs), self.ln_qk[1]( ks)
-    
     if len(fields_lnormed) > 1 :
 
       field_proj = self.proj_heads_other[0]( fields_lnormed[0].flatten(1,-2))

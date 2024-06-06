@@ -54,6 +54,11 @@ class Evaluator( Trainer_BERT) :
   ##############################################
   @staticmethod
   def run( cf, model_id, model_epoch, devices) :
+    
+    cf.batch_size = cf.batch_size_max
+    cf.batch_size_validation = cf.batch_size_max
+    cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
+    cf.with_mixed_precision = True
 
     # set/over-write options as desired
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
@@ -82,7 +87,6 @@ class Evaluator( Trainer_BERT) :
     cf.par_rank = par_rank
     cf.par_size = par_size
     # overwrite old config
-    cf.file_path = str(config.path_data)
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
@@ -132,14 +136,26 @@ class Evaluator( Trainer_BERT) :
   ##############################################
   @staticmethod
   def global_forecast( cf, model_id, model_epoch, devices, args = {}) :
-
+    
     cf.BERT_strategy = 'global_forecast'
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
     cf.log_test_num_ranks = 1
-    cf.batch_size_start = 14
+    
+    if not hasattr(cf, 'file_path'):
+      cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
+
+    if not hasattr(cf, 'batch_size'):
+      cf.batch_size = 14
+    if not hasattr(cf, 'batch_size_validation'):
+      cf.batch_size_validation = 1 #64
+    if not hasattr(cf, 'batch_size_delta'):
+      cf.batch_size_delta = 8
     if not hasattr(cf, 'num_samples_validate'):
       cf.num_samples_validate = 196 
+    #if not hasattr(cf,'with_mixed_precision'):
+    cf.with_mixed_precision = True
+
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']

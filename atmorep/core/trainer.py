@@ -499,6 +499,11 @@ class Trainer_Base() :
         crps_loss = torch.mean( CRPS( target, pred[0], pred[1]))
         losses['crps'].append( crps_loss)
 
+      #cosine weighted RMSE loss
+      if 'cos_weighted_mse' in self.cf.losses :
+        cw_mse_loss = torch.mean( CosW_MSELoss( pred[0], target = target))
+        losses['cos_weighted_mse'].append( cw_mse_loss)
+        
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
@@ -540,7 +545,7 @@ class Trainer_BERT( Trainer_Base) :
 
     cf = self.cf
     devs = self.devices
-    
+
     # unpack loader output
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx_list) = xin[0]

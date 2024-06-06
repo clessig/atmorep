@@ -73,7 +73,7 @@ class AtmoRepData( torch.nn.Module) :
     cf = self.net.cf
     if batch_size < 0 :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
-    
+    print(times)
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_global( times, batch_size, cf.token_overlap)
 
@@ -138,11 +138,11 @@ class AtmoRepData( torch.nn.Module) :
     
     if mode == NetMode.train :
       self.data_loader_iter = iter(self.data_loader_train)
-      # self.data_loader_iter = iter(self.dataset_train)
+      #self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
       self.data_loader_iter = iter(self.data_loader_test)
-      # self.data_loader_iter = iter(self.dataset_test)
+      #self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -376,6 +376,74 @@ class AtmoRep( torch.nn.Module) :
                                               field_info[0], field_info[1][4][0], len(mkeys) ) )
 
   ###################################################
+  def translate_weights(self, mloaded, mkeys, ukeys):
+    cf = self.cf
+
+    #encoder:
+    for layer in range(cf.encoder_num_layers) :
+      qs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
+      ks = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
+      vs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
+      mw = torch.cat( [*qs, *ks, *vs])
+      #print(qs[0][:3,:3])
+      mloaded[f'encoders.0.heads.{layer}.proj_heads.weight'] = mw
+      for head in range(cf.encoder_num_heads):
+        del mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight']
+        del mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight']
+        del mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_vs.weight']
+
+      #cross attention
+      if f'encoders.0.heads.{layer}.heads_other.0.proj_qs.weight' in ukeys:
+        qs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
+        ks = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
+        vs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
+        mw = torch.cat( [*qs, *ks, *vs])
+
+        for i in range(cf.encoder_num_heads):
+          del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight']
+          del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight']
+          del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight']
+
+      else:
+        mw = torch.tensor(np.zeros([0,2048]))
+    
+      mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
+    
+    #decoder
+    for iblock in range(0, 19, 2) : 
+      print(iblock)
+      qs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight'] for i in range(8)]
+      ks = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_ks.weight'] for i in range(8)]
+      vs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_vs.weight'] for i in range(8)]
+      mw = torch.cat( [*qs, *ks, *vs])
+      mloaded[f'decoders.0.blocks.{iblock}.proj_heads.weight'] = mw 
+
+      qs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_qs.weight'] for i in range(8)]
+      ks = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight'] for i in range(8)]
+      vs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight'] for i in range(8)]
+      
+      mw = torch.cat( [*ks, *vs])
+      mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_q.weight']  = torch.cat([*qs])
+      mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_kv.weight'] = mw
+
+      #self.num_samples_validate
+      mloaded[f'decoders.0.blocks.{iblock}.ln_q.weight'] = torch.tensor(np.ones([128]))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_k.weight'] = torch.tensor(np.ones([128]))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_q.bias'] = torch.tensor(np.ones([128]))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_k.bias'] = torch.tensor(np.ones([128]))
+
+      for i in range(8):
+        del mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight']
+        del mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_ks.weight']
+        del mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_vs.weight']
+        del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_qs.weight']
+        del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight']
+        del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight']
+
+
+    return mloaded
+
+  ###################################################
   @staticmethod
   def load( model_id, devices, cf = None, epoch = -2, load_pretrained=False) :
     '''Load network from checkpoint'''
@@ -386,7 +454,11 @@ class AtmoRep( torch.nn.Module) :
 
     model = AtmoRep( cf).create( devices, load_pretrained=False)
     mloaded = torch.load( utils.get_model_filename( model, model_id, epoch) )
-    mkeys, _ = model.load_state_dict( mloaded, False )
+    mkeys, ukeys = model.load_state_dict( mloaded, False )
+    mloaded = model.translate_weights(mloaded, mkeys, ukeys)
+    mkeys, ukeys = model.load_state_dict( mloaded, False )
+    
+    # breakpoint()
 
     if len(mkeys) > 0 :
       print( f'Loaded AtmoRep: ignoring {len(mkeys)} elements: {mkeys}')

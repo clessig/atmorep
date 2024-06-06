@@ -114,83 +114,11 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'vorticity', [ 1, 2048, [ ], 0 ], 
-                               [ 96, 105, 114, 123, 137 ], 
-                              #  [ 137 ], 
-                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  cf.fields = [ [ 'temperature',[ 1, 512, [ ], 3 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                [12, 2, 4], [3, 27, 27], [0.25, 0.9, 0.2, 0.05], 'local' ]  ]
+ 
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
-  # cf.fields = [ [ 'velocity_u', [ 1, 2048, [ ], 0], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-  
-  # cf.fields = [ [ 'velocity_v', [ 1, 2048, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-
-  # cf.fields = [ [ 'velocity_z', [ 1, 1024, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-
-  # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-
-  #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
-
-  # cf.fields = [ [ 'total_precip', [ 1, 2048, [ ], 0 ],
-  #                                 [ 0 ], 
-  #                                 [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-
-  # cf.fields = [  [ 'geopotential', [ 1, 1024, [], 0 ], 
-  #                                 [ 0 ], 
-  #                                 [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
-  # cf.fields_prediction = [ ['geopotential', 1.] ]
-
-  #cf.fields_prediction = [ [cf.fields[0][0], 1.0] ]
-
-  # cf.fields = [ [ 'velocity_u', [ 1, 1024, ['velocity_v'], 0], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
-  #               [ 'velocity_v', [ 1, 1024, ['velocity_u'], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-  # cf.fields_prediction = [ [cf.fields[0][0], 0.5],  [cf.fields[1][0], 0.5] ]
-
-
-  # cf.fields = [ [ 'velocity_u', [ 1, 1024, ['velocity_v'], 0], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ],
-  #               [ 'velocity_v', [ 1, 1024, ['velocity_u'], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ],
-  #               [ 'total_precip', [ 1, 1024, ['velocity_u', 'velocity_v'], 0 ],
-  #                                 [ 0 ], 
-  #                                 [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]
-  # cf.fields_prediction = [ [cf.fields[0][0], 0.33],  [cf.fields[1][0], 0.33],
-  #                          [cf.fields[2][0], 0.33]]
-  
-  cf.fields = [ [ 'vorticity', [ 1, 2048, ['divergence', 'temperature'], 0 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ],
-                [ 'velocity_z', [ 1, 1536, ['vorticity', 'divergence'], 0 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ], 
-                [ 'divergence', [ 1, 2048, ['vorticity', 'temperature'], 1 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ],
-                [ 'specific_humidity', [ 1, 2048, ['vorticity', 'divergence', 'velocity_z'], 2 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ],
-                [ 'temperature', [ 1, 1024, ['vorticity', 'divergence'], 3 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ],   
-                [ 'total_precip', [ 1, 1536, ['vorticity', 'divergence', 'specific_humidity'], 3 ],
-                                  [ 0 ], 
-                                  [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.2, 0.05] ] ]
-  cf.fields_prediction = [['vorticity', 0.25],  ['velocity_z', 0.1], 
-                          ['divergence', 0.25], ['specific_humidity', 0.15],
-                          ['temperature', 0.15], ['total_precip', 0.1] ]
 
   cf.fields_targets = []
 
@@ -211,8 +139,7 @@ def train() :
   cf.torch_seed = torch.initial_seed()
   # training params
   cf.batch_size_validation = 1 #64
-  cf.batch_size = 16 # 4 # 32
-  cf.batch_size_delta = 8
+  cf.batch_size = 8 #16 #4 # 32
   cf.num_epochs = 128
   
   # additional infos
@@ -227,12 +154,12 @@ def train() :
   cf.learnable_mask = False
   cf.with_qk_lnorm = False
   # encoder
-  cf.encoder_num_layers = 4
+  cf.encoder_num_layers = 6 #10 #4
   cf.encoder_num_heads = 16
   cf.encoder_num_mlp_layers = 2
   cf.encoder_att_type = 'dense'
   # decoder
-  cf.decoder_num_layers = 4
+  cf.decoder_num_layers = 6 #10 #4
   cf.decoder_num_heads = 16
   cf.decoder_num_mlp_layers = 2
   cf.decoder_self_att = False
@@ -280,17 +207,17 @@ def train() :
   cf.with_mixed_precision = True
   cf.num_samples_per_epoch = 4096
   cf.num_samples_validate = 128
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 6
 
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk32.zarr'
+  #cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk32.zarr'
   # # in steps x lat_degrees x lon_degrees
-  cf.n_size = [36, 1*9*6, 1.*9*12]
+  #cf.n_size = [36, 1*9*6, 1.*9*12]
 
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk16.zarr'
   # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk32.zarr'
-  cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk32.zarr'
+  #cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk32.zarr'
   # 
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
+  #cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'

@@ -140,10 +140,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       sources_infos, source_idxs = [], []
   
       i_bidx = self.idxs_perm_t[bidx]
-      idxs_t = list(np.arange( bidx - n_size[0]*ts, bidx, ts, dtype=np.int64))
+      idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
       data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
       data_tt = self.ds['data'].oindex[idxs_t]
-
+      
       for sidx in range(self.batch_size) :
 
         # i_bidx = self.idxs_perm_t[bidx]
@@ -253,7 +253,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
     ''' generate patch/token positions for global grid '''
-
+    print("inside set_global")
     token_overlap = np.array( token_overlap).astype(np.int64)
 
     # assumed that sanity checking that field data is consistent has been done 

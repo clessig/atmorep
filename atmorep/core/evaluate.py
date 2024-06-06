@@ -54,10 +54,10 @@ if __name__ == '__main__':
 
   # BERT forecast with patching to obtain global forecast
   mode, options = 'global_forecast', { 'fields[0][2]' : [114], #[123, 137], #[105, 137],
-                                       'dates' : [[2021, 1, 10, 18]], #[[2021, 2, 10, 12]],
-                                       'token_overlap' : [0, 0],
-                                       'forecast_num_tokens' : 2,
-                                       'attention' : False }
+                                      'dates' : [[2021, 1, 10, 18]], #[[2021, 2, 10, 12]],
+                                      'token_overlap' : [0, 0],
+                                      'forecast_num_tokens' : 2,
+                                      'attention' : False }
   now = time.time()
   Evaluator.evaluate( mode, model_id, options)
   print("time", time.time() - now)
