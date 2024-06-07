@@ -139,14 +139,14 @@ class MultiCrossAttentionHead(torch.nn.Module):
     x = x.flatten( 1, -2)
     s = [ *x.shape[:-1], self.num_heads, -1]
     qs, ks, vs = torch.tensor_split( self.proj_heads( x).reshape(s).transpose( 2, 1), 3, dim=-1)
-    # qs, ks = self.ln_q( qs), self.ln_k( ks)
+    qs, ks = self.ln_q( qs), self.ln_k( ks)
     
     s = [ *x.shape[:-1], self.num_heads_other, -1]
     qs_o = self.proj_heads_o_q( x).reshape(s).transpose( 2, 1)
     x_o = x_other.flatten( 1, -2)
     s = [ *x_o.shape[:-1], self.num_heads_other, -1]
     ks_o, vs_o = torch.tensor_split( self.proj_heads_o_kv(x_o).reshape(s).transpose( 2, 1),2,dim=-1)
-    # qs_o, ks_o = self.ln_q( qs_o), self.ln_k( ks_o)
+    qs_o, ks_o = self.ln_q( qs_o), self.ln_k( ks_o)
 
     # correct ordering of tensors with seq dimension second but last is critical
     with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
@@ -155,9 +155,8 @@ class MultiCrossAttentionHead(torch.nn.Module):
       outs_self = self.att( qs, ks, vs).transpose( 2, 1).flatten( -2, -1).reshape(s)
       outs_other = self.att( qs_o, ks_o, vs_o).transpose( 2, 1).flatten( -2, -1).reshape(s)
       outs = torch.cat( [outs_self, outs_other], -1)
-
+    
     outs = self.dropout( self.checkpoint( self.proj_out, outs) )
-
     atts = []
     return x_in + outs, atts
 
@@ -235,11 +234,11 @@ class MultiInterAttentionHead(torch.nn.Module):
 
     # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
     # collapse three space and time dimensions for dense space-time attention
-    #proj_heads: torch.Size([3, 16, 128, 2048])
+    #proj_heads: torch.Size([16, 3, 128, 2048])
     field_proj = self.proj_heads( fields_lnormed[0].flatten(1,-2))
     s = [ *field_proj.shape[:-1], self.num_heads_self, -1 ]
     qs, ks, vs = torch.tensor_split( field_proj.reshape(s).transpose(-3,-2), 3, dim=-1)
-    breakpoint()  
+    #breakpoint()  
     qs, ks = self.ln_qk[0]( qs), self.ln_qk[1]( ks)
     if len(fields_lnormed) > 1 :
 

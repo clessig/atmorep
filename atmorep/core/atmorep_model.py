@@ -381,10 +381,20 @@ class AtmoRep( torch.nn.Module) :
 
     #encoder:
     for layer in range(cf.encoder_num_layers) :
-      qs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
-      ks = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
-      vs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
-      mw = torch.cat( [*qs, *ks, *vs])
+      # qs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
+      # ks = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
+      # vs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
+      # mw = torch.cat( [*qs, *ks, *vs])
+      #torch.Size([3, 16, 128, 2048])
+      # att = temp.reshape([16, 3, 128, 2048])
+      # att.shape
+      # (Pdb) (Pdb) torch.Size([16, 3, 128, 2048])
+      # att1 = temp1.reshape([16, 3, 128, 2048])
+      # mw.shape
+      # (Pdb) (Pdb) torch.Size([6144, 2048])
+      # att_mw = mw.reshape([3, 16, 128, 2048])
+      mw  = torch.cat([mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_{k}.weight'] for head in range(cf.encoder_num_heads) for k in ["qs", "ks", "vs"]])
+      #breakpoint()
       #print(qs[0][:3,:3])
       mloaded[f'encoders.0.heads.{layer}.proj_heads.weight'] = mw
       for head in range(cf.encoder_num_heads):
@@ -394,11 +404,12 @@ class AtmoRep( torch.nn.Module) :
 
       #cross attention
       if f'encoders.0.heads.{layer}.heads_other.0.proj_qs.weight' in ukeys:
-        qs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
-        ks = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
-        vs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
-        mw = torch.cat( [*qs, *ks, *vs])
-
+        # qs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
+        # ks = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
+        # vs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
+        # mw = torch.cat( [*qs, *ks, *vs])
+        mw  = torch.cat([mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_{k}.weight'] for head in range(cf.encoder_num_heads) for k in ["qs", "ks", "vs"]])
+       
         for i in range(cf.encoder_num_heads):
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight']
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight']
@@ -412,17 +423,19 @@ class AtmoRep( torch.nn.Module) :
     #decoder
     for iblock in range(0, 19, 2) : 
       print(iblock)
-      qs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight'] for i in range(8)]
-      ks = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_ks.weight'] for i in range(8)]
-      vs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_vs.weight'] for i in range(8)]
-      mw = torch.cat( [*qs, *ks, *vs])
+      # qs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight'] for i in range(8)]
+      # ks = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_ks.weight'] for i in range(8)]
+      # vs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_vs.weight'] for i in range(8)]
+      # mw = torch.cat( [*qs, *ks, *vs])
+      mw  = torch.cat([mloaded[f'decoders.0.blocks.{iblock}.heads.{head}.proj_{k}.weight'] for head in range(8) for k in ["qs", "ks", "vs"]])
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads.weight'] = mw 
 
-      qs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_qs.weight'] for i in range(8)]
-      ks = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight'] for i in range(8)]
-      vs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight'] for i in range(8)]
+      qs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{head}.proj_qs.weight'] for head in range(8)]
+      # ks = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight'] for i in range(8)]
+      # vs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight'] for i in range(8)]
+      # mw = torch.cat( [*ks, *vs])
+      mw  = torch.cat([mloaded[f'decoders.0.blocks.{iblock}.heads_other.{head}.proj_{k}.weight'] for head in range(8) for k in ["ks", "vs"]])
       
-      mw = torch.cat( [*ks, *vs])
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_q.weight']  = torch.cat([*qs])
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_kv.weight'] = mw
 
