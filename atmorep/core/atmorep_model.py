@@ -313,6 +313,7 @@ class AtmoRep( torch.nn.Module) :
       device = self.devices[0]
       if len(field_info[1]) > 3 :
         assert field_info[1][3] < 4, 'Only single node model parallelism supported'
+        print(devices, field_info[1][3])
         assert field_info[1][3] < len(devices), 'Per field device id larger than max devices'
         device = self.devices[ field_info[1][3] ]
       # set device
@@ -377,26 +378,18 @@ class AtmoRep( torch.nn.Module) :
 
   ###################################################
   def translate_weights(self, mloaded, mkeys, ukeys):
+    '''
+    Function used for backward compatibility 
+    '''
     cf = self.cf
 
     #encoder:
     for layer in range(cf.encoder_num_layers) :
-      # qs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
-      # ks = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
-      # vs = [mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
-      # mw = torch.cat( [*qs, *ks, *vs])
-      #torch.Size([3, 16, 128, 2048])
-      # att = temp.reshape([16, 3, 128, 2048])
-      # att.shape
-      # (Pdb) (Pdb) torch.Size([16, 3, 128, 2048])
-      # att1 = temp1.reshape([16, 3, 128, 2048])
-      # mw.shape
-      # (Pdb) (Pdb) torch.Size([6144, 2048])
-      # att_mw = mw.reshape([3, 16, 128, 2048])
+  
+      #shape([16, 3, 128, 2048])
       mw  = torch.cat([mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_{k}.weight'] for head in range(cf.encoder_num_heads) for k in ["qs", "ks", "vs"]])
-      #breakpoint()
-      #print(qs[0][:3,:3])
       mloaded[f'encoders.0.heads.{layer}.proj_heads.weight'] = mw
+
       for head in range(cf.encoder_num_heads):
         del mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_qs.weight']
         del mloaded[f'encoders.0.heads.{layer}.heads_self.{head}.proj_ks.weight']
@@ -404,10 +397,6 @@ class AtmoRep( torch.nn.Module) :
 
       #cross attention
       if f'encoders.0.heads.{layer}.heads_other.0.proj_qs.weight' in ukeys:
-        # qs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_qs.weight'] for head in range(cf.encoder_num_heads)] 
-        # ks = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight'] for head in range(cf.encoder_num_heads)]
-        # vs = [mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight'] for head in range(cf.encoder_num_heads)]
-        # mw = torch.cat( [*qs, *ks, *vs])
         mw  = torch.cat([mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_{k}.weight'] for head in range(cf.encoder_num_heads) for k in ["qs", "ks", "vs"]])
        
         for i in range(cf.encoder_num_heads):
@@ -422,18 +411,10 @@ class AtmoRep( torch.nn.Module) :
     
     #decoder
     for iblock in range(0, 19, 2) : 
-      print(iblock)
-      # qs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight'] for i in range(8)]
-      # ks = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_ks.weight'] for i in range(8)]
-      # vs = [mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_vs.weight'] for i in range(8)]
-      # mw = torch.cat( [*qs, *ks, *vs])
       mw  = torch.cat([mloaded[f'decoders.0.blocks.{iblock}.heads.{head}.proj_{k}.weight'] for head in range(8) for k in ["qs", "ks", "vs"]])
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads.weight'] = mw 
 
       qs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{head}.proj_qs.weight'] for head in range(8)]
-      # ks = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight'] for i in range(8)]
-      # vs = [mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight'] for i in range(8)]
-      # mw = torch.cat( [*ks, *vs])
       mw  = torch.cat([mloaded[f'decoders.0.blocks.{iblock}.heads_other.{head}.proj_{k}.weight'] for head in range(8) for k in ["ks", "vs"]])
       
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_q.weight']  = torch.cat([*qs])
@@ -453,7 +434,6 @@ class AtmoRep( torch.nn.Module) :
         del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight']
         del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight']
 
-
     return mloaded
 
   ###################################################
@@ -468,10 +448,9 @@ class AtmoRep( torch.nn.Module) :
     model = AtmoRep( cf).create( devices, load_pretrained=False)
     mloaded = torch.load( utils.get_model_filename( model, model_id, epoch) )
     mkeys, ukeys = model.load_state_dict( mloaded, False )
-    mloaded = model.translate_weights(mloaded, mkeys, ukeys)
-    mkeys, ukeys = model.load_state_dict( mloaded, False )
-    
-    # breakpoint()
+    if (f'encoders.0.heads.0.proj_heads.weight') in mkeys:
+      mloaded = model.translate_weights(mloaded, mkeys, ukeys)
+      mkeys, ukeys = model.load_state_dict( mloaded, False )
 
     if len(mkeys) > 0 :
       print( f'Loaded AtmoRep: ignoring {len(mkeys)} elements: {mkeys}')

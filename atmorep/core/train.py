@@ -114,15 +114,38 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'temperature',[ 1, 512, [ ], 3 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                [12, 2, 4], [3, 27, 27], [0.25, 0.9, 0.2, 0.05], 'local' ]  ]
+  # cf.fields = [ [ 'temperature',[ 1, 512, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                               [12, 2, 4], [3, 27, 27], [0.25, 0.9, 0.2, 0.05], 'local' ]  ]
  
-  cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  cf.fields = [ [ 'velocity_u', [ 1, 2048, ['velocity_v', 'temperature'], 0 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+                [ 'velocity_v', [ 1, 2048, ['velocity_u', 'temperature'], 1 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ], 
+                [ 'specific_humidity', [ 1, 2048, ['velocity_u', 'velocity_v', 'temperature'], 2 ], 
+                              [ 96, 105, 114, 123, 137 ], 
+                              [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3 ], 
+                              [ 96, 105, 114, 123, 137 ], 
+                              [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'global' ],
+                [ 'temperature', [ 1, 1024, ['velocity_u', 'velocity_v', 'specific_humidity'], 3 ], 
+                              [ 96, 105, 114, 123, 137 ], 
+                              [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+                ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3], 
+                              [0], 
+                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] ]
+ 
+  cf.fields_prediction = [['velocity_u', 0.225], ['velocity_v', 0.225], 
+                          ['specific_humidity', 0.15], ['velocity_z', 0.1], ['temperature', 0.2],
+                          ['total_precip', 0.1] ]
 
   cf.fields_targets = []
 
-  cf.years_train = list( range( 1979, 2018))
+  cf.years_train = list( range( 2010, 2021))
   cf.years_test = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -219,7 +242,7 @@ def train() :
   # 
   #cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
   # in steps x lat_degrees x lon_degrees
   cf.n_size = [36, 0.25*9*6, 0.25*9*12]
