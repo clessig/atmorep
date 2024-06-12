@@ -123,7 +123,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
   ###################################################
   def __iter__(self):
-
     if self.with_shuffle :
       self.shuffle()
 
@@ -135,7 +134,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     iter_start, iter_end = self.worker_workset()
    
     for bidx in range( iter_start, iter_end) :
-     
       sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
       sources_infos, source_idxs = [], []
   
@@ -143,9 +141,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
       data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
       data_tt = self.ds['data'].oindex[idxs_t]
-      
       for sidx in range(self.batch_size) :
-
         # i_bidx = self.idxs_perm_t[bidx]
         # idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
 
@@ -169,14 +165,12 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
 
         # extract data
-        for ifield, field_info in enumerate(self.fields):
-
+        for ifield, field_info in enumerate(self.fields):  
           source_lvl, tok_info_lvl  = [], []
           tok_size  = field_info[4]
           corr_type = 'global' if len(field_info) <= 6 else field_info[6]
         
           for ilevel, vl in enumerate(field_info[2]):
-
             if vl == 0 : #surface level
               field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
               data_t = data_tt_sfc[ :, field_idx ]
@@ -188,14 +182,12 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
             cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
-            
+                
             normalizer = self.normalizers[ifield][ilevel]
             if corr_type != 'global':   
-              normalizer = np.take( np.take( normalizer, lat_ran, -2), lon_ran, -1)
-
+              normalizer = np.take( np.take( normalizer, lat_ran, -2), lon_ran, -1) 
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
-            source_data = tokenize( torch.from_numpy( cdata), tok_size )
-          
+            source_data = tokenize( torch.from_numpy( cdata), tok_size )    
             # token_infos uses center of the token: *last* datetime and center in space
             dates = self.ds['time'][ idxs_t ].astype(datetime)
             cdates = dates[tok_size[0]-1::tok_size[0]]
@@ -208,16 +200,14 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                                                                   for (year, day, hour) in dates]]
 
             source_lvl += [ source_data ]
-            tok_info_lvl += [ torch.tensor(tok_info, dtype=torch.float32).flatten( 1, -2)]
-
+            tok_info_lvl += [ torch.tensor(tok_info, dtype=torch.float32).flatten( 1, -2)]      
           sources[ifield] += [ torch.stack(source_lvl, 0) ]
           token_infos[ifield] += [ torch.stack(tok_info_lvl, 0) ]
       
-      # concatenate batches
+      # concatenate batches   
       sources = [torch.stack(sources_field).transpose(1,0) for sources_field in sources]
       token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
       sources = self.pre_batch( sources, token_infos )
-
       # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
       target_idxs = None

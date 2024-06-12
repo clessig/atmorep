@@ -91,8 +91,9 @@ class Evaluator( Trainer_BERT) :
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
-
-    cf.num_loader_workers = cf.loader_num_workers
+    
+   # if not hasattr( cf, 'num_loader_workers'):
+    cf.num_loader_workers = 12 #cf.loader_num_workers
     cf.rng_seed = None 
     
     #backward compatibility
@@ -139,7 +140,7 @@ class Evaluator( Trainer_BERT) :
     
     cf.BERT_strategy = 'global_forecast'
     cf.batch_size_test = 24
-    cf.num_loader_workers = 1
+    cf.num_loader_workers = 12 #1
     cf.log_test_num_ranks = 1
     
     if not hasattr(cf, 'file_path'):

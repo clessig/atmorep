@@ -1,6 +1,6 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-0:09:59
+#SBATCH --time=0-02:30:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=80 #####nodes * gpus/node * 20
 #SBATCH --gres=gpu:4
@@ -38,7 +38,7 @@ date
 CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_eval_${SLURM_JOBID}
 mkdir ${CONFIG_DIR}
 cp ${SLURM_SUBMIT_DIR}/atmorep/core/evaluate.py ${CONFIG_DIR}
-echo "${CONFIG_DIR}/train.py"
+echo "${CONFIG_DIR}/evaluate.py"
 srun --label --cpu-bind=v ${SLURM_SUBMIT_DIR}/pyenv/bin/python -u ${CONFIG_DIR}/evaluate.py > output/output_${SLURM_JOBID}.txt
 
 echo "Finished job."

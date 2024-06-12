@@ -19,7 +19,8 @@ import time
 if __name__ == '__main__':
 
   # models for individual fields
-  model_id = '4nvwbetz'     # vorticity
+  model_id='m5vo5vqz'
+  #model_id = '4nvwbetz'     # vorticity
   #model_id = 'oxpycr7w'     # divergence
   # model_id = '1565pb1f'     # specific_humidity
   #model_id = '3kdutwqb'     # total precip

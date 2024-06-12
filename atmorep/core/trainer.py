@@ -91,7 +91,6 @@ class Trainer_Base() :
 
   ###################################################
   def create( self, load_embeds=True) :
-    
     net = AtmoRep( self.cf) 
     self.model = AtmoRepData( net)
 
@@ -100,13 +99,11 @@ class Trainer_Base() :
     # TODO: pass the properly to model / net
     self.model.net.encoder_to_decoder = self.encoder_to_decoder
     self.model.net.decoder_to_tail = self.decoder_to_tail
-
     return self
 
   ###################################################
   @classmethod
   def load( Typename, cf, model_id, epoch, devices) :
-
     trainer = Typename( cf, devices).create( load_embeds=False)
     trainer.model.net = trainer.model.net.load( model_id, devices, cf, epoch)
 
@@ -116,7 +113,6 @@ class Trainer_Base() :
 
     str = 'Loaded model id = {}{}.'.format( model_id, f' at epoch = {epoch}' if epoch> -2 else '')
     print( str)
-
     return trainer
 
   ###################################################
@@ -365,7 +361,6 @@ class Trainer_Base() :
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
-   
     cf = self.cf
     BERT_strategy_train = cf.BERT_strategy
     cf.BERT_strategy = BERT_test_strategy
@@ -383,7 +378,7 @@ class Trainer_Base() :
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
           (sources, token_infos, targets, tmis_list) = batch_data[0]
-    
+
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
                            tmis_list)
@@ -391,11 +386,10 @@ class Trainer_Base() :
         with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
           batch_data = self.prepare_batch( batch_data)
           preds, atts = self.model( batch_data)
-        
         loss = torch.tensor( 0.)
         ifield = 0
         for pred, idx in zip( preds, self.fields_prediction_idx) :
-
+          
           target = self.targets[idx]
           # hook for custom test loss
           self.test_loss( pred, target)
@@ -405,7 +399,6 @@ class Trainer_Base() :
           loss += cur_loss 
           total_losses[ifield] += cur_loss
           ifield += 1
-
         total_loss += loss
         test_len += 1
     
@@ -413,10 +406,9 @@ class Trainer_Base() :
         if cf.par_rank < cf.log_test_num_ranks :
           log_preds = [[p.detach().clone().cpu() for p in pred] for pred in preds]
           self.log_validate( epoch, it, log_sources, log_preds)
-          
           if cf.attention:
             self.log_attention( epoch, it, atts)
-                                            
+                                    
     # average over all nodes
     total_loss /= test_len * len(self.cf.fields_prediction)
     total_losses /= test_len
@@ -440,7 +432,6 @@ class Trainer_Base() :
         loss_dict[idx_name] = total_losses[i]
         print( 'validation loss for {} : {}'.format( field[0], total_losses[i] ))
       wandb.log( loss_dict)
-
     batch_data = []
     torch.cuda.empty_cache()
 
