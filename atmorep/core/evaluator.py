@@ -55,13 +55,17 @@ class Evaluator( Trainer_BERT) :
   @staticmethod
   def run( cf, model_id, model_epoch, devices) :
     
-    cf.batch_size = cf.batch_size_max
-    cf.batch_size_validation = cf.batch_size_max
-    cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
+    if not hasattr(cf, 'batch_size'):
+      cf.batch_size = cf.batch_size_max
+    if not hasattr(cf, 'batch_size_validation'):
+      cf.batch_size_validation = cf.batch_size_max
+   
+    cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
     cf.with_mixed_precision = True
 
     # set/over-write options as desired
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
+
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
@@ -117,7 +121,6 @@ class Evaluator( Trainer_BERT) :
     if not hasattr(cf, 'num_samples_validate'):
       cf.num_samples_validate = 128 #1472 
     Evaluator.parse_args( cf, args)
-
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
@@ -144,7 +147,7 @@ class Evaluator( Trainer_BERT) :
     cf.log_test_num_ranks = 1
     
     if not hasattr(cf, 'file_path'):
-      cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
+      cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
 
     if not hasattr(cf, 'batch_size'):
       cf.batch_size = 14

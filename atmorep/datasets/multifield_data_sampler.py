@@ -20,9 +20,7 @@ import zarr
 import pandas as pd
 from datetime import datetime
 import time
-import logging
-
-import code
+import os
 
 # from atmorep.datasets.normalizer_global import NormalizerGlobal
 # from atmorep.datasets.normalizer_local import NormalizerLocal
@@ -48,9 +46,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.num_samples = num_samples
     self.with_source_idxs = with_source_idxs
     self.with_shuffle = with_shuffle
-
     self.pre_batch = pre_batch
-    self.ds = zarr.open( file_path) 
+    
+    assert os.path.exists(file_path), f"File path {file_path} does not exist"
+    self.ds = zarr.open( file_path)
+
     self.ds_global = self.ds.attrs['is_global']
 
     self.lats = np.array( self.ds['lats'])
@@ -75,7 +75,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # lon: no change for periodic case
     if self.ds_global < 1.:
       self.range_lon += np.array([n_size[2]/2., -n_size[2]/2.])
-
     # data normalizers
     self.normalizers = []
     for ifield, field_info in enumerate(fields) :
@@ -90,7 +89,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           vl_idx = self.ds.attrs['levels'].index(vl)
           field_idx = self.ds.attrs['fields'].index( field_info[0])
           self.normalizers[ifield] += [self.ds[f'normalization/{nf_name}'].oindex[ :, :, field_idx, vl_idx]] 
-
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
     idxs_years = self.times.year == years[0]
@@ -243,7 +241,6 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
     ''' generate patch/token positions for global grid '''
-    print("inside set_global")
     token_overlap = np.array( token_overlap).astype(np.int64)
 
     # assumed that sanity checking that field data is consistent has been done 
