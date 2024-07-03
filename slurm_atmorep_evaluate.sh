@@ -1,9 +1,9 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-02:30:00
+#SBATCH --time=0-0:10:00
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=80 #####nodes * gpus/node * 20
-#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=40
+#SBATCH --gres=gpu:2
 #SBATCH --chdir=.
 #SBATCH --qos=acc_ehpc
 #SBATCH --output=logs/atmorep-%x.%j.out
@@ -34,6 +34,8 @@ echo "Starting job."
 echo "Number of Nodes: $SLURM_JOB_NUM_NODES"
 echo "Number of Tasks: $SLURM_NTASKS"
 date
+
+export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
 CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_eval_${SLURM_JOBID}
 mkdir ${CONFIG_DIR}

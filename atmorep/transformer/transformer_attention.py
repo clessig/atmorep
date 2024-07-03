@@ -43,7 +43,6 @@ class MultiSelfAttentionHead(torch.nn.Module):
 
     assert 0 == dim_embed % num_heads
     self.dim_head_proj = int(dim_embed / num_heads)
-
     self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
     self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
     self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = False)

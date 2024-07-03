@@ -42,14 +42,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
-import atmorep.utils.utils as utils
-from atmorep.utils.utils import shape_to_str
-from atmorep.utils.utils import relMSELoss
-from atmorep.utils.utils import Gaussian
-from atmorep.utils.utils import CRPS
-from atmorep.utils.utils import NetMode
-from atmorep.utils.utils import sgn_exp
-from atmorep.utils.utils import tokenize, detokenize
+from atmorep.utils.utils import Gaussian, CRPS, get_weights, weighted_mse, NetMode, tokenize, detokenize
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
@@ -236,11 +229,11 @@ class Trainer_Base() :
     for batch_idx in range( model.len( NetMode.train)) :
       
       batch_data = self.model.next()
-      
+      (_, _ , _, tmis_list) = batch_data[0]
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
-        loss, mse_loss, losses = self.loss( preds, batch_idx)
+        loss, mse_loss, losses = self.loss( preds, batch_idx, tmis_list)
       
       self.grad_scaler.scale(loss).backward()
       self.grad_scaler.step(self.optimizer)
@@ -255,7 +248,7 @@ class Trainer_Base() :
 
       # logging
 
-      if int((batch_idx * cf.batch_size) / 4) > ctr :
+      if int((batch_idx * cf.batch_size) / 8) > ctr :
         
         # wandb logging
         if cf.with_wandb and (0 == cf.par_rank) :
@@ -361,6 +354,7 @@ class Trainer_Base() :
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
+    print('inside_validate')
     cf = self.cf
     BERT_strategy_train = cf.BERT_strategy
     cf.BERT_strategy = BERT_test_strategy
@@ -377,8 +371,7 @@ class Trainer_Base() :
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, token_infos, targets, tmis_list) = batch_data[0]
-
+          (sources, _ , targets, tmis_list) = batch_data[0]
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
                            tmis_list)
@@ -395,23 +388,27 @@ class Trainer_Base() :
           self.test_loss( pred, target)
           # base line loss
           cur_loss = self.MSELoss( pred[0], target = target ).cpu().item()
-       
+    
+          print(cur_loss, flush = True)
           loss += cur_loss 
           total_losses[ifield] += cur_loss
           ifield += 1
+        print(f"total_loss {total_loss}", flush = True)
         total_loss += loss
         test_len += 1
-    
+        
         # store detailed results on current test set for book keeping
         if cf.par_rank < cf.log_test_num_ranks :
           log_preds = [[p.detach().clone().cpu() for p in pred] for pred in preds]
           self.log_validate( epoch, it, log_sources, log_preds)
           if cf.attention:
             self.log_attention( epoch, it, atts)
-                                    
+    
+    print(f"FINAL total_loss {total_loss}", flush = True)                                
     # average over all nodes
     total_loss /= test_len * len(self.cf.fields_prediction)
     total_losses /= test_len
+    print(f"FINAL total_loss after ratio {total_loss}", flush = True) 
     if cf.with_ddp :
       total_loss_cuda = total_loss.cuda()
       total_losses_cuda = total_losses.cuda()
@@ -419,7 +416,7 @@ class Trainer_Base() :
       dist.all_reduce( total_losses_cuda, op=torch.distributed.ReduceOp.AVG )
       total_loss = total_loss_cuda.cpu()
       total_losses = total_losses_cuda.cpu()
-
+    print(f"FINAL total_loss after DDP {total_loss}", flush = True) 
     if 0 == cf.par_rank :
       print( 'validation loss for strategy={} at epoch {} : {}'.format( BERT_test_strategy,
                                                                   epoch, total_loss),
@@ -446,7 +443,7 @@ class Trainer_Base() :
     pass
 
   ###################################################
-  def loss( self, preds, batch_idx = 0) :
+  def loss( self, preds, batch_idx = 0, tmidx_list = None) :
 
     # TODO: move implementations to individual files
 
@@ -471,6 +468,50 @@ class Trainer_Base() :
           loss_en += self.MSELoss( en, target = target) 
         losses['mse_ensemble'].append( loss_en / pred[2].shape[1])
 
+      if 'weighted_mse' in self.cf.losses :
+        loss_en = torch.tensor( 0., device=target.device)
+        field_info = cf.fields[idx]
+        nlvls = len(field_info[2])
+        num_tokens = field_info[3]
+        token_size = field_info[4]
+
+        #idx_loc = [tokens_masked_idx_list[0][vlvl][batch_idx] - np.prod(num_tokens) * batch_idx for vlvl in range(nlvls)]
+        #targets_temp = self.get_masked_data(field_info, target, tokens_masked_idx_list[0])
+        #preds_temp = self.get_masked_data(field_info, pred[0], tokens_masked_idx_list[0])
+        lats_mskd = []
+        weights = []
+        for vidx in range(nlvls):
+          for bidx in range(cf.batch_size):
+           
+            lats_idx = self.sources_idxs[bidx][1] 
+            lons_idx = self.sources_idxs[bidx][2]
+            grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+            
+            grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
+            
+            idx_base = tmidx_list[idx][vidx][bidx]
+            idx_loc = idx_base - np.prod(num_tokens) * bidx
+            #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
+           
+            lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lats_mskd.append(lats_mskd_b)
+            weights.append([get_weights(la) for la in lats_mskd_b])
+        lats_mskd = torch.Tensor([l for l in lats_mskd])
+        weights = torch.Tensor(np.array([w for batch in weights for w in batch]))
+        breakpoint()        
+        weights = weights.view(*weights.shape, 1, 1).repeat(1, 1, token_size[0], token_size[2]).swapaxes(1, 2)
+       
+        weights = weights.reshape([weights.shape[0], -1]).to(target.get_device())
+        
+        #target_temp = detokenize(target.reshape([nlvls, -1] + tok_size + ntokens).cpu().detach().numpy())
+        #preds_temp  = detokenize(preds[0].reshape([nlvls, ]).cpu().detach().numpy())
+        for en in torch.transpose( pred[2], 1, 0) :
+          loss_en += weighted_mse( en, target, weights)          
+
+        losses['weighted_mse'].append( loss_en / pred[2].shape[1]) 
+
       # Generalized cross entroy loss for continuous distributions
       if 'stats' in self.cf.losses :
         stats_loss = Gaussian( target, pred[0], pred[1])  
@@ -489,16 +530,11 @@ class Trainer_Base() :
       if 'crps' in self.cf.losses :
         crps_loss = torch.mean( CRPS( target, pred[0], pred[1]))
         losses['crps'].append( crps_loss)
-
-      #cosine weighted RMSE loss
-      if 'cos_weighted_mse' in self.cf.losses :
-        cw_mse_loss = torch.mean( CosW_MSELoss( pred[0], target = target))
-        losses['cos_weighted_mse'].append( cw_mse_loss)
         
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
-      #print( 'LOSS : {} :: {}'.format( key, losses[key]))
+      print( 'LOSS : {} :: {}'.format( key, losses[key]))
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
         tot_weight += self.loss_weights[ifield] 
@@ -643,7 +679,8 @@ class Trainer_BERT( Trainer_Base) :
       target = detokenize( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
                            forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
      
-      coords_b, targ_coords_b = [], []
+      coords_b = []
+  
       for bidx in range(batch_size):
         dates   = self.sources_info[bidx][0]
         lats    = self.sources_info[bidx][1]
@@ -657,7 +694,7 @@ class Trainer_BERT( Trainer_Base) :
           normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx) 
           source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)
           target[bidx,vidx] = denormalize( target[bidx,vidx], normalizer, dates_t, year_base)
-      
+
         coords_b += [[dates, 90.-lats, lons, dates_t]]
 
       # append
@@ -688,7 +725,7 @@ class Trainer_BERT( Trainer_Base) :
           normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
           pred[bidx,vidx] = denormalize( pred[bidx,vidx], normalizer, dates_t, year_base)
           ensemble[bidx,:,vidx] = denormalize(ensemble[bidx,:,vidx], normalizer, dates_t, year_base)
-          
+
       # append
       preds_out.append( [fn[0], pred])
       ensembles_out.append( [fn[0], ensemble])
@@ -710,6 +747,7 @@ class Trainer_BERT( Trainer_Base) :
     return [torch.split( data_b[vidx], lens) for vidx,lens in enumerate(lens_batches)]
 
   def get_masked_data(self, field_info, data, idx_list, ensemble = False):
+  
     cf = self.cf
     batch_size = len(self.sources_info)  
     num_levels = len(field_info[2])
@@ -747,7 +785,7 @@ class Trainer_BERT( Trainer_Base) :
       num_tokens = field_info[3]
       token_size = field_info[4]
       sources_b = detokenize( sources[fidx].numpy())
-      
+     
       if is_predicted :
         targets_b   = self.get_masked_data(field_info, targets[fidx], tokens_masked_idx_list[fidx])
         preds_mu_b  = self.get_masked_data(field_info, log_preds[fidx][0], tokens_masked_idx_list[fidx])
@@ -785,7 +823,7 @@ class Trainer_BERT( Trainer_Base) :
                                 shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
             grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
             grid_lons_toked = tokenize( grid[1], token_size).flatten( 0, 2)
-            
+          
             idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
             lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
@@ -803,8 +841,9 @@ class Trainer_BERT( Trainer_Base) :
               if len(normalizer.shape) > 2: #local normalization                                     
                 lats_mskd_idx = np.where(np.isin(lats,la))[0]
                 lons_mskd_idx = np.where(np.isin(lons,lo))[0]
-                normalizer_ii = normalizer[:, :, lats_mskd_idx, lons_mskd_idx]
-
+                #normalizer_ii = normalizer[:, :, lats_mskd_idx, lons_mskd_idx] problems in python 3.9
+                normalizer_ii = normalizer[:, :, lats_mskd_idx[0]:lats_mskd_idx[-1]+1, lons_mskd_idx[0]:lons_mskd_idx[-1]+1]
+             
               targets_b[vidx][bidx][ii]   = denormalize(t, normalizer_ii, da, year_base)  
               preds_mu_b[vidx][bidx][ii]  = denormalize(p, normalizer_ii, da, year_base) 
               preds_ens_b[vidx][bidx][ii] = denormalize(e, normalizer_ii, da, year_base)

@@ -206,9 +206,26 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       sources = [torch.stack(sources_field).transpose(1,0) for sources_field in sources]
       token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
       sources = self.pre_batch( sources, token_infos )
+
+      # tmidx_list = sources[-1]
+      # breakpoint()
+      # for ifield, field_info in enumerate(self.fields): 
+      #   for ilevel, vl in enumerate(field_info[2]):
+      #     idx_base = tmidx_list[ifield][ilevel][bidx]
+      #     idx_loc = idx_base - np.prod(num_tokens) * bidx
+          #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
+          # lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+          #lons_mskd_b = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
+      
+      #weights_idx_list += [get_weights(la, lo) for la, lo in zip(lats_mskd_b, lons_mskd_b)]
+      # 1. retrieve token_masked_idx
+      # 2. get_weights_idx
+      # 3. propagate get_weights_idx 
+
       # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
       target_idxs = None
+     
       yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
 
   ###################################################
@@ -283,8 +300,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           lon += side_len[1].item() - overlap[1].item()
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
-    batch_size = num_tiles_lon
- 
+    batch_size = len(times_pos) #num_tiles_lon
+    print(batch_size)
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
     self.set_data( times_pos, batch_size)

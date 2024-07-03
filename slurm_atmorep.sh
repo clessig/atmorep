@@ -1,8 +1,9 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-0:09:59
+#SBATCH --time=0-71:59:59
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=80 #####nodes * gpus/node * 20
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=20
 #SBATCH --gres=gpu:4
 #SBATCH --chdir=.
 #SBATCH --qos=acc_ehpc
@@ -16,7 +17,7 @@ export UCX_TLS="^cma"
 export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_4:1,mlx5_5:1
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0 #,1,2,3
 
 # so processes know who to talk to
 export MASTER_ADDR="$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)"
@@ -35,11 +36,13 @@ echo "Number of Nodes: $SLURM_JOB_NUM_NODES"
 echo "Number of Tasks: $SLURM_NTASKS"
 date
 
+export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
+
 CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_train_${SLURM_JOBID}
 mkdir ${CONFIG_DIR}
 cp ${SLURM_SUBMIT_DIR}/atmorep/core/train.py ${CONFIG_DIR}
 echo "${CONFIG_DIR}/train.py"
-srun --label --cpu-bind=v ${SLURM_SUBMIT_DIR}/pyenv/bin/python -u ${CONFIG_DIR}/train.py > output/output_${SLURM_JOBID}.txt
+srun --label --cpu-bind=v --accel-bind=v ${SLURM_SUBMIT_DIR}/pyenv/bin/python -u ${CONFIG_DIR}/train.py > output/output_${SLURM_JOBID}.txt
 
 echo "Finished job."
 date

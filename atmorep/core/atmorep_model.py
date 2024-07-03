@@ -73,7 +73,7 @@ class AtmoRepData( torch.nn.Module) :
     cf = self.net.cf
     if batch_size < 0 :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
-    print(times)
+    print("dates:", times)
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_global( times, batch_size, cf.token_overlap)
 
@@ -137,12 +137,12 @@ class AtmoRepData( torch.nn.Module) :
   def mode( self, mode : NetMode) :
     
     if mode == NetMode.train :
-      self.data_loader_iter = iter(self.data_loader_train)
-      #self.data_loader_iter = iter(self.dataset_train)
+      #self.data_loader_iter = iter(self.data_loader_train)
+      self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
-      self.data_loader_iter = iter(self.data_loader_test)
-      #self.data_loader_iter = iter(self.dataset_test)
+      #self.data_loader_iter = iter(self.data_loader_test)
+      self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -189,7 +189,7 @@ class AtmoRepData( torch.nn.Module) :
     self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
-                                          with_shuffle = (cf.BERT_strategy != 'global_forecast') )
+                                          with_shuffle = (cf.BERT_strategy != 'global_forecast'), with_source_idxs = True )
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
@@ -405,10 +405,11 @@ class AtmoRep( torch.nn.Module) :
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight']
 
       else:
-        mw = torch.tensor(np.zeros([0,2048]))
-    
+        dim_mw = self.encoders[0].heads[0].proj_heads_other[0].weight.shape
+        mw = torch.tensor(np.zeros(dim_mw))
+      
       mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
-    
+     
     #decoder
     for iblock in range(0, 19, 2) : 
       mw  = torch.cat([mloaded[f'decoders.0.blocks.{iblock}.heads.{head}.proj_{k}.weight'] for head in range(8) for k in ["qs", "ks", "vs"]])
@@ -421,10 +422,11 @@ class AtmoRep( torch.nn.Module) :
       mloaded[f'decoders.0.blocks.{iblock}.proj_heads_o_kv.weight'] = mw
 
       #self.num_samples_validate
-      mloaded[f'decoders.0.blocks.{iblock}.ln_q.weight'] = torch.tensor(np.ones([128]))
-      mloaded[f'decoders.0.blocks.{iblock}.ln_k.weight'] = torch.tensor(np.ones([128]))
-      mloaded[f'decoders.0.blocks.{iblock}.ln_q.bias'] = torch.tensor(np.ones([128]))
-      mloaded[f'decoders.0.blocks.{iblock}.ln_k.bias'] = torch.tensor(np.ones([128]))
+      decoder_dim = self.decoders[0].blocks[iblock].ln_q.weight.shape #128
+      mloaded[f'decoders.0.blocks.{iblock}.ln_q.weight'] = torch.tensor(np.ones(decoder_dim))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_k.weight'] = torch.tensor(np.ones(decoder_dim))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_q.bias'] = torch.tensor(np.ones(decoder_dim))
+      mloaded[f'decoders.0.blocks.{iblock}.ln_k.bias'] = torch.tensor(np.ones(decoder_dim))
 
       for i in range(8):
         del mloaded[f'decoders.0.blocks.{iblock}.heads.{i}.proj_qs.weight']
@@ -433,7 +435,7 @@ class AtmoRep( torch.nn.Module) :
         del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_qs.weight']
         del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_ks.weight']
         del mloaded[f'decoders.0.blocks.{iblock}.heads_other.{i}.proj_vs.weight']
-
+    
     return mloaded
 
   ###################################################
@@ -458,7 +460,7 @@ class AtmoRep( torch.nn.Module) :
     # TODO: remove, only for backward 
     if model.embeds_token_info[0].weight.abs().max() == 0. :
       model.embeds_token_info = torch.nn.ModuleList()
-
+      
     return model
     
   ###################################################

@@ -352,6 +352,8 @@ def erf( x, mu=0., std_dev=1.) :
   val = c1 * ( 1./c2 - std_dev * torch.special.erf( (mu - x) / (c3 * std_dev) ) )
   return val
 
+########################################
+
 def CRPS( y, mu, std_dev) :
   # see Eq. A2 in S. Rasp and S. Lerch. Neural networks for postprocessing ensemble weather forecasts. Monthly Weather Review, 146(11):3885 – 3900, 2018.
   c1 = np.sqrt(1./np.pi)
@@ -359,3 +361,20 @@ def CRPS( y, mu, std_dev) :
   t2 = 2. * Gaussian( (y-mu) / std_dev)
   val = std_dev * ( (y-mu)/std_dev * t1 + t2 - c1 )
   return val
+
+
+########################################
+
+def get_weights(lats_idx, lat_min = -90., lat_max = 90., reso = 0.25):
+  lat_range = lat_max - lat_min 
+  bins = lat_range/reso+1
+
+  theta_weight = np.array([np.cos(w) for w in np.arange( lat_max * np.pi/lat_range , lat_min * np.pi/lat_range, -np.pi/bins)], dtype = np.float32)
+  
+  return theta_weight[lats_idx]
+
+########################################
+
+def weighted_mse(x, target, weights):
+        return torch.sum(weights * (x - target) **2 )/torch.sum(weights)
+

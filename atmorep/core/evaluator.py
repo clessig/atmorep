@@ -81,8 +81,10 @@ class Evaluator( Trainer_BERT) :
       with_ddp = False
       num_accs_per_task = 1 
     else :
-      num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-    devices = init_torch( num_accs_per_task)
+      num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+    #devices = init_torch( num_accs_per_task)
+    devices = ['cuda']
+
     par_rank, par_size = setup_ddp( with_ddp)
 
     cf = Config().load_json( model_id)
@@ -90,6 +92,7 @@ class Evaluator( Trainer_BERT) :
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
     cf.par_size = par_size
+    cf.losses = cf.losses + ['weighted_mse']
     # overwrite old config
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
@@ -150,7 +153,7 @@ class Evaluator( Trainer_BERT) :
       cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
 
     if not hasattr(cf, 'batch_size'):
-      cf.batch_size = 14
+      cf.batch_size = 196 #14
     if not hasattr(cf, 'batch_size_validation'):
       cf.batch_size_validation = 1 #64
     if not hasattr(cf, 'batch_size_delta'):

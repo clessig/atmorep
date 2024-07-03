@@ -94,7 +94,6 @@ def prepare_batch_BERT_field( cf, ifield, source, token_info, rng) :
   batch_dim = source.shape[0]
   num_tokens = source.shape[1] 
  
-  # 
   masking_ratios = rng.random( batch_dim) * BERT_frac
   # number of tokens masked per batch entry
   nums_masked = np.ceil( num_tokens * masking_ratios).astype(np.int64)
