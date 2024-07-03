@@ -229,11 +229,12 @@ class Trainer_Base() :
     for batch_idx in range( model.len( NetMode.train)) :
       
       batch_data = self.model.next()
-      (_, _ , _, tmis_list) = batch_data[0]
+      _, _, _, tmksd_list, weight_list = batch_data[0]
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
-        loss, mse_loss, losses = self.loss( preds, batch_idx, tmis_list)
+        #breakpoint()
+        loss, mse_loss, losses = self.loss( preds, batch_idx, tmksd_list, weight_list)
       
       self.grad_scaler.scale(loss).backward()
       self.grad_scaler.step(self.optimizer)
@@ -371,7 +372,7 @@ class Trainer_Base() :
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
-          (sources, _ , targets, tmis_list) = batch_data[0]
+          (sources, _ , targets, tmis_list, _) = batch_data[0]
           log_sources = ( [source.detach().clone().cpu() for source in sources ],
                           [target.detach().clone().cpu() for target in targets ],
                            tmis_list)
@@ -443,7 +444,7 @@ class Trainer_Base() :
     pass
 
   ###################################################
-  def loss( self, preds, batch_idx = 0, tmidx_list = None) :
+  def loss( self, preds, batch_idx = 0, tmidx_list = None, weights_list = None) :
 
     # TODO: move implementations to individual files
 
@@ -475,38 +476,31 @@ class Trainer_Base() :
         num_tokens = field_info[3]
         token_size = field_info[4]
 
-        #idx_loc = [tokens_masked_idx_list[0][vlvl][batch_idx] - np.prod(num_tokens) * batch_idx for vlvl in range(nlvls)]
-        #targets_temp = self.get_masked_data(field_info, target, tokens_masked_idx_list[0])
-        #preds_temp = self.get_masked_data(field_info, pred[0], tokens_masked_idx_list[0])
-        lats_mskd = []
         weights = []
-        for vidx in range(nlvls):
-          for bidx in range(cf.batch_size):
+        # for vidx in range(nlvls):
+        #   for bidx in range(cf.batch_size):
            
-            lats_idx = self.sources_idxs[bidx][1] 
-            lons_idx = self.sources_idxs[bidx][2]
-            grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
-            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
-                                shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+        #     lats_idx = self.sources_idxs[bidx][1] 
+        #     lons_idx = self.sources_idxs[bidx][2]
             
-            grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
+        #     idx_base = tmidx_list[idx][vidx][bidx]
+        #     idx_loc = idx_base - np.prod(num_tokens) * bidx
+
+        #     grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+        #     grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+        #                         shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+        #     grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
             
-            idx_base = tmidx_list[idx][vidx][bidx]
-            idx_loc = idx_base - np.prod(num_tokens) * bidx
-            #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-           
-            lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-            lats_mskd.append(lats_mskd_b)
-            weights.append([get_weights(la) for la in lats_mskd_b])
-        lats_mskd = torch.Tensor([l for l in lats_mskd])
-        weights = torch.Tensor(np.array([w for batch in weights for w in batch]))
-        breakpoint()        
+        #     lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            
+        #     weights.append([get_weights(la) for la in lats_mskd_b])
+        #breakpoint()
+
+        weights = torch.Tensor(np.array([w for batch in weights_list[idx] for w in batch]))
         weights = weights.view(*weights.shape, 1, 1).repeat(1, 1, token_size[0], token_size[2]).swapaxes(1, 2)
-       
         weights = weights.reshape([weights.shape[0], -1]).to(target.get_device())
-        
-        #target_temp = detokenize(target.reshape([nlvls, -1] + tok_size + ntokens).cpu().detach().numpy())
-        #preds_temp  = detokenize(preds[0].reshape([nlvls, ]).cpu().detach().numpy())
+        # weights = torch.ones(weights.shape).to(target.get_device())
+        #breakpoint()
         for en in torch.transpose( pred[2], 1, 0) :
           loss_en += weighted_mse( en, target, weights)          
 
@@ -534,7 +528,7 @@ class Trainer_Base() :
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
-      print( 'LOSS : {} :: {}'.format( key, losses[key]))
+      # print( 'LOSS : {} :: {}'.format( key, losses[key]))
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
         tot_weight += self.loss_weights[ifield] 
@@ -575,7 +569,7 @@ class Trainer_BERT( Trainer_Base) :
 
     # unpack loader output
     # xin[0] since BERT does not have targets
-    (sources, token_infos, targets, fields_tokens_masked_idx_list) = xin[0]
+    (sources, token_infos, targets, fields_tokens_masked_idx_list, _) = xin[0]
     (self.sources_idxs, self.sources_info) = xin[2]
     
     # network input

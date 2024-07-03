@@ -210,11 +210,11 @@ def train() :
   # loss
   # supported: see Trainer for supported losses
   #cf.losses = ['mse', 'stats']
-  #cf.losses = ['mse_ensemble'] #, 'stats'] 
-  cf.losses = ['weighted_mse']
+  #cf.losses = ['mse_ensemble', 'stats'] 
+  #cf.losses = ['weighted_mse', 'stats']
   # cf.losses = ['mse']
   # cf.losses = ['stats']
-  # cf.losses = ['crps']
+  cf.losses = ['mse_ensemble', 'crps']
   # training
   cf.optimizer_zero = False
   cf.lr_start = 5. * 10e-7
@@ -226,7 +226,7 @@ def train() :
   cf.lat_sampling_weighted = False #True
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation', 'identity'
-  cf.BERT_strategy = 'forecast' #'BERT'     
+  cf.BERT_strategy = 'BERT' #'BERT'     
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution

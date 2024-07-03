@@ -25,7 +25,7 @@ import os
 # from atmorep.datasets.normalizer_global import NormalizerGlobal
 # from atmorep.datasets.normalizer_local import NormalizerLocal
 from atmorep.datasets.normalizer import normalize
-from atmorep.utils.utils import tokenize
+from atmorep.utils.utils import tokenize, get_weights
 
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
@@ -140,9 +140,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
       data_tt = self.ds['data'].oindex[idxs_t]
       for sidx in range(self.batch_size) :
-        # i_bidx = self.idxs_perm_t[bidx]
-        # idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
-
+        
         idx = self.idxs_perm[bidx*self.batch_size+sidx]
         # slight asymetry with offset by res/2 is required to match desired token count
         lat_ran = np.where(np.logical_and(lats>idx[0]-ns_2[1]-res[0]/2.,lats<idx[0]+ns_2[1]))[0]
@@ -166,6 +164,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         for ifield, field_info in enumerate(self.fields):  
           source_lvl, tok_info_lvl  = [], []
           tok_size  = field_info[4]
+          num_tokens = field_info[3]
           corr_type = 'global' if len(field_info) <= 6 else field_info[6]
         
           for ilevel, vl in enumerate(field_info[2]):
@@ -207,20 +206,32 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
       sources = self.pre_batch( sources, token_infos )
 
-      # tmidx_list = sources[-1]
-      # breakpoint()
-      # for ifield, field_info in enumerate(self.fields): 
-      #   for ilevel, vl in enumerate(field_info[2]):
-      #     idx_base = tmidx_list[ifield][ilevel][bidx]
-      #     idx_loc = idx_base - np.prod(num_tokens) * bidx
-          #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-          # lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-          #lons_mskd_b = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
-      
-      #weights_idx_list += [get_weights(la, lo) for la, lo in zip(lats_mskd_b, lons_mskd_b)]
-      # 1. retrieve token_masked_idx
-      # 2. get_weights_idx
-      # 3. propagate get_weights_idx 
+      tmidx_list = sources[-1]
+      weights_idx_list = []
+
+      for ifield, field_info in enumerate(self.fields): 
+        weights = []
+        for ilevel, vl in enumerate(field_info[2]):
+          for ibatch in range(self.batch_size):
+            
+            lats_idx = source_idxs[ibatch][1] 
+            lons_idx = source_idxs[ibatch][2]
+
+            idx_base = tmidx_list[ifield][ilevel][ibatch]
+            idx_loc = idx_base - np.prod(num_tokens) * ibatch
+            
+            grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                     shape = [tok_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+
+            grid_lats_toked = tokenize( grid[0], tok_size).flatten( 0, 2)  
+
+            lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+
+            weights.append([get_weights(la) for la in lats_mskd_b])
+
+        weights_idx_list.append(weights)
+      sources = (*sources, weights_idx_list)
 
       # TODO: implement (only required when prediction target comes from different data stream)
       targets, target_info = None, None
