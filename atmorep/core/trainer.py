@@ -23,9 +23,7 @@ import code
 from pathlib import Path
 import os
 import datetime
-from typing import TypeVar
 import functools
-import pandas as pd
 
 import wandb
 # import horovod.torch as hvd
@@ -42,7 +40,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
-from atmorep.utils.utils import Gaussian, CRPS, get_weights, weighted_mse, NetMode, tokenize, detokenize
+from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
@@ -355,7 +353,7 @@ class Trainer_Base() :
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
-    print('inside_validate')
+
     cf = self.cf
     BERT_strategy_train = cf.BERT_strategy
     cf.BERT_strategy = BERT_test_strategy
@@ -390,11 +388,10 @@ class Trainer_Base() :
           # base line loss
           cur_loss = self.MSELoss( pred[0], target = target ).cpu().item()
     
-          print(cur_loss, flush = True)
           loss += cur_loss 
           total_losses[ifield] += cur_loss
           ifield += 1
-        print(f"total_loss {total_loss}", flush = True)
+  
         total_loss += loss
         test_len += 1
         
@@ -404,12 +401,11 @@ class Trainer_Base() :
           self.log_validate( epoch, it, log_sources, log_preds)
           if cf.attention:
             self.log_attention( epoch, it, atts)
-    
-    print(f"FINAL total_loss {total_loss}", flush = True)                                
+                             
     # average over all nodes
     total_loss /= test_len * len(self.cf.fields_prediction)
     total_losses /= test_len
-    print(f"FINAL total_loss after ratio {total_loss}", flush = True) 
+
     if cf.with_ddp :
       total_loss_cuda = total_loss.cuda()
       total_losses_cuda = total_losses.cuda()
@@ -417,7 +413,7 @@ class Trainer_Base() :
       dist.all_reduce( total_losses_cuda, op=torch.distributed.ReduceOp.AVG )
       total_loss = total_loss_cuda.cpu()
       total_losses = total_losses_cuda.cpu()
-    print(f"FINAL total_loss after DDP {total_loss}", flush = True) 
+
     if 0 == cf.par_rank :
       print( 'validation loss for strategy={} at epoch {} : {}'.format( BERT_test_strategy,
                                                                   epoch, total_loss),
@@ -472,35 +468,12 @@ class Trainer_Base() :
       if 'weighted_mse' in self.cf.losses :
         loss_en = torch.tensor( 0., device=target.device)
         field_info = cf.fields[idx]
-        nlvls = len(field_info[2])
-        num_tokens = field_info[3]
         token_size = field_info[4]
-
-        weights = []
-        # for vidx in range(nlvls):
-        #   for bidx in range(cf.batch_size):
-           
-        #     lats_idx = self.sources_idxs[bidx][1] 
-        #     lons_idx = self.sources_idxs[bidx][2]
-            
-        #     idx_base = tmidx_list[idx][vidx][bidx]
-        #     idx_loc = idx_base - np.prod(num_tokens) * bidx
-
-        #     grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
-        #     grid = torch.from_numpy( np.array( np.broadcast_to( grid,
-        #                         shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
-        #     grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
-            
-        #     lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-            
-        #     weights.append([get_weights(la) for la in lats_mskd_b])
-        #breakpoint()
 
         weights = torch.Tensor(np.array([w for batch in weights_list[idx] for w in batch]))
         weights = weights.view(*weights.shape, 1, 1).repeat(1, 1, token_size[0], token_size[2]).swapaxes(1, 2)
         weights = weights.reshape([weights.shape[0], -1]).to(target.get_device())
-        # weights = torch.ones(weights.shape).to(target.get_device())
-        #breakpoint()
+       
         for en in torch.transpose( pred[2], 1, 0) :
           loss_en += weighted_mse( en, target, weights)          
 
@@ -524,11 +497,16 @@ class Trainer_Base() :
       if 'crps' in self.cf.losses :
         crps_loss = torch.mean( CRPS( target, pred[0], pred[1]))
         losses['crps'].append( crps_loss)
+
+      if 'kernel_crps' in self.cf.losses :
+        kcrps_loss = torch.mean( kernel_crps( target,torch.transpose( pred[2], 1, 0)))
+        losses['kernel_crps'].append( kcrps_loss)
+
         
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
-      # print( 'LOSS : {} :: {}'.format( key, losses[key]))
+      #print( 'LOSS : {} :: {}'.format( key, losses[key]))
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
         tot_weight += self.loss_weights[ifield] 

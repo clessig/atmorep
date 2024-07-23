@@ -22,7 +22,7 @@ from enum import Enum
 import wandb
 import code
 from calendar import monthrange
-
+#import properscoring as ps
 import numpy as np
 
 import torch.distributed as dist
@@ -353,8 +353,12 @@ def erf( x, mu=0., std_dev=1.) :
   return val
 
 ########################################
+# def CRPS_ps( y, mu, std_dev) :
+#   val = ps.crps_gaussian(y.cpu().detach().numpy(), mu=mu.cpu().detach().numpy(), sig=std_dev.cpu().detach().numpy())
+#   return torch.tensor(val)
 
 def CRPS( y, mu, std_dev) :
+   
   # see Eq. A2 in S. Rasp and S. Lerch. Neural networks for postprocessing ensemble weather forecasts. Monthly Weather Review, 146(11):3885 – 3900, 2018.
   c1 = np.sqrt(1./np.pi)
   t1 = 2. * erf( (y-mu) / std_dev) - 1.
@@ -362,6 +366,27 @@ def CRPS( y, mu, std_dev) :
   val = std_dev * ( (y-mu)/std_dev * t1 + t2 - c1 )
   return val
 
+########################################
+# def kernel_crps_ps( target, ens) :
+#   #breakpoint()
+#   val = ps.crps_ensemble(target.cpu().detach().numpy(), ens.permute([1,2,0]).cpu().detach().numpy())
+#   return torch.tensor(val)
+
+def kernel_crps( target, ens, fair = True) :
+  #breakpoint()
+  ens_size = ens.shape[0]
+  mae = torch.cat( [(target - mem).abs().mean().unsqueeze(0) for mem in ens], 0).mean()
+
+  if ens_size == 1:
+    return mae
+
+  coef = -1.0 / (2.0 * ens_size * (ens_size - 1)) if fair else -1.0 / (2.0 * ens_size**2)
+  temp = [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]
+  # breakpoint()
+  ens_var = coef * torch.tensor( [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]).sum()
+  ens_var /= (ens.shape[1]*ens.shape[2])
+
+  return mae + ens_var
 
 ########################################
 

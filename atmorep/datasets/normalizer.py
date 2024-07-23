@@ -36,7 +36,6 @@ def normalize( data, norm, dates, year_base = 1979) :
   
 ######################################################
 def normalize_local( data, mean, var) :
-  #breakpoint()
   data = (data - mean) / var
   return data
 

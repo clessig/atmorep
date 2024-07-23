@@ -60,7 +60,6 @@ class Evaluator( Trainer_BERT) :
     if not hasattr(cf, 'batch_size_validation'):
       cf.batch_size_validation = cf.batch_size_max
    
-    cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
     cf.with_mixed_precision = True
 
     # set/over-write options as desired
@@ -73,7 +72,7 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, file_path, args = {}, model_epoch=-2) :
 
     # SLURM_TASKS_PER_NODE is controlled by #SBATCH --ntasks-per-node=1; should be 1 for multiformer
     with_ddp = True
@@ -81,18 +80,18 @@ class Evaluator( Trainer_BERT) :
       with_ddp = False
       num_accs_per_task = 1 
     else :
-      num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-    #devices = init_torch( num_accs_per_task)
-    devices = ['cuda']
+      num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+    devices = init_torch( num_accs_per_task)
+    #devices = ['cuda']
 
     par_rank, par_size = setup_ddp( with_ddp)
-
+    cf.file_path = file_path
     cf = Config().load_json( model_id)
     cf.with_wandb = True
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
     cf.par_size = par_size
-    cf.losses = cf.losses + ['weighted_mse']
+    cf.losses = cf.losses
     # overwrite old config
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
@@ -149,9 +148,6 @@ class Evaluator( Trainer_BERT) :
     cf.num_loader_workers = 12 #1
     cf.log_test_num_ranks = 1
     
-    if not hasattr(cf, 'file_path'):
-      cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
-
     if not hasattr(cf, 'batch_size'):
       cf.batch_size = 196 #14
     if not hasattr(cf, 'batch_size_validation'):

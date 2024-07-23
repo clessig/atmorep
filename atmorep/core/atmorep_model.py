@@ -73,7 +73,6 @@ class AtmoRepData( torch.nn.Module) :
     cf = self.net.cf
     if batch_size < 0 :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
-    print("dates:", times)
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_global( times, batch_size, cf.token_overlap)
 

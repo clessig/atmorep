@@ -312,7 +312,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
     batch_size = len(times_pos) #num_tiles_lon
-    print(batch_size)
+    
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
     self.set_data( times_pos, batch_size)
