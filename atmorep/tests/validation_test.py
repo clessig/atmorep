@@ -10,6 +10,7 @@ import os
 
 from atmorep.tests.test_utils import *
 
+# run it with e.g. pytest -s atmorep/tests/validation_test.py --field temperature --model_id ztsut0mr
 
 @pytest.fixture
 def field(request):
@@ -25,13 +26,12 @@ def epoch(request):
 
 ##################################################################
 
-#@pytest.mark.parametrize(metafunc): #"field, level, model_id", [("temperature", 105, "ztsut0mr")])
 def test_datetime(field, model_id, epoch = 0):
 
     """
-    Check against ERA5 timestamps
+    Check against ERA5 timestamps.
+    50 random samples.
     """
-    #field, model_id, epoch = get_fixtures(metafunc)
 
     level = 137
     store = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
@@ -62,14 +62,13 @@ def test_datetime(field, model_id, epoch = 0):
 
 #############################################################################
 
-#@pytest.mark.parametrize("field, model_id", [("temperature", "ztsut0mr")])
-
 def test_coordinates(field, model_id, epoch = 0):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
+    50 random samples.
     """
-    #field, model_id, epoch = get_fixtures(metafunc)
+   
     store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
     target = zarr.group(store_t)
 
@@ -94,11 +93,11 @@ def test_coordinates(field, model_id, epoch = 0):
 
 #########################################################################
 
-#@pytest.mark.parametrize("field, model_id", [("temperature", "ztsut0mr")])
-
 def test_rmse(field, model_id, epoch = 0):
-   # field, model_id, epoch = get_fixtures(metafunc)
-
+    """
+    Test that for each field the RMSE does not exceed a certain value. 
+    50 random samples.
+    """
     store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
     target = zarr.group(store_t)
 
