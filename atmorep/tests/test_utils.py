@@ -15,6 +15,8 @@ def grib_index(field):
                  "total_precip": "tp", 
                  "velocity_v": "v", 
                  "velocity_z": "z", 
+                 "vorticity" : "vo", 
+                 "divergence" : "d", 
                  "specific_humidity": "q"}
 
     return grib_idxs[field]
@@ -47,6 +49,8 @@ def get_max_RMSE(field):
               "velocity_u" : 0.005, #????
               "velocity_v": 0.005,  #????
               "velocity_z": 0.005,  #????
+              "vorticity" : 0.2,    #????
+              "divergence": 0.2,    #????
               "specific_humidity": 0.7,  #????
               "total_precip": 9999, #?????
             }

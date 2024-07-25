@@ -17,7 +17,7 @@
 import numpy as np
 import os
 import code
-
+import pytest
 import datetime
 
 import wandb
@@ -85,8 +85,8 @@ class Evaluator( Trainer_BERT) :
     #devices = ['cuda']
 
     par_rank, par_size = setup_ddp( with_ddp)
-    cf.file_path = file_path
     cf = Config().load_json( model_id)
+    cf.file_path = file_path
     cf.with_wandb = True
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
@@ -110,8 +110,15 @@ class Evaluator( Trainer_BERT) :
       cf.num_samples_per_epoch = 1024
     if not hasattr(cf, 'with_mixed_precision'):
       cf.with_mixed_precision = False
+    if not hasattr(cf, 'with_pytest'):
+      cf.pytest = False
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
+    
+    if cf.with_pytest:
+      fields = [field[0] for field in cf.fields_prediction]
+      for field in fields:
+        pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id])
 
   ##############################################
   @staticmethod

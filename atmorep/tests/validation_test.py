@@ -30,35 +30,35 @@ def test_datetime(field, model_id, epoch = 0):
 
     """
     Check against ERA5 timestamps.
-    50 random samples.
+    Loop over all levels individually. 50 random samples for each level.
     """
 
-    level = 137
     store = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
     atmorep = zarr.group(store)
 
-    #TODO: make it more elegant
-    ml_idx = np.where(atmorep[f"{field}/sample=00000"].ml[:] == level)[0].tolist()[0]
-
     nsamples = min(len(atmorep[field]), 50)
     samples = rnd.sample(range(len(atmorep[field])), nsamples)
+    levels = atmorep[f"{field}/sample=00000"].ml[:]
+   
+    for level in levels:
+        #TODO: make it more elegant
+        ml_idx = np.where(levels == level)[0].tolist()[0]
+        for s in samples:
+        
+            data = atmorep[f"{field}/sample={s:05d}"].data[ml_idx, 0]
+            datetime = pd.Timestamp(atmorep[f"{field}/sample={s:05d}"].datetime[0])
+            lats = atmorep[f"{field}/sample={s:05d}"].lat
+            lons = atmorep[f"{field}/sample={s:05d}"].lon
 
-    for s in samples:
-      
-        data = atmorep[f"{field}/sample={s:05d}"].data[ml_idx, 0]
-        datetime = pd.Timestamp(atmorep[f"{field}/sample={s:05d}"].datetime[0])
-        lats = atmorep[f"{field}/sample={s:05d}"].lat
-        lons = atmorep[f"{field}/sample={s:05d}"].lon
+            year, month = datetime.year, str(datetime.month).zfill(2)
 
-        year, month = datetime.year, str(datetime.month).zfill(2)
+            era5_path = era5_fname().format(field, level, field, year, month, level)
+            if not os.path.isfile(era5_path):
+                warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
+                continue
+            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[grib_index(field)].sel(time = datetime, latitude = lats, longitude = lons)
 
-        era5_path = era5_fname().format(field, level, field, year, month, level)
-        if not os.path.isfile(era5_path):
-            warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
-            continue
-        era5 = xr.open_dataset(era5_path, engine = "cfgrib")[grib_index(field)].sel(time = datetime, latitude = lats, longitude = lons)
-
-        assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+            assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
 #############################################################################
 
