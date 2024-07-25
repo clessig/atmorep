@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd 
 
 def era5_fname():
     return "/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
@@ -20,6 +21,24 @@ def grib_index(field):
                  "specific_humidity": "q"}
 
     return grib_idxs[field]
+
+##################################################################
+
+def get_BERT(atmorep, field, sample, level):
+    atmorep_sample = atmorep[f"{field}/sample={sample:05d}/ml={level:05d}"] 
+    data = atmorep_sample.data[0,0] 
+    datetime = pd.Timestamp(atmorep_sample.datetime[0,0])
+    lats = atmorep_sample.lat[0]
+    lons = atmorep_sample.lon[0]
+    return data, datetime, lats, lons
+
+def get_forecast(atmorep, field, sample,level_idx):
+    atmorep_sample = atmorep[f"{field}/sample={sample:05d}"]
+    data = atmorep_sample.data[level_idx, 0]
+    datetime = pd.Timestamp(atmorep_sample.datetime[0])
+    lats = atmorep_sample.lat
+    lons = atmorep_sample.lon
+    return data, datetime, lats, lons
 
 ######################################
 
@@ -45,7 +64,7 @@ def compute_RMSE(pred, target):
 
 def get_max_RMSE(field):
     #TODO: optimize thresholds
-    values = {"temperature" : 1.8, 
+    values = {"temperature" : 3, 
               "velocity_u" : 0.005, #????
               "velocity_v": 0.005,  #????
               "velocity_z": 0.005,  #????

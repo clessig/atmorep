@@ -111,14 +111,15 @@ class Evaluator( Trainer_BERT) :
     if not hasattr(cf, 'with_mixed_precision'):
       cf.with_mixed_precision = False
     if not hasattr(cf, 'with_pytest'):
-      cf.pytest = False
+      cf.with_pytest = False
+
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
     
     if cf.with_pytest:
       fields = [field[0] for field in cf.fields_prediction]
       for field in fields:
-        pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id])
+        pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id, "--strategy", cf.BERT_strategy])
 
   ##############################################
   @staticmethod
@@ -127,8 +128,7 @@ class Evaluator( Trainer_BERT) :
     cf.lat_sampling_weighted = False
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
-    if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 128 #1472 
+    cf.num_samples_validate = 128 #1472 
     Evaluator.parse_args( cf, args)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
@@ -140,8 +140,7 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'forecast'
     cf.log_test_num_ranks = 4
     cf.forecast_num_tokens = 1  # will be overwritten when user specified
-    if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 128 
+    cf.num_samples_validate = 128 #128 
     Evaluator.parse_args( cf, args)
     
     Evaluator.run( cf, model_id, model_epoch, devices)
@@ -218,8 +217,7 @@ class Evaluator( Trainer_BERT) :
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
     cf.log_test_num_ranks = 4
-    if not hasattr(cf, 'num_samples_validate'):
-      cf.num_samples_validate = 128
+    cf.num_samples_validate = 10 #128
     Evaluator.parse_args( cf, args)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
