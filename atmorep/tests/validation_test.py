@@ -28,6 +28,12 @@ def BERT(request):
     strategy = request.config.getoption("strategy")
     return (strategy == 'BERT' or strategy == 'temporal_interpolation')
 
+@pytest.fixture(autouse = True) 
+def strategy(request):
+    return request.config.getoption("strategy")
+
+#TODO: add test for global_forecast vs ERA5
+
 def test_datetime(field, model_id, BERT, epoch = 0):
 
     """

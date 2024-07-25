@@ -24,19 +24,20 @@ if __name__ == '__main__':
   #model_id = 'oxpycr7w'     # divergence
   #model_id = '1565pb1f'     # specific_humidity
   #model_id = '3kdutwqb'     # total precip
-  #model_id = 'dys79lgw'     # velocity_u
+  model_id = 'dys79lgw'     # velocity_u
   #model_id = '22j6gysw'     # velocity_v
   # model_id = '15oisw8d'     # velocity_z
-  model_id = '3qou60es'     # temperature (also 2147fkco)
+  #model_id = '3qou60es'     # temperature (also 2147fkco)
   #model_id = '2147fkco'     # temperature (also 2147fkco)
-  
+  #model_id='s3wwcc3j'
+
   # multi-field configurations with either velocity or voritcity+divergence
   #model_id = '1jh2qvrx'     # multiformer, velocity
   # model_id = 'wqqy94oa'     # multiformer, vorticity
   #model_id = '3cizyl1q'     # 3 field config: u,v,T
   # model_id = '1v4qk0qx'     # pre-trained, 3h forecasting
   # model_id = '1m79039j'     # pre-trained, 6h forecasting
-  model_id='s3wwcc3j'
+  #model_id='34niv2nu'
   # supported modes: test, forecast, fixed_location, temporal_interpolation, global_forecast,
   #                  global_forecast_range
   # options can be used to over-write parameters in config; some modes also have specific options, 
@@ -45,7 +46,7 @@ if __name__ == '__main__':
   #Add 'attention' : True to options to store the attention maps. NB. supported only for single field runs. 
   
   # BERT masked token model
-  mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True }
+  mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 10, 'with_pytest' : True }
 
   # BERT forecast mode
   #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'num_samples_validate' : 10, 'with_pytest' : True }

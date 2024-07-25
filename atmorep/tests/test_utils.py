@@ -65,13 +65,13 @@ def compute_RMSE(pred, target):
 def get_max_RMSE(field):
     #TODO: optimize thresholds
     values = {"temperature" : 3, 
-              "velocity_u" : 0.005, #????
-              "velocity_v": 0.005,  #????
-              "velocity_z": 0.005,  #????
+              "velocity_u" : 0.2, #????
+              "velocity_v": 0.2,  #????
+              "velocity_z": 0.2,  #????
               "vorticity" : 0.2,    #????
               "divergence": 0.2,    #????
-              "specific_humidity": 0.7,  #????
-              "total_precip": 9999, #?????
+              "specific_humidity": 0.2,  #????
+              "total_precip": 1, #?????
             }
     
     return values[field]
