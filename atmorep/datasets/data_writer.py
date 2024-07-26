@@ -17,8 +17,6 @@
 import numpy as np
 import xarray as xr
 import zarr
-import code
-import datetime
 import atmorep.config.config as config
 
 def write_item(ds_field, name_idx, data, levels, coords, name  = 'sample' ):
@@ -53,7 +51,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, sources_coords[fidx][bidx])
+      write_item(ds_field, sample, field[1][bidx], levels, sources_coords[fidx][bidx])
   store_source.close()
 
   store_target = zarr_store( fname.format( 'target'))
@@ -63,7 +61,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx])
+      write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx])
   store_target.close()
 
   store_pred = zarr_store( fname.format( 'pred'))
@@ -73,7 +71,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) 
+      write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) 
   store_pred.close()
 
   store_ens = zarr_store( fname.format( 'ens'))
@@ -83,7 +81,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx])
+      write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx])
   store_ens.close()
 
 ####################################################################################################
@@ -111,7 +109,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      ds_batch_item = write_item(ds_field, sample, field[1][bidx], levels[fidx], sources_coords[fidx][bidx] )
+      write_item(ds_field, sample, field[1][bidx], levels[fidx], sources_coords[fidx][bidx] )
   store_source.close()
 
   store_target = zarr_store( fname.format( 'target'))
@@ -125,7 +123,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
       sample = batch_idx * batch_size + bidx
       ds_target_b = ds_field.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
-        ds_target_b_l = write_item(ds_target_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], targets_coords[fidx][bidx][vidx], name = 'ml' )
+        write_item(ds_target_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], targets_coords[fidx][bidx][vidx], name = 'ml' )
   store_target.close()
 
   store_pred = zarr_store( fname.format( 'pred'))
@@ -139,7 +137,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
       sample = batch_idx * batch_size + bidx
       ds_pred_b = ds_pred.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
-        ds_pred_b_l = write_item(ds_pred_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
+        write_item(ds_pred_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
                                   targets_coords[fidx][bidx][vidx], name = 'ml' )
   store_pred.close()
 
@@ -154,7 +152,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
       sample = batch_idx * batch_size + bidx
       ds_ens_b = ds_ens.create_group( f'sample={sample:05d}')
       for vidx in range(len(levels[fidx])) :
-        ds_ens_b_l = write_item(ds_ens_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
+        write_item(ds_ens_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], 
                                 targets_coords[fidx][bidx][vidx], name = 'ml' )
   store_ens.close()
 

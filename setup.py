@@ -11,7 +11,8 @@ setup(
     description='AtmoRep',
     packages=find_packages(),   
     # if packages are available in a native form fo the host system then these should be used
-    install_requires=['torch', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo'],
+    install_requires=['torch', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo', 'pytest', 'cfgrib'],
+>>>>>>> 3868ab41a354c82de5a5ac7c71877c46f8016278
     data_files=[('./output', []), ('./logs', []), ('./results',[])],
 )
 
