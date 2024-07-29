@@ -16,9 +16,8 @@
 
 import torch
 import numpy as np
-import math
 
-from atmorep.transformer.transformer_base import MLP
+from atmorep.transformer.mlp import MLP
 from atmorep.transformer.transformer_attention import MultiInterAttentionHead
 from atmorep.transformer.axial_attention import MultiFieldAxialAttention
 

@@ -15,11 +15,8 @@
 ####################################################################################################
 
 import torch
-import torch.utils.checkpoint as checkpoint
-import numpy as np
-import math
 
-from atmorep.transformer.transformer_base import MLP, prepare_token
+from atmorep.transformer.mlp import MLP
 from atmorep.transformer.transformer_attention import MultiSelfAttentionHead, MultiCrossAttentionHead
 from atmorep.transformer.axial_attention import MultiFieldAxialAttention
 from atmorep.utils.utils import identity
