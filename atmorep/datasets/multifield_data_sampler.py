@@ -21,6 +21,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
+import code
 
 # from atmorep.datasets.normalizer_global import NormalizerGlobal
 # from atmorep.datasets.normalizer_local import NormalizerLocal
@@ -75,6 +76,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # lon: no change for periodic case
     if self.ds_global < 1.:
       self.range_lon += np.array([n_size[2]/2., -n_size[2]/2.])
+    
     # data normalizers
     self.normalizers = []
     for ifield, field_info in enumerate(fields) :
@@ -84,19 +86,20 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       for vl in field_info[2]: 
         if vl == 0:
           field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-          self.normalizers[ifield] += [self.ds[f'normalization/{nf_name}_sfc'].oindex[ :, :, field_idx]] 
+          n_name = f'normalization/{nf_name}_sfc'
+          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx]] 
         else:
           vl_idx = self.ds.attrs['levels'].index(vl)
           field_idx = self.ds.attrs['fields'].index( field_info[0])
-          self.normalizers[ifield] += [self.ds[f'normalization/{nf_name}'].oindex[ :, :, field_idx, vl_idx]] 
+          n_name = f'normalization/{nf_name}'
+          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx, vl_idx]] 
+    
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
     idxs_years = self.times.year == years[0]
     for year in years[1:] :
       idxs_years = np.logical_or( idxs_years, self.times.year == year)
     self.idxs_years = np.where( idxs_years)[0]
-    # logging.getLogger('atmorep').info( f'Dataset size for years {years}: {len(self.idxs_years)}.')
-    print( f'Dataset size for years {years}: {len(self.idxs_years)}.', flush=True)
 
   ###################################################
   def shuffle( self) :
@@ -178,17 +181,19 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
-            cdata = np.take( np.take( data_t, lat_ran, -2), lon_ran, -1)
+            cdata = data_t[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
                 
             normalizer = self.normalizers[ifield][ilevel]
             if corr_type != 'global':   
-              normalizer = np.take( np.take( normalizer, lat_ran, -2), lon_ran, -1) 
+              normalizer = normalizer[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
+            
             source_data = tokenize( torch.from_numpy( cdata), tok_size )    
             # token_infos uses center of the token: *last* datetime and center in space
             dates = self.ds['time'][ idxs_t ].astype(datetime)
             cdates = dates[tok_size[0]-1::tok_size[0]]
-            dates = [(d.year, d.timetuple().tm_yday-1, d.hour) for d in cdates] #-1 is to start days from 0
+            # use -1 is to start days from 0
+            dates = [(d.year, d.timetuple().tm_yday-1, d.hour) for d in cdates] 
             lats_sidx = self.lats[lat_ran][ tok_size[1]//2 :: tok_size[1] ]
             lons_sidx = self.lons[lon_ran][ tok_size[2]//2 :: tok_size[2] ]
             # tensor product for token_infos
