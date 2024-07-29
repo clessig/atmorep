@@ -222,7 +222,8 @@ def train() :
   # # # in steps x lat_degrees x lon_degrees
   # cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
-  cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk16.zarr'
+  # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk16.zarr'
+  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
   cf.n_size = [36, 1*9*6, 1.*9*12]
 
   if cf.with_wandb and 0 == cf.par_rank :
