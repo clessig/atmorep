@@ -163,7 +163,9 @@ def setup_ddp( with_ddp = True) :
   rank = 0
   size = 1
 
-  if with_ddp :
+  master_node = os.environ.get('MASTER_ADDR', '-1')
+
+  if with_ddp and (master_node != '-1'):
 
     local_rank = int(os.environ.get("SLURM_LOCALID"))
     ranks_per_node = int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] )

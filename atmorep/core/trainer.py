@@ -147,7 +147,7 @@ class Trainer_Base() :
                                                               lr=cf.lr_start )
     else :
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
-                                        weight_decay=cf.weight_decay)
+                                          weight_decay=cf.weight_decay)
     
     self.grad_scaler = torch.cuda.amp.GradScaler(enabled=cf.with_mixed_precision)
 
@@ -571,15 +571,7 @@ class Trainer_BERT( Trainer_Base) :
       cdev = devs[cf.fields[i][1][3]]
       tmi_out += [ [torch.cat(tmi_l).to( cdev, non_blocking=True) for tmi_l in tmi] ]
     self.tokens_masked_idx = tmi_out
-   
-    # learnable class token (cannot be done in the data loader since this is running in parallel)
-    if cf.learnable_mask :
-      for ifield, (source, _) in enumerate(batch_data) :
-        source = torch.flatten( torch.flatten( torch.flatten( source, 1, 4), 2, 4), 0, 1)
-        assert len(cf.fields[ifield][2]) == 1
-        tmidx = self.tokens_masked_idx[ifield][0]
-        source[ tmidx ] = self.model.net.masks[ifield].to( source.device)
-
+  
     return batch_data
 
   ###################################################

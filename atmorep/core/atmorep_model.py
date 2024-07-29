@@ -137,11 +137,9 @@ class AtmoRepData( torch.nn.Module) :
     
     if mode == NetMode.train :
       self.data_loader_iter = iter(self.data_loader_train)
-      #self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
       self.data_loader_iter = iter(self.data_loader_test)
-      #self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -188,11 +186,12 @@ class AtmoRepData( torch.nn.Module) :
     self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
-                                          with_shuffle = (cf.BERT_strategy != 'global_forecast'), with_source_idxs = True )
+                                          with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
+                                                with_source_idxs = True )
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
-    self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_test,
+    self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
                                                cf.batch_size_validation,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
                                           with_shuffle = (cf.BERT_strategy != 'global_forecast'),
@@ -250,16 +249,8 @@ class AtmoRep( torch.nn.Module) :
 
     self.embeds = torch.nn.ModuleList()
     self.encoders = torch.nn.ModuleList()
-    self.masks = torch.nn.ParameterList()
 
     for field_idx, field_info in enumerate(cf.fields) : 
-
-      # learnabl class token
-      if cf.learnable_mask :
-        mask = torch.nn.Parameter( 0.1 * torch.randn( np.prod( field_info[4]), requires_grad=True))
-        self.masks.append( mask.to(devices[0]))
-      else :
-        self.masks.append( None)
 
       # encoder
       self.encoders.append( TransformerEncoder( cf, field_idx, True).create())
@@ -316,8 +307,6 @@ class AtmoRep( torch.nn.Module) :
         assert field_info[1][3] < len(devices), 'Per field device id larger than max devices'
         device = self.devices[ field_info[1][3] ]
       # set device
-      if self.masks[field_idx] != None :
-        self.masks[field_idx].to(device)
       self.embeds[field_idx].to(device)
       self.encoders[field_idx].to(device)
 
@@ -551,16 +540,14 @@ class AtmoRep( torch.nn.Module) :
     return fields_embed_cur, atts
 
   ###################################################
- 
   def get_fields_embed( self, xin ) :
-    cf = self.cf
     if 0 == len(self.embeds_token_info) :   # TODO: only for backward compatibility, remove
       emb_net_ti = self.embed_token_info
-      return [prepare_token( field_data, emb_net, emb_net_ti, cf.with_cls )
+      return [prepare_token( field_data, emb_net, emb_net_ti )
                               for fidx,(field_data,emb_net) in enumerate(zip( xin, self.embeds))]
     else :
       embs_net_ti = self.embeds_token_info
-      return [prepare_token( field_data, emb_net, embs_net_ti[fidx], cf.with_cls )
+      return [prepare_token( field_data, emb_net, embs_net_ti[fidx] )
                                 for fidx,(field_data,emb_net) in enumerate(zip( xin, self.embeds))]
     
   ###################################################
