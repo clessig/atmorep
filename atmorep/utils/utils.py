@@ -405,3 +405,7 @@ def get_weights(lats_idx, lat_min = -90., lat_max = 90., reso = 0.25):
 def weighted_mse(x, target, weights):
         return torch.sum(weights * (x - target) **2 )/torch.sum(weights)
 
+########################################
+
+def check_num_samples(num_samples_validate, batch_size):
+  assert num_samples_validate // batch_size > 0, f"Num samples validate: {num_samples_validate} is smaller than batch size: {batch_size}. Please increase it."

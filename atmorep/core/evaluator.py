@@ -128,8 +128,9 @@ class Evaluator( Trainer_BERT) :
     cf.lat_sampling_weighted = False
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
-    cf.num_samples_validate = 128 #1472 
+    cf.num_samples_validate = 10 #28 #1472 
     Evaluator.parse_args( cf, args)
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
@@ -142,7 +143,7 @@ class Evaluator( Trainer_BERT) :
     cf.forecast_num_tokens = 1  # will be overwritten when user specified
     cf.num_samples_validate = 128 #128 
     Evaluator.parse_args( cf, args)
-    
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
   
   ##############################################
@@ -217,8 +218,9 @@ class Evaluator( Trainer_BERT) :
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
     cf.log_test_num_ranks = 4
-    cf.num_samples_validate = 10 #128
+    cf.num_samples_validate = 128
     Evaluator.parse_args( cf, args)
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
