@@ -14,9 +14,7 @@
 #
 ####################################################################################################
 
-import code
 import numpy as np
-import xarray as xr
 
 from atmorep.utils.logger import logger
 
