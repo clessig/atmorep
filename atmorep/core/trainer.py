@@ -41,6 +41,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
 from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
+from atmorep.utils.logger import logger
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
@@ -102,8 +103,8 @@ class Trainer_Base() :
     trainer.model.net.encoder_to_decoder = trainer.encoder_to_decoder
     trainer.model.net.decoder_to_tail = trainer.decoder_to_tail
 
-    str = 'Loaded model id = {}{}.'.format( model_id, f' at epoch = {epoch}' if epoch> -2 else '')
-    print( str)
+    epoch_print = epoch if epoch> -2 else ''
+    logger.info('Loaded model id = {} at epoch = {}.', model_id, epoch_print)
     return trainer
 
   ###################################################
@@ -155,7 +156,7 @@ class Trainer_Base() :
       # print( self.model.net)
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
-      print( f'Number of trainable parameters: {num_params:,}')
+      logger.info('Number of trainable parameters: {:,}', num_params)
   
     if cf.test_initial :
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
@@ -182,7 +183,8 @@ class Trainer_Base() :
         g['lr'] = lr
 
       tstr = datetime.datetime.now().strftime("%H:%M:%S")
-      print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
+      logger.info('{} : {} :: batch_size = {}, lr = {}',
+                  epoch, tstr,cf.batch_size, lr)
 
       self.train( epoch)
 
@@ -200,7 +202,8 @@ class Trainer_Base() :
       epoch += 1
 
     tstr = datetime.datetime.now().strftime("%H:%M:%S")
-    print( 'Finished training at {} with test loss = {}.'.format( tstr, test_loss[-1]) )
+    logger.info('Finished training at {} with test loss = {}.',
+                tstr, test_loss[-1])
 
     # save final network
     if cf.with_wandb and 0 == cf.par_rank :
@@ -266,12 +269,12 @@ class Trainer_Base() :
       
           # console output
           samples_sec = cf.batch_size / (time.time() - time_start)
-          str = 'epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
-          print( str.format( epoch, batch_idx, model.len( NetMode.train),
-                            100. * batch_idx/model.len(NetMode.train), 
-                            torch.mean( torch.tensor( grad_loss_total)), 
-                            torch.mean(torch.tensor(mse_loss_total)),
-                            torch.mean( preds[0][1]), samples_sec ), flush=True)
+          template_str = 'epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
+          logger.info(template_str, epoch, batch_idx, model.len( NetMode.train),
+                      100. * batch_idx/model.len(NetMode.train),
+                      torch.mean(torch.tensor(grad_loss_total)),
+                      torch.mean(torch.tensor(mse_loss_total)),
+                      torch.mean(preds[0][1]), samples_sec)
     
           # save model (use -2 as epoch to indicate latest, stored without epoch specification)
           self.save( -2)
@@ -324,8 +327,8 @@ class Trainer_Base() :
     # https://pytorch.org/blog/trace-analysis-for-masses/
 
     # do for all par_ranks to avoid that they run out of sync
-    print( '---------------------------------')
-    print( 'Profiling:')
+    logger.info('---------------------------------')
+    logger.info('Profiling:')
     pname = './logs/profile_par_rank' + str(cf.par_rank) + '_' + cf.wandb_id + '/profile'
     with torch.profiler.profile( activities=[torch.profiler.ProfilerActivity.CPU,
                                             torch.profiler.ProfilerActivity.CUDA],
@@ -348,8 +351,8 @@ class Trainer_Base() :
 
         prof.step()
 
-    print( 'Profiling finished.')
-    print( '---------------------------------')
+    logger.info('Profiling finished.')
+    logger.info('---------------------------------')
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
@@ -415,16 +418,16 @@ class Trainer_Base() :
       total_losses = total_losses_cuda.cpu()
 
     if 0 == cf.par_rank :
-      print( 'validation loss for strategy={} at epoch {} : {}'.format( BERT_test_strategy,
-                                                                  epoch, total_loss),
-                                                                  flush=True)
+      logger.info('validation loss for strategy={} at epoch {} : {}',
+                  BERT_test_strategy, epoch, total_loss)
+
     if cf.with_wandb and (0 == cf.par_rank) :
       loss_dict = {"val. loss {}".format(BERT_test_strategy) : total_loss}
       total_losses = total_losses.cpu().detach()
       for i, field in enumerate(cf.fields_prediction) :
         idx_name = 'val., {}, '.format(BERT_test_strategy) + field[0]
         loss_dict[idx_name] = total_losses[i]
-        print( 'validation loss for {} : {}'.format( field[0], total_losses[i] ))
+        logger.info('validation loss for {} : {}', field[0], total_losses[i])
       wandb.log( loss_dict)
     batch_data = []
     torch.cuda.empty_cache()
@@ -506,7 +509,7 @@ class Trainer_Base() :
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :
-      #print( 'LOSS : {} :: {}'.format( key, losses[key]))
+      logger.debug('LOSS : {} :: {}', key, losses[key])
       for ifield, val in enumerate(losses[key]) :
         loss += self.loss_weights[ifield] * val.to( self.device_out)
         tot_weight += self.loss_weights[ifield] 

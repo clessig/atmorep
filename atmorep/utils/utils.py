@@ -31,6 +31,7 @@ import torch.utils.data.distributed
 import pandas as pd
 
 import atmorep.config.config as config
+from atmorep.utils.logger import  logger
 
 ####################################################################################################
 class NetMode( Enum) :
@@ -63,7 +64,7 @@ class Config :
   def print( self) :
     self_dict = self.__dict__
     for key, value in self_dict.items() : 
-        print("{} : {}".format( key, value))
+      logger.info("{} : {}", key, value)
 
   def create_dirs( self, wandb) :
     dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
@@ -112,7 +113,7 @@ class Config :
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
-        print( f'Could not find fname due to {e}. Aborting.')
+        logger.error('Could not find fname due to {}. Aborting.', e)
         quit()
 
     self.__dict__ = json.loads( json_str[0])
@@ -150,7 +151,7 @@ def init_torch( num_accs_per_task) :
   else :
     devices = ['cuda:{}'.format(int(local_id_node) * num_accs_per_task + i) 
                                                                   for i in range(num_accs_per_task)]
-  print( 'devices : {}'.format( devices) )
+  logger.info('devices : {}', devices)
   torch.cuda.set_device( int(local_id_node) * num_accs_per_task )
 
   torch.backends.cuda.matmul.allow_tf32 = True
@@ -207,7 +208,7 @@ def setup_wandb( with_wandb, cf, rank, project_name = None, entity = 'atmorep', 
         wandb.run.name = 'atmorep-{}-{}'.format( wandb.run.id, slurm_job_id_node)
       else :
         wandb.run.name = 'atmorep-{}'.format( wandb.run.id)
-      print( 'Wandb run: {}'.format( wandb.run.name))
+      logger.info('Wandb run: {}', wandb.run.name)
 
       cf.wandb_id = wandb.run.id
 

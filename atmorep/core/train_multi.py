@@ -26,6 +26,7 @@ from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 import atmorep.utils.utils as utils
+from atmorep.utils.logger import logger
 
 import atmorep.config.config as config
 
@@ -65,7 +66,7 @@ def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
 
   # run
   trainer = Trainer.load( cf, model_id, model_epoch, device)
-  print( 'Loaded run \'{}\' at epoch {}.'.format( model_id, model_epoch))
+  logger.info('Loaded run \'{}\' at epoch {}.',  model_id, model_epoch)
   trainer.run( model_epoch_continue)
 
 ####################################################################################################

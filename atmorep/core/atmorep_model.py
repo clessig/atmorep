@@ -25,6 +25,7 @@ import atmorep.utils.utils as utils
 from atmorep.utils.utils import identity
 from atmorep.utils.utils import NetMode
 from atmorep.utils.utils import get_model_filename
+from atmorep.utils.logger import logger
 
 from atmorep.transformer.transformer_base import prepare_token
 from atmorep.transformer.transformer_base import checkpoint_wrapper
@@ -241,7 +242,8 @@ class AtmoRep( torch.nn.Module) :
         name = 'AtmoRep' + '_embed_token_info'
         mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
         self.embeds_token_info[-1].load_state_dict( mloaded)
-        print( 'Loaded embed_token_info from id = {}.'.format( field_info[1][4][0] ) )
+        logger.info('Loaded embed_token_info from id = {}.'
+                    .format(field_info[1][4][0]))
       else :
         # initalization
         torch.nn.init.constant_( self.embeds_token_info[-1].weight, 0.0)
@@ -305,7 +307,7 @@ class AtmoRep( torch.nn.Module) :
       device = self.devices[0]
       if len(field_info[1]) > 3 :
         assert field_info[1][3] < 4, 'Only single node model parallelism supported'
-        print(devices, field_info[1][3])
+        logger.info("%s %s", devices, field_info[1][3])
         assert field_info[1][3] < len(devices), 'Per field device id larger than max devices'
         device = self.devices[ field_info[1][3] ]
       # set device
@@ -363,8 +365,12 @@ class AtmoRep( torch.nn.Module) :
     [mkeys.remove(k) for k in keys_del]  # remove proj_out keys so that they are not over-written
     [utils.init_weights_uniform( block.state_dict()[k], 0.01) for k in mkeys]
 
-    print( 'Loaded {} for {} from id = {} (ignoring/missing {} elements).'.format( block_name,
-                                              field_info[0], field_info[1][4][0], len(mkeys) ) )
+    logger.info('Loaded {} for {} from id = {} (ignoring/missing {} elements).'
+                .format(
+                  block_name,
+                  field_info[0],
+                  field_info[1][4][0],
+                  len(mkeys)))
 
   ###################################################
   def translate_weights(self, mloaded, mkeys, ukeys):
@@ -445,7 +451,7 @@ class AtmoRep( torch.nn.Module) :
       mkeys, ukeys = model.load_state_dict( mloaded, False )
 
     if len(mkeys) > 0 :
-      print( f'Loaded AtmoRep: ignoring {len(mkeys)} elements: {mkeys}')
+      logger.info('Loaded AtmoRep: ignoring {} elements: {}', len(mkeys), mkeys)
 
     # TODO: remove, only for backward 
     if model.embeds_token_info[0].weight.abs().max() == 0. :

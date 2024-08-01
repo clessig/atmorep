@@ -22,6 +22,7 @@ import datetime
 
 import wandb
 
+from atmorep.utils.logger import logger
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
@@ -90,10 +91,18 @@ class Evaluator( Trainer_BERT) :
     # overwrite old config
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
+<<<<<<< HEAD
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
 
     # if not hasattr( cf, 'num_loader_workers'):
+=======
+    
+    if 0 == cf.par_rank:
+      logger.info('Running Evaluate.evaluate wtih mode = {}', mode)
+    
+   # if not hasattr( cf, 'num_loader_workers'):
+>>>>>>> d739f00 (change: use logger.info instead of print)
     cf.num_loader_workers = 12 #cf.loader_num_workers
     cf.rng_seed = None 
     
