@@ -153,7 +153,7 @@ class Trainer_Base() :
     self.grad_scaler = torch.cuda.amp.GradScaler(enabled=cf.with_mixed_precision)
 
     if 0 == cf.par_rank :
-      # print( self.model.net)
+      logger.debug("{}", self.model.net)
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
       logger.info('Number of trainable parameters: {:,}', num_params)

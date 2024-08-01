@@ -577,5 +577,5 @@ class AtmoRep( torch.nn.Module) :
           attn_field = attn_field + attn_layer
         attn_field = torch.sum(attn_field, dim = 0, keepdim=True)
       attn.append(attn_field)
-#      print("att FINAL", ifield, len(attn), attn[0].shape)
+      logger.debug("att FINAL {} {} {}", ifield, len(attn), attn[0].shape)
     return attn
