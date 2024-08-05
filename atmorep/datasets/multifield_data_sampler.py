@@ -101,6 +101,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       idxs_years = np.logical_or( idxs_years, self.times.year == year)
     self.idxs_years = np.where( idxs_years)[0]
 
+    self.num_samples = min( self.num_samples, self.idxs_years.shape[0])
+
   ###################################################
   def shuffle( self) :
 
@@ -124,6 +126,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
   ###################################################
   def __iter__(self):
+
     if self.with_shuffle :
       self.shuffle()
 
@@ -133,8 +136,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     res = self.res
 
     iter_start, iter_end = self.worker_workset()
-   
+
     for bidx in range( iter_start, iter_end) :
+
       sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
       sources_infos, source_idxs = [], []
   
