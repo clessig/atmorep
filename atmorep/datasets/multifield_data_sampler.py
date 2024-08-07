@@ -184,7 +184,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
             cdata = data_t[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
                 
             normalizer = self.normalizers[ifield][ilevel]
-            if corr_type != 'global':   
+            if corr_type != 'global': 
               normalizer = normalizer[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
             
