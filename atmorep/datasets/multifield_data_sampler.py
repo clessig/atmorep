@@ -32,7 +32,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
   def __init__( self, file_path, fields, years, batch_size, pre_batch, n_size,
-                num_samples, with_shuffle = False, time_sampling = 1, with_source_idxs = False,
+                num_samples, with_shuffle = False, time_sampling = 1, with_source_idxs = False, compute_weights = False, 
                 fields_targets = None, pre_batch_targets = None ) :
     '''
       Data set for single dynamic field at an arbitrary number of vertical levels
@@ -46,6 +46,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.n_size = n_size
     self.num_samples = num_samples
     self.with_source_idxs = with_source_idxs
+    self.compute_weights = compute_weights
     self.with_shuffle = with_shuffle
     self.pre_batch = pre_batch
     
@@ -185,11 +186,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
-            cdata = data_t[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
-                
+            cdata = data_t[... , lat_ran[:,np.newaxis], lon_ran]
+           
             normalizer = self.normalizers[ifield][ilevel]
             if corr_type != 'global': 
-              normalizer = normalizer[ : , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+              normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran]
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
             
             source_data = tokenize( torch.from_numpy( cdata), tok_size )    
@@ -217,29 +218,29 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
       tmidx_list = sources[-1]
       weights_idx_list = []
+      if self.compute_weights:
+        for ifield, field_info in enumerate(self.fields): 
+          weights = []
+          for ilevel, vl in enumerate(field_info[2]):
+            for ibatch in range(self.batch_size):
+              
+              lats_idx = source_idxs[ibatch][1] 
+              lons_idx = source_idxs[ibatch][2]
 
-      for ifield, field_info in enumerate(self.fields): 
-        weights = []
-        for ilevel, vl in enumerate(field_info[2]):
-          for ibatch in range(self.batch_size):
-            
-            lats_idx = source_idxs[ibatch][1] 
-            lons_idx = source_idxs[ibatch][2]
+              idx_base = tmidx_list[ifield][ilevel][ibatch]
+              idx_loc = idx_base - np.prod(num_tokens) * ibatch
+              
+              grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+              grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                      shape = [tok_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
 
-            idx_base = tmidx_list[ifield][ilevel][ibatch]
-            idx_loc = idx_base - np.prod(num_tokens) * ibatch
-            
-            grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
-            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
-                                     shape = [tok_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+              grid_lats_toked = tokenize( grid[0], tok_size).flatten( 0, 2)  
 
-            grid_lats_toked = tokenize( grid[0], tok_size).flatten( 0, 2)  
+              lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
 
-            lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+              weights.append([get_weights(la) for la in lats_mskd_b])
 
-            weights.append([get_weights(la) for la in lats_mskd_b])
-
-        weights_idx_list.append(weights)
+          weights_idx_list.append(weights)
       sources = (*sources, weights_idx_list)
 
       # TODO: implement (only required when prediction target comes from different data stream)

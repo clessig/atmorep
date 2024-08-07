@@ -137,9 +137,11 @@ class AtmoRepData( torch.nn.Module) :
     
     if mode == NetMode.train :
       self.data_loader_iter = iter(self.data_loader_train)
+      #self.data_loader_iter = iter(self.dataset_train)
       self.net.train()
     elif mode == NetMode.test :
       self.data_loader_iter = iter(self.data_loader_test)
+      #self.data_loader_iter = iter(self.dataset_test)
       self.net.eval()
     else :
       assert False
@@ -187,7 +189,7 @@ class AtmoRepData( torch.nn.Module) :
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
                                           with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
-                                                with_source_idxs = True )
+                                                with_source_idxs = True, compute_weights = (cf.losses.count('weighted_mse') > 0) )
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
@@ -195,7 +197,7 @@ class AtmoRepData( torch.nn.Module) :
                                                cf.batch_size_validation,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
                                           with_shuffle = (cf.BERT_strategy != 'global_forecast'),
-                                               with_source_idxs = True )
+                                               with_source_idxs = True, compute_weights = (cf.losses.count('weighted_mse') > 0) )
     self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
                                                           sampler = None)
 

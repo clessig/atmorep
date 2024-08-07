@@ -18,7 +18,7 @@ import torch
 import os
 import sys
 import traceback
-
+import pdb
 import wandb
 
 from atmorep.core.trainer import Trainer_BERT
@@ -106,22 +106,29 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+  cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
                                [ 96, 105, 114, 123, 137 ], 
-                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
-  # cf.fields = [ [ 'velocity_v', [ 1, 2048, [ ], 0 ], 
+  # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
 
-  # cf.fields = [ [ 'velocity_z', [ 1, 1024, [ ], 0 ], 
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+
+  # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                               [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
+
+  # cf.fields = [ [ 'velocity_z', [ 1, 512, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
 
-  # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
+  # cf.fields = [ [ 'specific_humidity', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
   #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
 
   cf.fields_targets = []
@@ -135,7 +142,7 @@ def train() :
   cf.torch_seed = torch.initial_seed()
   # training params
   cf.batch_size_validation = 1 #64
-  cf.batch_size = 96 
+  cf.batch_size = 96
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
@@ -211,13 +218,13 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
-  # cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
   # # # in steps x lat_degrees x lon_degrees
-  # cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk16.zarr'
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
-  cf.n_size = [36, 1*9*6, 1.*9*12]
+  #cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
+  #cf.n_size = [36, 1*9*6, 1.*9*12]
 
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
