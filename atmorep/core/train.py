@@ -82,7 +82,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -106,15 +106,9 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  # cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
-  #                              [ 96, 105, 114, 123, 137 ], 
-  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
-  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
-  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
-
+  cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+                               [ 96, 105, 114, 123, 137 ], 
+                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
   # cf.fields = [ [ 'velocity_v', [ 1, 2048, [ ], 0 ], 
@@ -217,13 +211,13 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
-  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  # cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
   # # # in steps x lat_degrees x lon_degrees
-  cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  # cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk16.zarr'
-  # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
-  # cf.n_size = [36, 1*9*6, 1.*9*12]
+  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
+  cf.n_size = [36, 1*9*6, 1.*9*12]
 
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
