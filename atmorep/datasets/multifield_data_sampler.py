@@ -186,11 +186,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
-            cdata = data_t[... , lat_ran[:,np.newaxis], lon_ran]
-           
+            cdata = data_t[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+            
             normalizer = self.normalizers[ifield][ilevel]
             if corr_type != 'global': 
-              normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran]
+              normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
             
             source_data = tokenize( torch.from_numpy( cdata), tok_size )    
