@@ -106,16 +106,16 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
-                               [ 96, 105, 114, 123, 137 ], 
-                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
-  cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
-  # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
-
+  # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+  #                              [ 96, 105, 114, 123, 137 ], 
+  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
   # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
+  cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
 
   # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 

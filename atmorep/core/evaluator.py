@@ -55,11 +55,6 @@ class Evaluator( Trainer_BERT) :
   @staticmethod
   def run( cf, model_id, model_epoch, devices) :
     
-    if not hasattr(cf, 'batch_size'):
-      cf.batch_size = cf.batch_size_max
-    if not hasattr(cf, 'batch_size_validation'):
-      cf.batch_size_validation = cf.batch_size_max
-   
     cf.with_mixed_precision = True
 
     # set/over-write options as desired
@@ -82,7 +77,7 @@ class Evaluator( Trainer_BERT) :
     else :
       num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
     devices = init_torch( num_accs_per_task)
-    #devices = ['cuda']
+    devices = ['cuda:1']
 
     par_rank, par_size = setup_ddp( with_ddp)
     cf = Config().load_json( model_id)
@@ -112,6 +107,12 @@ class Evaluator( Trainer_BERT) :
       cf.with_mixed_precision = False
     if not hasattr(cf, 'with_pytest'):
       cf.with_pytest = False
+    if not hasattr(cf, 'batch_size'):
+      cf.batch_size = cf.batch_size_max
+    if not hasattr(cf, 'batch_size_validation'):
+      cf.batch_size_validation = cf.batch_size_max
+    if not hasattr(cf, 'years_val'):
+      cf.years_val = cf.years_test
 
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
@@ -159,8 +160,6 @@ class Evaluator( Trainer_BERT) :
       cf.batch_size = 196 #14
     if not hasattr(cf, 'batch_size_validation'):
       cf.batch_size_validation = 1 #64
-    if not hasattr(cf, 'batch_size_delta'):
-      cf.batch_size_delta = 8
     if not hasattr(cf, 'num_samples_validate'):
       cf.num_samples_validate = 196 
     #if not hasattr(cf,'with_mixed_precision'):
