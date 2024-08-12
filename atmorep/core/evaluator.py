@@ -77,7 +77,7 @@ class Evaluator( Trainer_BERT) :
     else :
       num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
     devices = init_torch( num_accs_per_task)
-    devices = ['cuda:1']
+    #devices = ['cuda:1']
 
     par_rank, par_size = setup_ddp( with_ddp)
     cf = Config().load_json( model_id)

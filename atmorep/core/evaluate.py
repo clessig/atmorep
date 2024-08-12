@@ -41,7 +41,7 @@ if __name__ == '__main__':
   #                  global_forecast_range
   # options can be used to over-write parameters in config; some modes also have specific options, 
   # e.g. global_forecast where a start date can be specified
-  
+
   #Add 'attention' : True to options to store the attention maps. NB. supported only for single field runs. 
   
   # BERT masked token model
