@@ -45,6 +45,14 @@ def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
   cf.optimizer_zero = False   
   if hasattr( cf, 'loader_num_workers') :
     cf.num_loader_workers = cf.loader_num_workers
+  if not hasattr( cf, 'n_size'):
+    cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
+  if not hasattr(cf, 'num_samples_per_epoch'):
+    cf.num_samples_per_epoch = 1024
+  if not hasattr(cf, 'num_samples_validate'):
+    cf.num_samples_validate = 128
+  if not hasattr(cf, 'with_mixed_precision'):
+    cf.with_mixed_precision = True
 
   setup_wandb( cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
 
@@ -78,7 +86,7 @@ def train_multi() :
   # general
   cf.comment = ''
   cf.file_format = 'grib'
-  cf.data_dir = str(config.path_data)
+  cf.file_path = str(config.path_data)
   cf.level_type = 'ml'
   
   cf.fields = [ [ 'vorticity', [ 1, 2048, ['divergence', 'temperature'], 0 ], 
@@ -194,7 +202,6 @@ def train_multi() :
   cf.lat_sampling_weighted = False
   # BERT
   cf.BERT_strategy = 'BERT'      # 'BERT', 'forecast', 'identity', 'totalmask'
-  cf.BERT_window = False          # sample sub-region 
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution

@@ -16,328 +16,238 @@
 
 import torch
 import numpy as np
-import math
-import itertools
+import zarr
+import pandas as pd
+from datetime import datetime
+import time
+import os
 import code
-# code.interact(local=locals())
 
-from atmorep.datasets.dynamic_field_level import DynamicFieldLevel
-from atmorep.datasets.static_field import StaticField
-
-from atmorep.utils.utils import days_until_month_in_year
-from atmorep.utils.utils import days_in_month
-
-import atmorep.config.config as config
+# from atmorep.datasets.normalizer_global import NormalizerGlobal
+# from atmorep.datasets.normalizer_local import NormalizerLocal
+from atmorep.datasets.normalizer import normalize
+from atmorep.utils.utils import tokenize, get_weights
 
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
   ###################################################
-  def __init__( self, file_path, years_data, fields, batch_size, 
-                num_t_samples, num_patches_per_t, num_load, pre_batch, 
-                rng_seed = None, file_shape = (-1, 721, 1440),
-                level_type = 'ml', time_sampling = 1, 
-                smoothing = 0, file_format = 'grib', month = None, lat_sampling_weighted = True,
-                geo_range = [[-90.,90.], [0.,360.]], 
-                fields_targets = [], pre_batch_targets = None
-              ) :
+  def __init__( self, file_path, fields, years, batch_size, pre_batch, n_size,
+                num_samples, with_shuffle = False, time_sampling = 1, with_source_idxs = False, compute_weights = False, 
+                fields_targets = None, pre_batch_targets = None ) :
     '''
       Data set for single dynamic field at an arbitrary number of vertical levels
+
+      nsize : neighborhood in (tsteps, deg_lat, deg_lon)
     '''
     super( MultifieldDataSampler).__init__()
 
     self.fields = fields
     self.batch_size = batch_size
-
+    self.n_size = n_size
+    self.num_samples = num_samples
+    self.with_source_idxs = with_source_idxs
+    self.compute_weights = compute_weights
+    self.with_shuffle = with_shuffle
     self.pre_batch = pre_batch
+    
+    assert os.path.exists(file_path), f"File path {file_path} does not exist"
+    self.ds = zarr.open( file_path)
 
-    self.years_data = years_data
+    self.ds_global = self.ds.attrs['is_global']
+
+    self.lats = np.array( self.ds['lats'])
+    self.lons = np.array( self.ds['lons'])
+    
+    sh = self.ds['data'].shape
+    st = self.ds['time'].shape
+    self.ds_len = st[0] 
+    print( f'self.ds[\'data\'] : {sh} :: {st}')
+    print( f'self.lats : {self.lats.shape}', flush=True)
+    print( f'self.lons : {self.lons.shape}', flush=True)
+    self.fields_idxs = []
+
     self.time_sampling = time_sampling
-    self.month        = month
-    self.range_lat    = 90. - np.array( geo_range[0])
-    self.range_lon    = np.array( geo_range[1])
-    self.geo_range    = geo_range
+    self.range_lat = np.array( self.lats[ [0,-1] ])
+    self.range_lon = np.array( self.lons[ [0,-1] ])
+    self.res = np.array(self.ds.attrs['res'])
+    self.year_base = self.ds['time'][0].astype(datetime).year
 
-    # order North to South
-    self.range_lat = np.flip(self.range_lat) if self.range_lat[1] < self.range_lat[0] \
-                                             else self.range_lat
-
-    # prepare range_lat and range_lon for sampling
-    self.is_global = 0 == self.range_lat[0] and self.range_lon[0] == 0.  \
-                          and 180. == self.range_lat[1] and 360. == self.range_lon[1]
+    # ensure neighborhood does not exceed domain (either at pole or for finite domains)
+    self.range_lat += np.array([n_size[1] / 2., -n_size[1] / 2.])
+    # lon: no change for periodic case
+    if self.ds_global < 1.:
+      self.range_lon += np.array([n_size[2]/2., -n_size[2]/2.])
     
-    # TODO: this assumes file_shape is set correctly and not just per field and it defines a 
-    # reference grid, likely has to be the coarsest
-    self.res = 360. / file_shape[2]
+    # data normalizers
+    self.normalizers = []
+    for ifield, field_info in enumerate(fields) :
+      corr_type = 'global' if len(field_info) <= 6 else field_info[6]
+      nf_name = 'global_norm' if corr_type == 'global' else 'norm'
+      self.normalizers.append( [] )
+      for vl in field_info[2]: 
+        if vl == 0:
+          field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
+          n_name = f'normalization/{nf_name}_sfc'
+          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx]] 
+        else:
+          vl_idx = self.ds.attrs['levels'].index(vl)
+          field_idx = self.ds.attrs['fields'].index( field_info[0])
+          n_name = f'normalization/{nf_name}'
+          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx, vl_idx]] 
     
-    # avoid wrap around at poles
-    pole_offset = np.ceil(fields[0][3][1] * fields[0][4][1] / 2) * self.res
-    self.range_lat[0] = pole_offset if self.range_lat[0] < pole_offset else self.range_lat[0]
-    self.range_lat[1] =180.-pole_offset if 180.-self.range_lat[1]<pole_offset else self.range_lat[1]
+    # extract indices for selected years
+    self.times = pd.DatetimeIndex( self.ds['time'])
+    idxs_years = self.times.year == years[0]
+    for year in years[1:] :
+      idxs_years = np.logical_or( idxs_years, self.times.year == year)
+    self.idxs_years = np.where( idxs_years)[0]
 
-    self.lat_sampling_weighted = lat_sampling_weighted
-
-    self.level_type = level_type
-    self.smoothing = smoothing
-
-    self.file_path    = config.path_data
-    self.file_shape   = file_shape
-    self.file_format  = file_format
-    self.num_load = num_load
-    self.num_patches_per_t = int(num_patches_per_t)
-    self.num_t_samples = int(num_t_samples)
-
-    self.fields_targets = fields_targets
-    self.pre_batch_targets = pre_batch_targets
-
-    # convert to mathematical latitude and ensure North -> South ordering
-    # shrink so that cookie cutting based on sampling does not exceed domain if it is not global
-    if not self.is_global :
-      # TODO: check that field data is consistent and covers the same spatial domain 
-      # TODO: code below assumes that fields[0] is global
-      # TODO: code below does not handle anisotropic grids
-      finfo = self.fields[0]
-      # ensure that delta is a multiple of the coarse grid resolution
-      ngrid1 = finfo[3][1] * finfo[4][1]
-      ngrid2 = finfo[3][2] * finfo[4][2]
-      delta1 = 0.5 * self.res * (ngrid1-1 if ngrid1 % 2==0 else ngrid1+1)
-      delta2 = 0.5 * self.res * (ngrid2-1 if ngrid2 % 2==0 else ngrid2+1)
-      self.range_lat += np.array([delta1, -delta1])
-      self.range_lon += np.array([delta2, -delta2])
-
-    # ensure all data loaders use same rng_seed and hence generate consistent data
-    if not rng_seed :
-      rng_seed = np.random.randint( 0, 100000, 1)[0]
-    self.rng = np.random.default_rng( rng_seed)
-
-    # create (source) fields
-    self.datasets = self.create_loaders( fields)
-
-    # create (target) fields 
-    self.datasets_targets = self.create_loaders( fields_targets)
-
-  ###################################################
-  def create_loaders( self, fields ) :
-
-    datasets = []
-    for field_idx, field_info in enumerate(fields) :
-
-      datasets.append( [])
-
-      # extract field info
-      (vls, num_tokens, token_size) = field_info[2:5]
-
-      if len(field_info) > 6 :
-        corr_type = field_info[6]
-      else:
-        corr_type = 'global'
-
-      smoothing = self.smoothing
-      log_transform_data = False
-      if len(field_info) > 7 :
-        (data_type, file_shape, file_geo_range, file_format) = field_info[7][:4]
-        if len( field_info[7]) > 6 :
-          smoothing = field_info[7][6]
-          print( '{} : smoothing = {}'.format( field_info[0], smoothing) )
-        if len( field_info[7]) > 7 :
-          log_transform_data = field_info[7][7]
-          print( '{} : log_transform_data = {}'.format( field_info[0], log_transform_data) )
-      else :
-        data_type = 'era5'
-        file_format = self.file_format
-        file_shape = self.file_shape
-        file_geo_range = [[90.,-90.], [0.,360.]]
-
-      # static fields
-      if 0 == field_info[1][0] :
-        datasets[-1].append( StaticField( self.file_path, field_info, self.batch_size, data_type,
-                                          file_shape, file_geo_range,
-                                          num_tokens, token_size, smoothing, file_format, corr_type) )
-                                         
-      # dynamic fields
-      elif 1 == field_info[1][0] :
-        for vlevel in vls :
-          datasets[-1].append( DynamicFieldLevel( self.file_path, self.years_data, field_info,
-                                                  self.batch_size, data_type,
-                                                  file_shape, file_geo_range,
-                                                  num_tokens, token_size,
-                                                  self.level_type, vlevel, self.time_sampling, 
-                                                  smoothing, file_format, corr_type, 
-                                                  log_transform_data ) )
-      
-      else :
-          assert False
-
-    return datasets 
+    self.num_samples = min( self.num_samples, self.idxs_years.shape[0])
 
   ###################################################
   def shuffle( self) :
 
-    # ensure that different parallel loaders create independent random shuffles
-    delta = torch.randint( 0, 100000, (1,)).item()
-    self.rng.bit_generator.advance( delta)
+    worker_info = torch.utils.data.get_worker_info()
+    rng_seed = None
+    if worker_info is not None :
+      rng_seed = int(time.time()) // (worker_info.id+1) + worker_info.id
 
-    self.idxs_perm = np.zeros( (0, 4), dtype=np.int64)
-
-    # latitude, first map to mathematical lat coords in [0,180.], then to [0,pi] then
-    # to z-value in [-1,1]
-    if self.lat_sampling_weighted :
-      lat_r = np.cos( self.range_lat/180. * np.pi)
-    else :
-      lat_r = self.range_lat
-
-    # 1.00001 is a fudge factor since np.round(*.5) leads to flooring instead of proper up-rounding
-    res_inv = 1.0 / self.res * 1.00001
-
-    # loop over individual data year-month items 
-    for i_ym in range( len(self.years_months)) :
+    rng = np.random.default_rng( rng_seed)
+    self.idxs_perm_t = rng.permutation( self.idxs_years)[ : self.num_samples // self.batch_size]
     
-      ym = self.years_months[i_ym]
-      
-      # ensure a constant size of work load of data loader independent of the month length 
-      # factor of 128 is a fudge parameter to ensure that mod-ing leads to sufficiently 
-      # random wrap-around (with 1 instead of 128 there is clustering on the first days)
-      hours_in_day = int( 24 / self.time_sampling)
-      time_slices = 128 * 31 * hours_in_day
-      time_slices_i_ym = hours_in_day * days_in_month( ym[0], ym[1])
-      idxs_perm_temp = np.mod(self.rng.permutation(time_slices), time_slices_i_ym)
-      # fixed number of time samples independent of length of month
-      idxs_perm_temp = idxs_perm_temp[:self.num_t_samples]
-      idxs_perm = np.zeros( (self.num_patches_per_t *idxs_perm_temp.shape[0],4) )
+    lats = rng.random(self.num_samples) * (self.range_lat[1] - self.range_lat[0]) +self.range_lat[0]
+    lons = rng.random(self.num_samples) * (self.range_lon[1] - self.range_lon[0]) +self.range_lon[0]
 
-      # split up into file index and local index
-      idx = 0
-      for it in idxs_perm_temp :
+    # align with grid
+    res_inv = 1.0 / self.res * 1.00001
+    lats = self.res[0] * np.round( lats * res_inv[0])
+    lons = self.res[1] * np.round( lons * res_inv[1])
+
+    self.idxs_perm = np.stack( [lats, lons], axis=1)
+
+  ###################################################
+  def __iter__(self):
+
+    if self.with_shuffle :
+      self.shuffle()
+
+    lats, lons = self.lats, self.lons
+    ts, n_size = self.time_sampling, self.n_size
+    ns_2 = np.array(self.n_size) / 2.
+    res = self.res
+
+    iter_start, iter_end = self.worker_workset()
+
+    for bidx in range( iter_start, iter_end) :
+
+      sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
+      sources_infos, source_idxs = [], []
+  
+      i_bidx = self.idxs_perm_t[bidx]
+      idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
+      data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
+      data_tt = self.ds['data'].oindex[idxs_t]
+      for sidx in range(self.batch_size) :
         
-        idx_patches = self.rng.random( (self.num_patches_per_t, 2) )
-        # for jj in idx_patches :
-        for jj in idx_patches :
-          # area consistent sampling on the sphere (with less patches close to the pole)
-          # see https://graphics.stanford.edu/courses/cs448-97-fall/notes.html , Lecture 7
-          # for area preserving sampling of the sphere
-          # py \in [0,180], px \in [0,360] (possibly with negative values for lon)
-          if self.lat_sampling_weighted :
-            py = ((np.arccos(lat_r[0] + (lat_r[1]-lat_r[0]) * jj[0]) / np.pi) * 180.)
-          else :
-            py = (lat_r[0] + (lat_r[1]-lat_r[0]) * jj[0])
-          px = jj[1] * (self.range_lon[1] - self.range_lon[0]) + self.range_lon[0]
+        idx = self.idxs_perm[bidx*self.batch_size+sidx]
+        # slight asymetry with offset by res/2 is required to match desired token count
+        lat_ran = np.where(np.logical_and(lats>idx[0]-ns_2[1]-res[0]/2.,lats<idx[0]+ns_2[1]))[0]
+        # handle periodicity of lon
+        assert not ((idx[1]-ns_2[2]) < 0. and (idx[1]+ns_2[2]) > 360.)
+        il, ir = (idx[1]-ns_2[2]-res[1]/2., idx[1]+ns_2[2])
+        if il < 0. :
+          lon_ran = np.concatenate( [np.where( lons > il+360)[0], np.where(lons < ir)[0]], 0)
+        elif ir > 360. :
+          lon_ran = np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)
+        else : 
+          lon_ran = np.where(np.logical_and( lons > il, lons < ir))[0]
+        
+        sources_infos += [ [ self.ds['time'][ idxs_t ].astype(datetime), 
+                             self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
 
-          # align with grid
-          py = self.res * np.round( py * res_inv)
-          px = self.res * np.round( px * res_inv)
+        if self.with_source_idxs :
+          source_idxs += [ (idxs_t, lat_ran, lon_ran) ]
 
-          idxs_perm[idx] = np.array( [i_ym, it, py, px])
-          idx = idx + 1
+        # extract data
+        for ifield, field_info in enumerate(self.fields):  
+          source_lvl, tok_info_lvl  = [], []
+          tok_size  = field_info[4]
+          num_tokens = field_info[3]
+          corr_type = 'global' if len(field_info) <= 6 else field_info[6]
+        
+          for ilevel, vl in enumerate(field_info[2]):
+            if vl == 0 : #surface level
+              field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
+              data_t = data_tt_sfc[ :, field_idx ]
+            else :
+              field_idx = self.ds.attrs['fields'].index( field_info[0])
+              vl_idx = self.ds.attrs['levels'].index(vl)
+              data_t = data_tt[ :, field_idx, vl_idx ]
+          
+            source_data, tok_info = [], []
+            # extract data, normalize and tokenize
+            cdata = data_t[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+            
+            normalizer = self.normalizers[ifield][ilevel]
+            if corr_type != 'global': 
+              normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+            cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
+            
+            source_data = tokenize( torch.from_numpy( cdata), tok_size )    
+            # token_infos uses center of the token: *last* datetime and center in space
+            dates = self.ds['time'][ idxs_t ].astype(datetime)
+            cdates = dates[tok_size[0]-1::tok_size[0]]
+            # use -1 is to start days from 0
+            dates = [(d.year, d.timetuple().tm_yday-1, d.hour) for d in cdates] 
+            lats_sidx = self.lats[lat_ran][ tok_size[1]//2 :: tok_size[1] ]
+            lons_sidx = self.lons[lon_ran][ tok_size[2]//2 :: tok_size[2] ]
+            # tensor product for token_infos
+            tok_info += [[[[[ year, day, hour, vl, lat, lon, vl, self.res[0]] for lon in lons_sidx]
+                                                                              for lat in lats_sidx]
+                                                                  for (year, day, hour) in dates]]
 
-      self.idxs_perm = np.concatenate( (self.idxs_perm, idxs_perm[:idx]))
+            source_lvl += [ source_data ]
+            tok_info_lvl += [ torch.tensor(tok_info, dtype=torch.float32).flatten( 1, -2)]      
+          sources[ifield] += [ torch.stack(source_lvl, 0) ]
+          token_infos[ifield] += [ torch.stack(tok_info_lvl, 0) ]
+      
+      # concatenate batches   
+      sources = [torch.stack(sources_field).transpose(1,0) for sources_field in sources]
+      token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
+      sources = self.pre_batch( sources, token_infos )
 
-    # shuffle again to avoid clustering of patches by loop over idx_patches above
-    self.idxs_perm = self.idxs_perm[self.rng.permutation(self.idxs_perm.shape[0])]
-    self.idxs_perm = self.idxs_perm[self.rng.permutation(self.idxs_perm.shape[0])]
-    # restrict to multiples of batch size
-    lenbatch = int(math.floor(self.idxs_perm.shape[0] / self.batch_size)) * self.batch_size
-    self.idxs_perm = self.idxs_perm[:lenbatch]
-    # # DEBUG
-    # print( 'self.idxs_perm.shape = {}'.format(self.idxs_perm.shape ))
-    # rank = torch.distributed.get_rank()
-    # fname = 'idxs_perm_rank{}_{}.dat'.format( rank, shape_to_str( self.idxs_perm.shape))
-    # self.idxs_perm.tofile( fname)
+      tmidx_list = sources[-1]
+      weights_idx_list = []
+      if self.compute_weights:
+        for ifield, field_info in enumerate(self.fields): 
+          weights = []
+          for ilevel, vl in enumerate(field_info[2]):
+            for ibatch in range(self.batch_size):
+              
+              lats_idx = source_idxs[ibatch][1] 
+              lons_idx = source_idxs[ibatch][2]
 
-  ###################################################
-  def set_full_time_range( self) :
+              idx_base = tmidx_list[ifield][ilevel][ibatch]
+              idx_loc = idx_base - np.prod(num_tokens) * ibatch
+              
+              grid = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+              grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                      shape = [tok_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
 
-    self.idxs_perm = np.zeros( (0, 4), dtype=np.int64)
+              grid_lats_toked = tokenize( grid[0], tok_size).flatten( 0, 2)  
 
-    # latitude, first map to mathematical lat coords in [0,180.], then to [0,pi] then
-    # to z-value in [-1,1]
-    if self.lat_sampling_weighted :
-      lat_r = np.cos( self.range_lat/180. * np.pi)
-    else :
-      lat_r = self.range_lat
+              lats_mskd_b = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
 
-    # 1.00001 is a fudge factor since np.round(*.5) leads to flooring instead of proper up-rounding
-    res_inv = 1.0 / self.res * 1.00001
+              weights.append([get_weights(la) for la in lats_mskd_b])
 
-    # loop over individual data year-month items 
-    for i_ym in range( len(self.years_months)) :
+          weights_idx_list.append(weights)
+      sources = (*sources, weights_idx_list)
 
-      ym = self.years_months[i_ym]
-
-      hours_in_day = int( 24 / self.time_sampling)
-      idxs_perm_temp = np.arange( hours_in_day * days_in_month( ym[0], ym[1]))
-      idxs_perm = np.zeros( (self.num_patches_per_t *idxs_perm_temp.shape[0],4) )
-
-      # split up into file index and local index
-      idx = 0
-      for it in idxs_perm_temp :
-
-        idx_patches = self.rng.random( (self.num_patches_per_t, 2) )
-        for jj in idx_patches :
-          # area consistent sampling on the sphere (with less patches close to the pole)
-          # see https://graphics.stanford.edu/courses/cs448-97-fall/notes.html , Lecture 7
-          # for area preserving sampling of the sphere
-          # py \in [0,180], px \in [0,360] (possibly with negative values for lon)
-          if self.lat_sampling_weighted :
-            py = ((np.arccos(lat_r[0] + (lat_r[1]-lat_r[0]) * jj[0]) / np.pi) * 180.)
-          else :
-            py = (lat_r[0] + (lat_r[1]-lat_r[0]) * jj[0])
-          px = jj[1] * (self.range_lon[1] - self.range_lon[0]) + self.range_lon[0]
-
-          # align with grid
-          py = self.res * np.round( py * res_inv)
-          px = self.res * np.round( px * res_inv)
-
-          idxs_perm[idx] = np.array( [i_ym, it, py, px])
-          idx = idx + 1
-
-      self.idxs_perm = np.concatenate( (self.idxs_perm, idxs_perm[:idx]))
-
-    # shuffle again to avoid clustering of patches by loop over idx_patches above
-    self.idxs_perm = self.idxs_perm[self.rng.permutation(self.idxs_perm.shape[0])]
-    # restrict to multiples of batch size
-    lenbatch = int(math.floor(self.idxs_perm.shape[0] / self.batch_size)) * self.batch_size
-    self.idxs_perm = self.idxs_perm[:lenbatch]
-
-    # # DEBUG
-    # print( 'self.idxs_perm.shape = {}'.format(self.idxs_perm.shape ))
-    # fname = 'idxs_perm_{}_{}.dat'.format( self.epoch_counter, shape_to_str( self.idxs_perm.shape))
-    # self.idxs_perm.tofile( fname)
-
-  ###################################################
-  def load_data( self, batch_size = None) :
-
-    years_data = self.years_data
-    
-    # ensure proper separation of different random samplers
-    delta = torch.randint( 0, 1000, (1,)).item()
-    self.rng.bit_generator.advance( delta)
-
-    # select num_load random months and years 
-    perms = np.concatenate( [self.rng.permutation( np.arange(len(years_data))) for i in range(64)])
-    perms = perms[:self.num_load]
-    if self.month : 
-      self.years_months = [ (years_data[iyear], self.month) for iyear in perms]
-    else : 
-      # stratified sampling of month to ensure proper distribution, needs to be adapted for 
-      # number of parallel workers not being divisible by 4
-      # rank, ms = torch.distributed.get_rank() % 4, 3
-      # perms_m = np.concatenate( [self.rng.permutation( np.arange( rank*ms+1, (rank+1)*ms+1))
-                                                                              # for i in range(16)])
-      perms_m = np.concatenate( [self.rng.permutation( np.arange( 1, 12+1)) for i in range(16)])
-      self.years_months = [ ( years_data[iyear], perms_m[i]) for i,iyear in enumerate(perms)]
-
-    # generate random permutations passed to the loaders for individual files 
-    # to ensure consistent processing
-    self.shuffle()
-
-    # perform actual loading of data
- 
-    for ds_field in self.datasets :
-      for ds in ds_field :
-        ds.load_data( self.years_months, self.idxs_perm, batch_size)
-
-    for ds_field in self.datasets_targets :
-      for ds in ds_field :
-        ds.load_data( self.years_months, self.idxs_perm, batch_size)
+      # TODO: implement (only required when prediction target comes from different data stream)
+      targets, target_info = None, None
+      target_idxs = None
+     
+      yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
 
   ###################################################
   def set_data( self, times_pos, batch_size = None) :
@@ -347,55 +257,37 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         - lon \in [0,360]
         - (year,month) pairs should be a limited number since all data for these is loaded
     '''
-
-    # extract required years and months
-    years_months_all = np.array( [ [it[0], it[1]] for it in times_pos ], dtype=np.int64)
-    self.years_months = list( zip( np.unique(years_months_all[:,0]),
-                                   np.unique( years_months_all[:,1] )))
-
     # generate all the data
-    self.idxs_perm = np.zeros( (len(times_pos), 4))
+    self.idxs_perm = np.zeros( (len(times_pos), 2))
+    self.idxs_perm_t = []
+    self.num_samples = len(times_pos)
     for idx, item in enumerate( times_pos) :
 
       assert item[2] >= 1 and item[2] <= 31
       assert item[3] >= 0 and item[3] < int(24 / self.time_sampling)
       assert item[4] >= -90. and item[4] <= 90.
 
-      # find year
-      for i_ym, ym in enumerate( self.years_months) :
-        if ym[0] == item[0] and ym[1] == item[1] :
-          break
-
-      # last term: correct for window from last file that is loaded
-      it = (item[2] - 1) * (24./self.time_sampling) + item[3]
-      # it = item[2] * (24./self.time_sampling) + item[3]
-      idx_lat = item[4]
-      idx_lon = item[5]
+      tstamp = pd.to_datetime( f'{item[0]}-{item[1]}-{item[2]}-{item[3]}', format='%Y-%m-%d-%H')
+      
+      self.idxs_perm_t += [ np.where( self.times == tstamp)[0]+1 ] #The +1 assures that tsamp is included in the range
 
       # work with mathematical lat coordinates from here on
-      self.idxs_perm[idx] = np.array( [i_ym, it, 90. - idx_lat, idx_lon])
-
-    for ds_field in self.datasets :
-      for ds in ds_field :
-        ds.load_data( self.years_months, self.idxs_perm, batch_size)
-
-    for ds_field in self.datasets_targets :
-      for ds in ds_field :
-        ds.load_data( self.years_months, self.idxs_perm, batch_size)
+      self.idxs_perm[idx] = np.array( [90. - item[4], item[5]])
+   
+    self.idxs_perm_t = np.array(self.idxs_perm_t).squeeze()
 
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
     ''' generate patch/token positions for global grid '''
-
-    token_overlap = torch.tensor( token_overlap).to(torch.int64)
+    token_overlap = np.array( token_overlap).astype(np.int64)
 
     # assumed that sanity checking that field data is consistent has been done 
     ifield = 0
     field = self.fields[ifield]
 
     res = self.res
-    side_len = torch.tensor( [field[3][1] * field[4][1] * res, field[3][2] * field[4][2] * res] )
-    overlap = torch.tensor( [token_overlap[0]*field[4][1]*res, token_overlap[1]*field[4][2]*res] )
+    side_len = np.array( [field[3][1] * field[4][1]*res[0], field[3][2] * field[4][2]*res[1]] )
+    overlap = np.array([token_overlap[0]*field[4][1]*res[0],token_overlap[1]*field[4][2]*res[1]])
     side_len_2 = side_len / 2.
     assert all( overlap <= side_len_2), 'token_overlap too large for #tokens, reduce if possible'
 
@@ -422,72 +314,22 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       lat -= side_len[0] - overlap[0]
       if lat - side_len_2[0] < 180. :
         num_tiles_lat += 1
-        lat = 180. - side_len_2[0].item() + res
+        lat = 180. - side_len_2[0].item() + res[0]
         lon = side_len_2[1].item() - overlap[1].item()/2.
         while (lon - side_len_2[1]) < 360. :
           times_pos += [[*ctime, -lat + 90., np.mod(lon,360.) ]]
           lon += side_len[1].item() - overlap[1].item()
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
-    batch_size = num_tiles_lon
-
+    batch_size = len(times_pos) #num_tiles_lon
+    
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
 
     self.set_data( times_pos, batch_size)
 
   ###################################################
-  def set_location( self, pos, years, months, num_t_samples_per_month, batch_size = None) :
-    ''' random time sampling for fixed location '''
-
-    times_pos = []
-    for i_ym, ym in enumerate(itertools.product( years, months )) :
-
-      # ensure a constant size of work load of data loader independent of the month length 
-      # factor of 128 is a fudge parameter to ensure that mod-ing leads to sufficiently 
-      # random wrap-around (with 1 instead of 128 there is clustering on the first days)
-      hours_in_day = int( 24 / self.time_sampling)
-      d_i_m = days_in_month( ym[0], ym[1]) 
-      perms = self.rng.permutation( num_t_samples_per_month * d_i_m)
-      # ensure that days start at 1
-      perms = np.mod( perms[ : num_t_samples_per_month], (d_i_m-1) ) + 1
-      rhs = self.rng.integers(low=0, high=hours_in_day, size=num_t_samples_per_month )
-
-      for rh, perm in zip( rhs, perms) :
-        times_pos += [[ ym[0], ym[1], perm, rh, pos[0], pos[1]] ]
-
-    # adjust batch size if necessary so that the evaluations split up across batches of equal size
-    while 0 != (len(times_pos) % batch_size) :
-      batch_size -= 1
-    assert batch_size >= 1
-
-    self.set_data( times_pos, batch_size)
-
-  ###################################################
-  def __iter__(self):
-
-    iter_start, iter_end = self.worker_workset()
-
-    for bidx in range( iter_start, iter_end) :
-
-      sources = []
-      for ds_field in self.datasets : 
-        sources.append( [ds_level[bidx] for ds_level in ds_field])
-      # perform batch pre-processing, e.g. BERT-type masking
-      if self.pre_batch :
-        sources = self.pre_batch( sources)
-
-      targets = []
-      for ds_field in self.datasets_targets :
-        targets.append( [ds_level[bidx] for ds_level in ds_field])
-      # perform batch pre-processing, e.g. BERT-type masking
-      if self.pre_batch_targets :
-        targets = self.pre_batch_targets( targets)
-
-      yield (sources,targets)
-
-  ###################################################
   def __len__(self):
-      return len(self.datasets[0][0])
+      return self.num_samples // self.batch_size
 
   ###################################################
   def worker_workset( self) :
@@ -496,17 +338,16 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     if worker_info is None: 
       iter_start = 0
-      iter_end = len(self.datasets[0][0])
-
+      iter_end = self.num_samples
+   
     else:  
       # split workload
-      temp = len(self.datasets[0][0])
-      per_worker = int( np.floor( temp / float(worker_info.num_workers) ) )
+      per_worker = len(self) // worker_info.num_workers
       worker_id = worker_info.id
       iter_start = int(worker_id * per_worker)
       iter_end = int(iter_start + per_worker)
       if worker_info.id+1 == worker_info.num_workers :
-        iter_end = int(temp)
+        iter_end = len(self)
 
     return iter_start, iter_end
- 
+

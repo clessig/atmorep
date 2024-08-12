@@ -22,7 +22,7 @@ from enum import Enum
 import wandb
 import code
 from calendar import monthrange
-
+#import properscoring as ps
 import numpy as np
 
 import torch.distributed as dist
@@ -98,20 +98,22 @@ class Config :
       f.write( json_str)
 
   def load_json( self, wandb_id) :
-
     if '/' in wandb_id :   # assumed to be full path instead of just id
       fname = wandb_id
     else :
       fname = Path( config.path_models, 'id{}/model_id{}.json'.format( wandb_id, wandb_id))
-
     try :
       with open(fname, 'r') as f :
         json_str = f.readlines() 
-    except IOError :
+    except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
-      fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format( wandb_id, wandb_id))
-      with open(fname, 'r') as f :
-        json_str = f.readlines()
+      try :
+        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        with open(fname, 'r') as f :
+          json_str = f.readlines()
+      except (OSError, IOError) as e:
+        print( f'Could not find fname due to {e}. Aborting.')
+        quit()
 
     self.__dict__ = json.loads( json_str[0])
 
@@ -161,7 +163,9 @@ def setup_ddp( with_ddp = True) :
   rank = 0
   size = 1
 
-  if with_ddp :
+  master_node = os.environ.get('MASTER_ADDR', '-1')
+
+  if with_ddp and (master_node != '-1'):
 
     local_rank = int(os.environ.get("SLURM_LOCALID"))
     ranks_per_node = int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] )
@@ -289,14 +293,19 @@ def tokenize( data, token_size = [-1,-1,-1]) :
     tok_tot_x = int( data_shape[-2] / token_size[1])
     tok_tot_y = int( data_shape[-1] / token_size[2])
 
-    if 4 == len(data_shape) :
-      t2 = torch.reshape( data, (-1, tok_tot_t, token_size[0], tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
-      data_tokenized = torch.transpose(torch.transpose( torch.transpose( t2, 5, 4), 3, 2), 4, 3)
+    if 5 == len(data_shape) :
+      t2 = torch.reshape( data, (data.shape[0], data.shape[1], tok_tot_t, token_size[0], 
+                                tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
+      data_tokenized = t2.permute( [0, 1, 2, 4, 6, 3, 5, 7])
+    elif 4 == len(data_shape) :
+      t2 = torch.reshape( data, (-1, tok_tot_t, token_size[0], 
+                                tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
+      data_tokenized = t2.permute( [0, 1, 3, 5, 4, 3, 6])
     elif 3 == len(data_shape) :
       t2 = torch.reshape( data, (tok_tot_t, token_size[0], tok_tot_x, token_size[1], tok_tot_y, token_size[2]))
       data_tokenized = torch.transpose(torch.transpose( torch.transpose( t2, 4, 3), 2, 1), 3, 2)
     elif 2 == len(data_shape) :
-      t2 = torch.reshape( t1, (tok_tot_x, token_size[0], tok_tot_y, token_size[1]))
+      t2 = torch.reshape( data, (tok_tot_x, token_size[0], tok_tot_y, token_size[1]))
       data_tokenized = torch.transpose( t2, 1, 2)
     else :
       assert False
@@ -345,10 +354,58 @@ def erf( x, mu=0., std_dev=1.) :
   val = c1 * ( 1./c2 - std_dev * torch.special.erf( (mu - x) / (c3 * std_dev) ) )
   return val
 
+########################################
+# def CRPS_ps( y, mu, std_dev) :
+#   val = ps.crps_gaussian(y.cpu().detach().numpy(), mu=mu.cpu().detach().numpy(), sig=std_dev.cpu().detach().numpy())
+#   return torch.tensor(val)
+
 def CRPS( y, mu, std_dev) :
+   
   # see Eq. A2 in S. Rasp and S. Lerch. Neural networks for postprocessing ensemble weather forecasts. Monthly Weather Review, 146(11):3885 – 3900, 2018.
   c1 = np.sqrt(1./np.pi)
   t1 = 2. * erf( (y-mu) / std_dev) - 1.
   t2 = 2. * Gaussian( (y-mu) / std_dev)
   val = std_dev * ( (y-mu)/std_dev * t1 + t2 - c1 )
   return val
+
+########################################
+# def kernel_crps_ps( target, ens) :
+#   #breakpoint()
+#   val = ps.crps_ensemble(target.cpu().detach().numpy(), ens.permute([1,2,0]).cpu().detach().numpy())
+#   return torch.tensor(val)
+
+def kernel_crps( target, ens, fair = True) :
+  #breakpoint()
+  ens_size = ens.shape[0]
+  mae = torch.cat( [(target - mem).abs().mean().unsqueeze(0) for mem in ens], 0).mean()
+
+  if ens_size == 1:
+    return mae
+
+  coef = -1.0 / (2.0 * ens_size * (ens_size - 1)) if fair else -1.0 / (2.0 * ens_size**2)
+  temp = [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]
+  # breakpoint()
+  ens_var = coef * torch.tensor( [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]).sum()
+  ens_var /= (ens.shape[1]*ens.shape[2])
+
+  return mae + ens_var
+
+########################################
+
+def get_weights(lats_idx, lat_min = -90., lat_max = 90., reso = 0.25):
+  lat_range = lat_max - lat_min 
+  bins = lat_range/reso+1
+
+  theta_weight = np.array([np.cos(w) for w in np.arange( lat_max * np.pi/lat_range , lat_min * np.pi/lat_range, -np.pi/bins)], dtype = np.float32)
+  
+  return theta_weight[lats_idx]
+
+########################################
+
+def weighted_mse(x, target, weights):
+        return torch.sum(weights * (x - target) **2 )/torch.sum(weights)
+
+########################################
+
+def check_num_samples(num_samples_validate, batch_size):
+  assert num_samples_validate // batch_size > 0, f"Num samples validate: {num_samples_validate} is smaller than batch size: {batch_size}. Please increase it."

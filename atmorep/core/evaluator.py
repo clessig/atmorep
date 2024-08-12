@@ -17,7 +17,7 @@
 import numpy as np
 import os
 import code
-
+import pytest
 import datetime
 
 import wandb
@@ -54,10 +54,12 @@ class Evaluator( Trainer_BERT) :
   ##############################################
   @staticmethod
   def run( cf, model_id, model_epoch, devices) :
+    
+    cf.with_mixed_precision = True
 
     # set/over-write options as desired
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.load_data( NetMode.test) 
+
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
@@ -65,7 +67,7 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, file_path, args = {}, model_epoch=-2) :
 
     # SLURM_TASKS_PER_NODE is controlled by #SBATCH --ntasks-per-node=1; should be 1 for multiformer
     with_ddp = True
@@ -75,25 +77,50 @@ class Evaluator( Trainer_BERT) :
     else :
       num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
     devices = init_torch( num_accs_per_task)
-    par_rank, par_size = setup_ddp( with_ddp)
+    #devices = ['cuda:1']
 
+    par_rank, par_size = setup_ddp( with_ddp)
     cf = Config().load_json( model_id)
+    cf.file_path = file_path
     cf.with_wandb = True
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
     cf.par_size = par_size
+    cf.losses = cf.losses
     # overwrite old config
-    cf.data_dir = str(config.path_data)
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
 
-    cf.num_loader_workers = cf.loader_num_workers
-    cf.data_dir = config.path_data
+    # if not hasattr( cf, 'num_loader_workers'):
+    cf.num_loader_workers = 12 #cf.loader_num_workers
+    cf.rng_seed = None 
+    
+    #backward compatibility
+    if not hasattr( cf, 'n_size'):
+      cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+      #cf.n_size = [36, 0.25*27*2, 0.25*27*4] 
+    if not hasattr(cf, 'num_samples_per_epoch'):
+      cf.num_samples_per_epoch = 1024
+    if not hasattr(cf, 'with_mixed_precision'):
+      cf.with_mixed_precision = False
+    if not hasattr(cf, 'with_pytest'):
+      cf.with_pytest = False
+    if not hasattr(cf, 'batch_size'):
+      cf.batch_size = cf.batch_size_max
+    if not hasattr(cf, 'batch_size_validation'):
+      cf.batch_size_validation = cf.batch_size_max
+    if not hasattr(cf, 'years_val'):
+      cf.years_val = cf.years_test
 
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)
+    
+    if cf.with_pytest:
+      fields = [field[0] for field in cf.fields_prediction]
+      for field in fields:
+        pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id, "--strategy", cf.BERT_strategy])
 
   ##############################################
   @staticmethod
@@ -102,9 +129,9 @@ class Evaluator( Trainer_BERT) :
     cf.lat_sampling_weighted = False
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
-
+    cf.num_samples_validate = 10 #28 #1472 
     Evaluator.parse_args( cf, args)
-
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
@@ -115,24 +142,32 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'forecast'
     cf.log_test_num_ranks = 4
     cf.forecast_num_tokens = 1  # will be overwritten when user specified
-
+    cf.num_samples_validate = 128 #128 
     Evaluator.parse_args( cf, args)
-    
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
   
   ##############################################
   @staticmethod
   def global_forecast( cf, model_id, model_epoch, devices, args = {}) :
-
-    cf.BERT_strategy = 'forecast'
+    
+    cf.BERT_strategy = 'global_forecast'
     cf.batch_size_test = 24
-    cf.num_loader_workers = 1
+    cf.num_loader_workers = 12 #1
     cf.log_test_num_ranks = 1
+    
+    if not hasattr(cf, 'batch_size'):
+      cf.batch_size = 196 #14
+    if not hasattr(cf, 'batch_size_validation'):
+      cf.batch_size_validation = 1 #64
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 196 
+    #if not hasattr(cf,'with_mixed_precision'):
+    cf.with_mixed_precision = True
 
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']
-
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
     evaluator.model.set_global( NetMode.test, np.array( dates))
     if 0 == cf.par_rank :
@@ -145,13 +180,16 @@ class Evaluator( Trainer_BERT) :
   def global_forecast_range( cf, model_id, model_epoch, devices, args = {}) :
 
     cf.forecast_num_tokens = 2
-    cf.BERT_strategy = 'forecast'
-    cf.token_overlap = [2, 6]
+    cf.BERT_strategy = 'global_forecast'
+    cf.token_overlap = [0, 0]
 
     cf.batch_size_test = 24
     cf.num_loader_workers = 1
     cf.log_test_num_ranks = 1
-    
+    cf.batch_size_start = 14
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 196 
+
     Evaluator.parse_args( cf, args)
 
     if 0 == cf.par_rank :
@@ -179,7 +217,9 @@ class Evaluator( Trainer_BERT) :
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
     cf.log_test_num_ranks = 4
-
+    cf.num_samples_validate = 128
+    Evaluator.parse_args( cf, args)
+    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
