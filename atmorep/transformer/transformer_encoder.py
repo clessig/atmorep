@@ -16,9 +16,8 @@
 
 import torch
 import numpy as np
-import math
 
-from atmorep.transformer.transformer_base import MLP
+from atmorep.transformer.mlp import MLP
 from atmorep.transformer.transformer_attention import MultiInterAttentionHead
 from atmorep.transformer.axial_attention import MultiFieldAxialAttention
 
@@ -57,7 +56,7 @@ class TransformerEncoder(torch.nn.Module) :
     self.mlps = torch.nn.ModuleList()
     for il in range( cf.encoder_num_layers) :
 
-      nhc = cf.coupling_num_heads_per_field * len( field_info[1][2])
+      nhc = cf.coupling_num_heads_per_field # * len( field_info[1][2])
       # nhs = cf.encoder_num_heads - nhc
       nhs = cf.encoder_num_heads
       # number of tokens
@@ -78,8 +77,9 @@ class TransformerEncoder(torch.nn.Module) :
 
       # attention heads
       if 'dense' == cf.encoder_att_type :
-        head = MultiInterAttentionHead( nhs, nhc, dims_embed, with_ln, dor, cf.with_qk_lnorm, 
-                                        cf.grad_checkpointing, with_attention=cf.attention )
+        head = MultiInterAttentionHead( nhs, len(field_info[1][2]), nhc, dims_embed, with_ln, dor,
+                                        cf.with_qk_lnorm, cf.grad_checkpointing, 
+                                        with_attention=cf.attention )
       elif 'axial' in cf.encoder_att_type :
         par = True if 'parallel' in cf.encoder_att_type else False
         head = MultiFieldAxialAttention( [3,2,1], dims_embed, nhs, nhc, par, dor)

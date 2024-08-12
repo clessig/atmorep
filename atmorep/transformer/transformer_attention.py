@@ -15,12 +15,8 @@
 ####################################################################################################
 
 import torch
-import numpy as np
-import math
 from enum import Enum
-import code
 
-from atmorep.transformer.axial_attention import AxialAttention
 from atmorep.utils.utils import identity
 from atmorep.transformer.transformer_base import checkpoint_wrapper
 
@@ -31,130 +27,68 @@ class CouplingAttentionMode( Enum) :
   kv_coupling = 2
 
 
-####################################################################################################
-
-class AttentionHead(torch.nn.Module):
-
-  def __init__(self, proj_dims, proj_dims_qs = -1, with_qk_lnorm = False, with_attention=False) :
-    '''Attention head'''
-
-    super(AttentionHead, self).__init__()
-
-    if proj_dims_qs == -1 :
-      proj_dims_qs = proj_dims[0]
-
-    self.proj_qs = torch.nn.Linear( proj_dims_qs, proj_dims[1], bias = False)
-    self.proj_ks = torch.nn.Linear( proj_dims[0], proj_dims[1], bias = False)
-    self.proj_vs = torch.nn.Linear( proj_dims[0], proj_dims[1], bias = False)
-    
-    self.softmax = torch.nn.Softmax(dim=-1)
-
-    if with_qk_lnorm :
-      self.lnorm_qs = torch.nn.LayerNorm( proj_dims[1], elementwise_affine=False)
-      self.lnorm_ks = torch.nn.LayerNorm( proj_dims[1], elementwise_affine=False)
-    else :
-      self.lnorm_qs = torch.nn.Identity()
-      self.lnorm_ks = torch.nn.Identity()
-
-    self.forward = self.forward_attention if with_attention else self.forward_evaluate
-
-  def attention( self, qs, ks) :
-    '''Compute attention'''
-    return torch.matmul( qs, torch.transpose( ks, -2, -1))
-
-  def forward_evaluate( self, xs_q, xs_k_v = None) :
-    '''Evaluate attention head'''
-
-    xs_k_v = xs_q if None == xs_k_v else xs_k_v
-
-    out_shape = xs_q.shape
-    qs = self.lnorm_qs( self.proj_qs( torch.flatten( xs_q, 1, -2) ))
-    ks = self.lnorm_ks( self.proj_ks( torch.flatten( xs_k_v, 1, -2) ))
-    vs = self.proj_vs( torch.flatten( xs_k_v, 1, -2) )
-    # normalization increases interpretability since otherwise the scaling of the values 
-    # interacts with the attention values
-    # torch.nn.functional.normalize( vs, dim=-1)
-
-    scaling = 1. / torch.sqrt( torch.tensor(qs.shape[2]))
-    vsp = torch.matmul( self.softmax( scaling * self.attention( qs, ks)),  vs)
-    return (vsp.reshape( [-1] + list(out_shape[1:-1]) + [vsp.shape[-1]]), None)
-
-  def forward_attention( self, xs_q, xs_k_v = None) :
-    '''Evaluate attention head and also return attention'''
-
-    xs_k_v = xs_q if None == xs_k_v else xs_k_v
-
-    out_shape = xs_q.shape
-    kv_shape = xs_k_v.shape
-    qs = self.lnorm_qs( self.proj_qs( torch.flatten( xs_q, 1, -2) ))
-    ks = self.lnorm_ks( self.proj_ks( torch.flatten( xs_k_v, 1, -2) ))
-    vs = self.proj_vs( torch.flatten( xs_k_v, 1, -2) )
-    # normalization increases interpretability since otherwise the scaling of the values 
-    # interacts with the attention values
-    # torch.nn.functional.normalize( vs, dim=-1)
-
-    scaling = 1. / torch.sqrt( torch.tensor(qs.shape[2]))
-    att = self.attention( qs, ks)
-    vsp = torch.matmul( self.softmax( scaling * att),  vs)
-    return ( vsp.reshape( [-1] + list(out_shape[1:-1]) + [vsp.shape[-1]]), 
-             att.reshape( [-1] + list(out_shape[1:-1]) + list(kv_shape[1:-1])).detach().cpu() )
-
-####################################################################################################
-
 class MultiSelfAttentionHead(torch.nn.Module):
 
-  def __init__(self, dim_embed, num_heads, dropout_rate = 0., att_type = 'dense', 
-                     with_qk_lnorm = False, grad_checkpointing = False, with_attention = False ) :
+  #########################################
+  def __init__(self, dim_embed, num_heads, dropout_rate=0., with_qk_lnorm=True, with_flash=True) :
     
     super(MultiSelfAttentionHead, self).__init__()
 
+    self.num_heads = num_heads
+    self.with_flash = with_flash
+
     assert 0 == dim_embed % num_heads
     self.dim_head_proj = int(dim_embed / num_heads)
-
     self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
+    self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
+    self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = False)
+    self.dropout = torch.nn.Dropout( p=dropout_rate) if dropout_rate > 0. else torch.nn.Identity()
 
-    self.heads = torch.nn.ModuleList()
-    if 'dense' == att_type :
-      for n in range( num_heads) :
-        self.heads.append( AttentionHead( [dim_embed, self.dim_head_proj], 
-                                      with_qk_lnorm= with_qk_lnorm, with_attention=with_attention))
-    elif 'axial' in att_type :
-      self.heads.append( AxialAttention( dim = dim_embed, dim_index = -1, heads = num_heads,
-                                         num_dimensions = 3) )
+    lnorm = torch.nn.LayerNorm if with_qk_lnorm else torch.nn.Identity
+    self.ln_q = lnorm( self.dim_head_proj, elementwise_affine=False)
+    self.ln_k = lnorm( self.dim_head_proj, elementwise_affine=False)
+    
+    # with_flash = False
+    if with_flash :
+      self.att = torch.nn.functional.scaled_dot_product_attention
     else :
-      assert False, 'Unsuppored attention type.'
+      self.att = self.attention
+      self.softmax = torch.nn.Softmax(dim=-1)
 
-    # proj_out is done is axial attention head so do not repeat it
-    self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = False) \
-                                                if att_type == 'dense' else torch.nn.Identity()
-    self.dropout = torch.nn.Dropout( p=dropout_rate)
+  #########################################
+  def forward( self, x) :
 
-    self.checkpoint = identity
-    if grad_checkpointing :
-      self.checkpoint = checkpoint_wrapper
-
-  def forward( self, x, y = None) :
-
+    split, tr = torch.tensor_split, torch.transpose
+    
     x_in = x
     x = self.lnorm( x)
 
-    outs, atts = [], []
-    for head in self.heads :
-      y, att = self.checkpoint( head, x)
-      outs.append( y)
-      atts.append( y)
-    outs = torch.cat( outs, -1)
+    # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
+    s = [ *x.shape[:-1], self.num_heads, -1]
+    qs, ks, vs = split( self.proj_heads( x).reshape(s).transpose( 2, 1), 3, dim=-1)
+    qs, ks = self.ln_q( qs), self.ln_k( ks)
+    
+    # correct ordering of tensors with seq dimension second but last is critical
+    with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
+      outs = self.att( qs, ks, vs).transpose( 2, 1)
+      
+    return x_in + self.dropout( self.proj_out( outs.flatten( -2, -1)) )
 
-    outs = self.dropout( self.checkpoint( self.proj_out, outs) )
-
-    return x_in + outs, atts
+  #########################################
+  def attention( self, q, k, v) :
+    scaling = 1. / torch.sqrt( torch.tensor(q.shape[-1]))
+    return torch.matmul( self.softmax( scaling * self.score( q, k)), v)
+      
+  #########################################
+  def score( self, q, k) :
+    return torch.matmul( q, torch.transpose( k, -2, -1))
 
 ####################################################################################################
 
 class MultiCrossAttentionHead(torch.nn.Module):
 
   def __init__(self, dim_embed, num_heads, num_heads_other, dropout_rate = 0., with_qk_lnorm =False,
-                     grad_checkpointing = False, with_attention=False):
+                     grad_checkpointing = False, with_attention=False, with_flash=True):
     super(MultiCrossAttentionHead, self).__init__()
 
     self.num_heads = num_heads
@@ -169,21 +103,23 @@ class MultiCrossAttentionHead(torch.nn.Module):
     else : 
       self.lnorm_other = torch.nn.Identity()
 
-    # self attention heads
-    self.heads = torch.nn.ModuleList()
-    for n in range( num_heads) :
-      self.heads.append( AttentionHead( [dim_embed, self.dim_head_proj],
-                                      with_qk_lnorm = with_qk_lnorm, with_attention=with_attention))
+    self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
+
+    self.proj_heads_o_q = torch.nn.Linear(dim_embed, num_heads_other*self.dim_head_proj, bias=False)
+    self.proj_heads_o_kv= torch.nn.Linear(dim_embed,num_heads_other*2*self.dim_head_proj,bias=False)
     
-    # cross attention heads
-    self.heads_other = torch.nn.ModuleList()
-    for n in range( num_heads_other) :
-      self.heads_other.append( AttentionHead( [dim_embed, self.dim_head_proj],
-                                      with_qk_lnorm = with_qk_lnorm, with_attention=with_attention))
+    self.ln_q = torch.nn.LayerNorm( self.dim_head_proj)
+    self.ln_k = torch.nn.LayerNorm( self.dim_head_proj)
 
     # proj_out is done is axial attention head so do not repeat it
     self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = False)
     self.dropout = torch.nn.Dropout( p=dropout_rate)
+
+    if with_flash :
+      self.att = torch.nn.functional.scaled_dot_product_attention
+    else :
+      self.att = self.attention
+    self.softmax = torch.nn.Softmax(dim=-1)
 
     self.checkpoint = identity
     if grad_checkpointing :
@@ -192,27 +128,31 @@ class MultiCrossAttentionHead(torch.nn.Module):
   def forward( self, x, x_other) :
     
     x_in = x
-    x = self.lnorm( x)
-    x_other = self.lnorm_other( x_other)
+    x, x_other = self.lnorm( x), self.lnorm_other( x_other)
 
-    # output tensor where output of heads is linearly concatenated
-    outs, atts = [], []
+    # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
+    x = x.flatten( 1, -2)
+    s = [ *x.shape[:-1], self.num_heads, -1]
+    qs, ks, vs = torch.tensor_split( self.proj_heads( x).reshape(s).transpose( 2, 1), 3, dim=-1)
+    qs, ks = self.ln_q( qs), self.ln_k( ks)
+    
+    s = [ *x.shape[:-1], self.num_heads_other, -1]
+    qs_o = self.proj_heads_o_q( x).reshape(s).transpose( 2, 1)
+    x_o = x_other.flatten( 1, -2)
+    s = [ *x_o.shape[:-1], self.num_heads_other, -1]
+    ks_o, vs_o = torch.tensor_split( self.proj_heads_o_kv(x_o).reshape(s).transpose( 2, 1),2,dim=-1)
+    qs_o, ks_o = self.ln_q( qs_o), self.ln_k( ks_o)
 
-    # self attention
-    for head in self.heads :
-      y, att = self.checkpoint( head, x)
-      outs.append( y)
-      atts.append( att) 
-
-    # cross attention
-    for head in self.heads_other :
-      y, att = self.checkpoint( head, x, x_other)
-      outs.append( y)
-      atts.append( att)
-
-    outs = torch.cat( outs, -1)
+    # correct ordering of tensors with seq dimension second but last is critical
+    with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
+      s = list(x_in.shape)
+      s[-1] = -1
+      outs_self = self.att( qs, ks, vs).transpose( 2, 1).flatten( -2, -1).reshape(s)
+      outs_other = self.att( qs_o, ks_o, vs_o).transpose( 2, 1).flatten( -2, -1).reshape(s)
+      outs = torch.cat( [outs_self, outs_other], -1)
+    
     outs = self.dropout( self.checkpoint( self.proj_out, outs) )
-
+    atts = []
     return x_in + outs, atts
 
 ####################################################################################################
@@ -220,44 +160,57 @@ class MultiCrossAttentionHead(torch.nn.Module):
 class MultiInterAttentionHead(torch.nn.Module):
 
   #####################################
-  def __init__( self, num_heads_self, num_heads_coupling, dims_embed, with_lnorm = True, 
-                      dropout_rate = 0., with_qk_lnorm = False, grad_checkpointing = False,
-                      with_attention=False) :
+  def __init__( self, num_heads_self, num_fields_other, num_heads_coupling_per_field, dims_embed,
+                      with_lnorm = True, dropout_rate = 0., with_qk_lnorm = False, 
+                      grad_checkpointing = False, with_attention=False, with_flash=True) :
     '''Multi-head attention with multiple interacting fields coupled through attention.'''
 
     super(MultiInterAttentionHead, self).__init__()
 
+    self.num_heads_self = num_heads_self
+    self.num_heads_coupling_per_field = num_heads_coupling_per_field
     self.num_fields = len(dims_embed)
 
-    # self.coupling_mode = coupling_mode
-    # assert 0 == (dims_embed[0] % (num_heads_self + num_heads_coupling))
-    # self.dim_head_proj = int(dims_embed[0] / (num_heads_self + num_heads_coupling))
     self.dim_head_proj = int(dims_embed[0] / num_heads_self)
 
     # layer norms for all fields
     self.lnorms = torch.nn.ModuleList()
+    ln = torch.nn.LayerNorm if with_lnorm else torch.nn.Identity
     for ifield in range( self.num_fields) :
-      if with_lnorm :
-        self.lnorms.append( torch.nn.LayerNorm( dims_embed[ifield], elementwise_affine=False))
-      else : 
-        self.lnorms.append( torch.nn.Identity())
+      self.lnorms.append( ln( dims_embed[ifield], elementwise_affine=False))
 
-    # self attention heads
-    self.heads_self = torch.nn.ModuleList()
-    for n in range( num_heads_self) :
-      self.heads_self.append( AttentionHead( [dims_embed[0], self.dim_head_proj],
-                                      dims_embed[0], with_qk_lnorm, with_attention=with_attention ))
+    # self-attention
+
+    nnc = num_fields_other * num_heads_coupling_per_field
+    self.proj_out = torch.nn.Linear( self.dim_head_proj * (num_heads_self + nnc), 
+                                     dims_embed[0], bias = False)
+    self.dropout = torch.nn.Dropout( p=dropout_rate) if dropout_rate > 0. else torch.nn.Identity()
+
+    nhs = num_heads_self
+    self.proj_heads = torch.nn.Linear( dims_embed[0], nhs*3*self.dim_head_proj, bias = False)
     
-    # coupling attention heads
-    self.heads_coupling = torch.nn.ModuleList()
-    for ifield in range( num_heads_coupling) :
-      arg1 = [dims_embed[ifield+1], self.dim_head_proj]
-      self.heads_coupling.append( AttentionHead( arg1, dims_embed[0], with_qk_lnorm,
-                                                 with_attention=with_attention ))
+    # cross-attention
 
-    # self.proj_out = torch.nn.Linear( dims_embed[0], dims_embed[0], bias = False)
-    self.proj_out = torch.nn.Linear( self.dim_head_proj * (num_heads_self + num_heads_coupling), dims_embed[0], bias = False)
-    self.dropout = torch.nn.Dropout( p=dropout_rate)
+    nhc_dim = num_heads_coupling_per_field * self.dim_head_proj
+    self.proj_heads_other = torch.nn.ModuleList()
+    # queries from primary source/target field
+    self.proj_heads_other.append( torch.nn.Linear( dims_embed[0], nhc_dim*num_fields_other,
+                                                   bias=False))
+    # keys, values for other fields
+    for i in range(num_fields_other) :
+      self.proj_heads_other.append( torch.nn.Linear( dims_embed[i+1], 2*nhc_dim, bias=False))
+
+    ln = torch.nn.LayerNorm if with_qk_lnorm else torch.nn.Identity
+    self.ln_qk = (ln( self.dim_head_proj, elementwise_affine=False), 
+                  ln( self.dim_head_proj, elementwise_affine=False))
+    nfo = num_fields_other
+    self.ln_k_other = [ln(self.dim_head_proj,elementwise_affine=False) for _ in range(nfo)]
+    
+    if with_flash :
+      self.att = torch.nn.functional.scaled_dot_product_attention
+    else :
+      self.att = self.attention
+    self.softmax = torch.nn.Softmax(dim=-1)
 
     self.checkpoint = identity
     if grad_checkpointing :
@@ -266,32 +219,60 @@ class MultiInterAttentionHead(torch.nn.Module):
   #####################################
   def forward( self, *args) :
     '''Evaluate block'''
-
-    x_in = args[0]
+    
+    x_in, atts = args[0], []
 
     # layer norm for each field
     fields_lnormed = []
     for ifield, field in enumerate( args) :
       fields_lnormed.append( self.lnorms[ifield](field) )
+
+    # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
+    # collapse three space and time dimensions for dense space-time attention
+    #proj_heads: torch.Size([16, 3, 128, 2048])
+    field_proj = self.proj_heads( fields_lnormed[0].flatten(1,-2))
+    s = [ *field_proj.shape[:-1], self.num_heads_self, -1 ]
+    qs, ks, vs = torch.tensor_split( field_proj.reshape(s).transpose(-3,-2), 3, dim=-1)
+    #breakpoint()  
+    qs, ks = self.ln_qk[0]( qs), self.ln_qk[1]( ks)
+    if len(fields_lnormed) > 1 :
+
+      field_proj = self.proj_heads_other[0]( fields_lnormed[0].flatten(1,-2))
+      s = [ *field_proj.shape[:-1], len(fields_lnormed)-1, self.num_heads_coupling_per_field, -1 ]
+      qs_other = field_proj.reshape(s).permute( [-3, 0, -2, 1, -1])
     
-    # output tensor where output of heads is linearly concatenated
-    outs, atts = [], []
+      ofields_projs = []
+      for i,f in enumerate(fields_lnormed[1:]) :
+        f_proj = self.proj_heads_other[i+1](f.flatten(1,-2)) 
+        s = [ *f_proj.shape[:-1], self.num_heads_coupling_per_field, -1 ]
+        ks_o, vs_o = torch.tensor_split( f_proj.reshape(s).transpose(-3,-2), 2, dim=-1)
+        ofields_projs += [ (self.ln_k_other[i]( ks_o), vs_o) ]
 
-    # self attention
-    for head in self.heads_self :
-      y, att = self.checkpoint( head, fields_lnormed[0], fields_lnormed[0])
-      outs.append( y)
-      atts.append( att)
+    # correct ordering of tensors with seq dimension second but last is critical
+    with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
       
-    # inter attention
-    for ifield, head in enumerate(self.heads_coupling) :
-      y, att = self.checkpoint( head, fields_lnormed[0], fields_lnormed[ifield+1])
-      outs.append( y)
-      atts.append( att)
+      # self-attention
+      s = list(fields_lnormed[0].shape)
+      outs = self.att( qs, ks, vs).transpose( -3, -2).flatten( -2, -1).reshape(s)
+      
+      # cross-attention
+      if len(fields_lnormed) > 1 :
+        s[-1] = -1
+        outs_other = [self.att( q, k, v).transpose( -3, -2).flatten( -2, -1).reshape(s)
+                                                    for (q,(k,v)) in zip(qs_other,ofields_projs)] 
+        outs = torch.cat( [outs, *outs_other], -1)
 
-    outs = torch.cat( outs, -1)
-    outs = self.dropout( self.checkpoint( self.proj_out, outs) ) 
+    # code.interact( local=locals())
+    outs = self.dropout( self.proj_out( outs))
 
     return x_in + outs, atts
 
-
+  #########################################
+  def attention( self, q, k, v) :
+    scaling = 1. / torch.sqrt( torch.tensor(q.shape[-1]))
+    return torch.matmul( self.softmax( scaling * self.score( q, k)), v)
+      
+  #########################################
+  def score( self, q, k) :
+    # code.interact( local=locals())
+    return torch.matmul( q, torch.transpose( k, -2, -1))

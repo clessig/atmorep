@@ -16,10 +16,6 @@
 
 import torch
 import numpy as np
-import math
-import code
-
-from atmorep.utils.utils import identity
 
 
 ####################################################################################################
@@ -96,68 +92,6 @@ def positional_encoding_harmonic( x, num_levels, num_tokens, with_cls = False) :
   return x
 
 ####################################################################################################
-class MLP(torch.nn.Module):
-
-  def __init__(self, dim_embed, num_layers = 2, with_lnorm = True, dim_embed_out = None, 
-                     nonlin = torch.nn.GELU(), dim_internal_factor = 2, dropout_rate = 0.,
-                     grad_checkpointing = False, with_residual = True) :
-    """
-    Multi-layer perceptron
-
-    dim_embed   : embedding dimension
-    num_layers  : number of layers
-    nonlin      : nonlinearity
-    dim_internal_factor : factor for number of hidden dimension relative to input / output
-    """
-    super(MLP, self).__init__()
-
-    if not dim_embed_out :
-      dim_embed_out = dim_embed
-
-    self.with_residual = with_residual
-
-    dim_internal = int( dim_embed * dim_internal_factor)
-    if with_lnorm : 
-      self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
-    else :
-      self.lnorm = torch.nn.Identity()
-
-    self.blocks = torch.nn.ModuleList()
-    self.blocks.append( torch.nn.Linear( dim_embed, dim_internal))
-    self.blocks.append( nonlin)
-    self.blocks.append( torch.nn.Dropout( p = dropout_rate))
-    
-    for _ in range( num_layers-2) :
-      self.blocks.append( torch.nn.Linear( dim_internal, dim_internal))
-      self.blocks.append( nonlin)
-      self.blocks.append( torch.nn.Dropout( p = dropout_rate))
-    
-    self.blocks.append( torch.nn.Linear( dim_internal, dim_embed_out))
-    self.blocks.append( nonlin)
-
-    if dim_embed == dim_embed_out :
-      self.proj_residual = torch.nn.Identity()
-    else :
-      self.proj_residual = torch.nn.Linear( dim_embed, dim_embed_out)
-
-    self.checkpoint = identity
-    if grad_checkpointing :
-      self.checkpoint = checkpoint_wrapper
-
-  def forward( self, x, y = None) :
-    
-    x_in = x
-    x = self.lnorm( x)
-    
-    for block in self.blocks:
-      x = self.checkpoint( block, x)
-
-    if self.with_residual :
-      x += x_in
-
-    return x
-
-####################################################################################################
 def prepare_token_info( cf, token_info) :
 
   if len( token_info.shape) > 3 :
@@ -173,7 +107,7 @@ def prepare_token_info( cf, token_info) :
   return token_info
 
 ####################################################################################################
-def prepare_token( xin, embed, embed_token_info, with_cls = True) :
+def prepare_token( xin, embed, embed_token_info) :
 
   (token_seq, token_info) = xin
   num_tokens = token_seq.shape[-6:-3]
@@ -187,18 +121,8 @@ def prepare_token( xin, embed, embed_token_info, with_cls = True) :
   # token_info = prepare_token_info( cf, token_info)
   token_info = token_info.reshape([-1] + list(token_seq_embed.shape[1:-1])+[token_info.shape[-1]])
   token_seq_embed = torch.cat( [token_seq_embed, token_info], -1)
-
-  # class token
-  if with_cls :
-    # initialize to zero (mean of data)
-    tts = token_seq_embed.shape
-    cls_token =  torch.zeros( (tts[0], 1, tts[2]), device=token_seq_embed.device)
   
   # add positional encoding
   token_seq_embed = positional_encoding_harmonic( token_seq_embed, num_levels, num_tokens)
-
-  # add class token after positional encoding
-  if with_cls :
-    token_seq_embed = torch.cat( [ cls_token, token_seq_embed ], 1)
 
   return token_seq_embed
