@@ -92,8 +92,8 @@ class Evaluator( Trainer_BERT) :
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
-    
-   # if not hasattr( cf, 'num_loader_workers'):
+
+    # if not hasattr( cf, 'num_loader_workers'):
     cf.num_loader_workers = 12 #cf.loader_num_workers
     cf.rng_seed = None 
     
