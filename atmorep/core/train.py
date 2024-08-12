@@ -15,21 +15,17 @@
 ####################################################################################################
 
 import torch
-import numpy as np
 import os
 import sys
-import pdb
 import traceback
-
+import pdb
 import wandb
 
-import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
-import atmorep.utils.utils as utils
 
 
 ####################################################################################################
@@ -110,31 +106,34 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
-                               [ 96, 105, 114, 123, 137 ], 
-                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+  #                              [ 96, 105, 114, 123, 137 ], 
+  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
-  # cf.fields = [ [ 'velocity_u', [ 1, 2048, [ ], 0], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-  
-  # cf.fields = [ [ 'velocity_v', [ 1, 2048, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [ 12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
 
-  # cf.fields = [ [ 'velocity_z', [ 1, 1024, [ ], 0 ], 
+  # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                               [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
+
+  # cf.fields = [ [ 'velocity_z', [ 1, 512, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
 
-  # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
+  # cf.fields = [ [ 'specific_humidity', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
   #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
 
   cf.fields_targets = []
 
-  cf.years_train = [2021] # list( range( 1980, 2018))
+  cf.years_train = list( range( 2010, 2021))
   cf.years_val = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -142,8 +141,8 @@ def train() :
   # random seeds
   cf.torch_seed = torch.initial_seed()
   # training params
-  cf.batch_size_validation = 64
-  cf.batch_size = 32
+  cf.batch_size_validation = 1 #64
+  cf.batch_size = 96
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
@@ -161,12 +160,12 @@ def train() :
   cf.dropout_rate = 0.05
   cf.with_qk_lnorm = False
   # encoder
-  cf.encoder_num_layers = 4
+  cf.encoder_num_layers = 6
   cf.encoder_num_heads = 16
   cf.encoder_num_mlp_layers = 2
   cf.encoder_att_type = 'dense'
   # decoder
-  cf.decoder_num_layers = 4
+  cf.decoder_num_layers = 6
   cf.decoder_num_heads = 16
   cf.decoder_num_mlp_layers = 2
   cf.decoder_self_att = False
@@ -177,19 +176,19 @@ def train() :
   cf.net_tail_num_nets = 16
   cf.net_tail_num_layers = 0
   # loss
-  cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps
+  cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
   # training
   cf.optimizer_zero = False
   cf.lr_start = 5. * 10e-7
-  cf.lr_max = 0.00005
-  cf.lr_min = 0.00002
-  cf.weight_decay = 0.1
+  cf.lr_max = 0.00005*3
+  cf.lr_min = 0.00004 #0.00002
+  cf.weight_decay = 0.05 #0.1
   cf.lr_decay_rate = 1.025
   cf.lr_start_epochs = 3
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
   cf.BERT_strategy = 'BERT'
-  cf.forecast_num_tokens = 1      # only needed / used for BERT_strategy 'forecast
+  cf.forecast_num_tokens = 2      # only needed / used for BERT_strategy 'forecast
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution
@@ -219,12 +218,13 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
   # # # in steps x lat_degrees x lon_degrees
-  # cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk16.zarr'
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
-  cf.n_size = [36, 1*9*6, 1.*9*12]
+  #cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk16.zarr'
+  #cf.n_size = [36, 1*9*6, 1.*9*12]
 
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
