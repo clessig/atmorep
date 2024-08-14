@@ -1,14 +1,11 @@
 import numpy as np
 import pandas as pd 
 
-def era5_fname():
-    return "/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
 
-def atmorep_pred():
-    return "./results/id{}/results_id{}_epoch{}_pred.zarr"
+ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
+ATMOREP_PRED = r"./results/id{}/results_id{}_epoch{}_pred.zarr"
+ATMOREP_TARGET = r"./results/id{}/results_id{}_epoch{}_target.zarr"
 
-def atmorep_target():
-    return "./results/id{}/results_id{}_epoch{}_target.zarr"
 
 def grib_index(field):
     grib_idxs = {"velocity_u": "u",

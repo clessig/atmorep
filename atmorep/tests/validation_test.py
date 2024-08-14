@@ -42,7 +42,9 @@ def test_datetime(field, model_id, BERT, epoch = 0):
     Loop over all levels individually. 50 random samples for each level.
     """
 
-    store = zarr.ZipStore(test_utils.atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
+    store = zarr.ZipStore(
+        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
+    )
     atmorep = zarr.group(store)
 
     nsamples = min(len(atmorep[field]), 50)
@@ -59,7 +61,9 @@ def test_datetime(field, model_id, BERT, epoch = 0):
             data, datetime, lats, lons = get_data(atmorep, field, s, level_idx)
             year, month = datetime.year, str(datetime.month).zfill(2)
 
-            era5_path = test_utils.era5_fname().format(field, level, field, year, month, level)
+            era5_path = test_utils.ERA5_FNAME.format(
+                field, level, field, year, month, level
+            )
             if not os.path.isfile(era5_path):
                 warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
                 continue
@@ -78,10 +82,14 @@ def test_coordinates(field, model_id, BERT, epoch = 0):
     50 random samples.
     """
 
-    store_t = zarr.ZipStore(test_utils.atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
+    store_t = zarr.ZipStore(
+        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
+    )
     target = zarr.group(store_t)
 
-    store_p = zarr.ZipStore(test_utils.atmorep_pred().format(model_id, model_id, str(epoch).zfill(5)))
+    store_p = zarr.ZipStore(
+        test_utils.ATMOREP_PRED.format(model_id, model_id, str(epoch).zfill(5))
+    )
     pred = zarr.group(store_p)
 
     nsamples = min(len(target[field]), 50)
@@ -108,10 +116,14 @@ def test_rmse(field, model_id, BERT, epoch = 0):
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
     """
-    store_t = zarr.ZipStore(test_utils.atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
+    store_t = zarr.ZipStore(
+        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
+    )
     target = zarr.group(store_t)
 
-    store_p = zarr.ZipStore(test_utils.atmorep_pred().format(model_id, model_id, str(epoch).zfill(5)))
+    store_p = zarr.ZipStore(
+        test_utils.ATMOREP_PRED.format(model_id, model_id, str(epoch).zfill(5))
+    )
     pred = zarr.group(store_p)
     
     nsamples = min(len(target[field]), 50)
