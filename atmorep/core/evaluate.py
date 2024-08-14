@@ -15,6 +15,7 @@
 ####################################################################################################
 
 from atmorep.core.evaluator import Evaluator
+from atmorep.utils.logger import logger
 import time
 
 if __name__ == '__main__':
@@ -71,4 +72,4 @@ if __name__ == '__main__':
   
   now = time.time()
   Evaluator.evaluate( mode, model_id, file_path, options)
-  print("time", time.time() - now)
+  logger.info("time %s", time.time() - now)

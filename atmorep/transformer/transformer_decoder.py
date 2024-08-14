@@ -20,6 +20,7 @@ from atmorep.transformer.mlp import MLP
 from atmorep.transformer.transformer_attention import MultiSelfAttentionHead, MultiCrossAttentionHead
 from atmorep.transformer.axial_attention import MultiFieldAxialAttention
 from atmorep.utils.utils import identity
+from atmorep.utils.logger import logger
 from atmorep.transformer.transformer_base import checkpoint_wrapper
 
 class TransformerDecoder(torch.nn.Module) :
@@ -116,9 +117,8 @@ class TransformerDecoder(torch.nn.Module) :
     ''' 
     Get attention and projected values from specific layer and her head
     '''
+    logger.debug("inside get_attention in transformer_decoder.py")
 
-    #    assert False
-    print("inside get_attention in transformer_decoder.py")
     # embedding
     token_seq_embed = decoder_in.to( dev, non_blocking=True)
     car = self.cf.decoder_cross_att_rate

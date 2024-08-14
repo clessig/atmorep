@@ -14,10 +14,9 @@
 #
 ####################################################################################################
 
-import code
 import numpy as np
-import xarray as xr
-import atmorep.config.config as config
+
+from atmorep.utils.logger import logger
 
 ######################################################
 #                   Normalize                        #
@@ -27,7 +26,7 @@ def normalize( data, norm, dates, year_base = 1979) :
   corr_data = np.array([norm[12*(dt.year-year_base) + dt.month-1] for dt in dates])
   mean, var = corr_data[:, 0], corr_data[:, 1]
   if (var == 0.).all() :
-    print( f'Warning: var == 0') 
+    logger.info('Warning: var == 0')
     assert False
   if len(norm.shape) > 2 : #global norm
     return normalize_local(data, mean, var)

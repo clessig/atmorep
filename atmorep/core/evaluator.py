@@ -16,21 +16,14 @@
 
 import numpy as np
 import os
-import code
 import pytest
 import datetime
 
 import wandb
 
+from atmorep.utils.logger import logger
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
-from atmorep.utils.utils import setup_ddp
-from atmorep.utils.utils import setup_wandb
-from atmorep.utils.utils import init_torch
-from atmorep.utils.utils import NetMode
 import atmorep.utils.utils as utils
-
-import atmorep.config.config as config
 
 class Evaluator( Trainer_BERT) :
 
@@ -76,11 +69,11 @@ class Evaluator( Trainer_BERT) :
       num_accs_per_task = 1 
     else :
       num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-    devices = init_torch( num_accs_per_task)
+    devices = utils.init_torch( num_accs_per_task)
     #devices = ['cuda:1']
 
-    par_rank, par_size = setup_ddp( with_ddp)
-    cf = Config().load_json( model_id)
+    par_rank, par_size = utils.setup_ddp( with_ddp)
+    cf = utils.Config().load_json( model_id)
     cf.file_path = file_path
     cf.with_wandb = True
     cf.with_ddp = with_ddp
@@ -89,11 +82,12 @@ class Evaluator( Trainer_BERT) :
     cf.losses = cf.losses
     # overwrite old config
     cf.attention = False
-    setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
-    if 0 == cf.par_rank :
-      print( 'Running Evaluate.evaluate with mode =', mode)
-
-    # if not hasattr( cf, 'num_loader_workers'):
+    utils.setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
+    
+    if 0 == cf.par_rank:
+      logger.info('Running Evaluate.evaluate wtih mode = {}', mode)
+    
+   # if not hasattr( cf, 'num_loader_workers'):
     cf.num_loader_workers = 12 #cf.loader_num_workers
     cf.rng_seed = None 
     
@@ -169,7 +163,7 @@ class Evaluator( Trainer_BERT) :
 
     dates = args['dates']
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.set_global( NetMode.test, np.array( dates))
+    evaluator.model.set_global( utils.NetMode.test, np.array( dates))
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
@@ -207,7 +201,7 @@ class Evaluator( Trainer_BERT) :
       dates += [cur_date]
 
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.set_global( NetMode.test, np.array( dates))
+    evaluator.model.set_global( utils.NetMode.test, np.array( dates))
     evaluator.evaluate( 0, cf.BERT_strategy)
 
   ##############################################
@@ -238,7 +232,7 @@ class Evaluator( Trainer_BERT) :
     num_t_samples_per_month = 2
 
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.set_location( NetMode.test, pos, years, months, num_t_samples_per_month)
+    evaluator.model.set_location( utils.NetMode.test, pos, years, months, num_t_samples_per_month)
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)

@@ -15,17 +15,13 @@
 ####################################################################################################
 
 import torch
-import numpy as np
 import os
 
 import wandb
 
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
-from atmorep.utils.utils import setup_ddp
-from atmorep.utils.utils import setup_wandb
-from atmorep.utils.utils import init_torch
 import atmorep.utils.utils as utils
+from atmorep.utils.logger import logger
 
 import atmorep.config.config as config
 
@@ -33,11 +29,11 @@ import atmorep.config.config as config
 def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
 
   num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  device = utils.init_torch( num_accs_per_task)
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  par_rank, par_size = utils.setup_ddp( with_ddp)
 
-  cf = Config().load_json( model_id)
+  cf = utils.Config().load_json( model_id)
   cf.with_ddp = with_ddp
   cf.par_rank = par_rank
   cf.par_size = par_size
@@ -54,7 +50,7 @@ def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
   if not hasattr(cf, 'with_mixed_precision'):
     cf.with_mixed_precision = True
 
-  setup_wandb( cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
+  utils.setup_wandb(cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
 
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)
@@ -65,18 +61,18 @@ def train_continue( model_id, model_epoch, Trainer, model_epoch_continue = -1) :
 
   # run
   trainer = Trainer.load( cf, model_id, model_epoch, device)
-  print( 'Loaded run \'{}\' at epoch {}.'.format( model_id, model_epoch))
+  logger.info('Loaded run \'{}\' at epoch {}.',  model_id, model_epoch)
   trainer.run( model_epoch_continue)
 
 ####################################################################################################
 def train_multi() :
 
   num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  device = utils.init_torch( num_accs_per_task)
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  par_rank, par_size = utils.setup_ddp( with_ddp)
 
-  cf = Config()
+  cf = utils.Config()
   # horovod 
   cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
   cf.with_ddp = with_ddp
@@ -216,7 +212,7 @@ def train_multi() :
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True
-  setup_wandb( cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
+  utils.setup_wandb(cf.with_wandb, cf, par_rank, 'train-multi', mode='offline')  
 
   if cf.with_wandb and 0 == cf.par_rank :
     cf.write_json( wandb)

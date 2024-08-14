@@ -22,21 +22,19 @@ import pdb
 import wandb
 
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
-from atmorep.utils.utils import setup_ddp
-from atmorep.utils.utils import setup_wandb
-from atmorep.utils.utils import init_torch
+import atmorep.utils.utils as utils
+from atmorep.utils.logger import logger
 
 
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
   num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  device = utils.init_torch( num_accs_per_task)
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  par_rank, par_size = utils.setup_ddp( with_ddp)
 
-  cf = Config().load_json( wandb_id)
+  cf = utils.Config().load_json( wandb_id)
 
   cf.with_ddp = with_ddp
   cf.par_rank = par_rank
@@ -63,7 +61,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
 
-  setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
+  utils.setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
   
@@ -76,21 +74,21 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
   # run
   trainer = Trainer.load( cf, wandb_id, epoch, device)
-  print( 'Loaded run \'{}\' at epoch {}.'.format( wandb_id, epoch))
+  logger.info('Loaded run \'{}\' at epoch {}.', wandb_id, epoch)
   trainer.run( epoch_continue)
 
 ####################################################################################################
 def train() :
 
   num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  device = utils.init_torch( num_accs_per_task)
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  par_rank, par_size = utils.setup_ddp( with_ddp)
 
   # torch.cuda.set_sync_debug_mode(1)
   torch.backends.cuda.matmul.allow_tf32 = True
 
-  cf = Config()
+  cf = utils.Config()
   # parallelization
   cf.with_ddp = with_ddp
   cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
@@ -204,7 +202,7 @@ def train() :
 
   # usually use %>wandb offline to switch to disable syncing with server
   cf.with_wandb = True
-  setup_wandb( cf.with_wandb, cf, par_rank, 'train', mode='offline')  
+  utils.setup_wandb( cf.with_wandb, cf, par_rank, 'train', mode='offline')  
 
   # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res100_chunk32.zarr'
   # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res100_chunk32.zarr'

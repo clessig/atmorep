@@ -21,12 +21,12 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
-import code
 
 # from atmorep.datasets.normalizer_global import NormalizerGlobal
 # from atmorep.datasets.normalizer_local import NormalizerLocal
 from atmorep.datasets.normalizer import normalize
 from atmorep.utils.utils import tokenize, get_weights
+from atmorep.utils.logger import logger
 
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
@@ -61,9 +61,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
     self.ds_len = st[0] 
-    print( f'self.ds[\'data\'] : {sh} :: {st}')
-    print( f'self.lats : {self.lats.shape}', flush=True)
-    print( f'self.lons : {self.lons.shape}', flush=True)
+    logger.info('self.ds["data"] : {} :: {}', sh, st)
+    logger.info('self.lats : {}', self.lats.shape)
+    logger.info('self.lons : {}', self.lons.shape)
     self.fields_idxs = []
 
     self.time_sampling = time_sampling
@@ -323,7 +323,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
     batch_size = len(times_pos) #num_tiles_lon
     
-    print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
+    logger.info('Number of batches per global forecast: {}', num_tiles_lat)
 
     self.set_data( times_pos, batch_size)
 
