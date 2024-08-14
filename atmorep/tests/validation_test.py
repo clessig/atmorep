@@ -34,6 +34,7 @@ def strategy(request):
 
 #TODO: add test for global_forecast vs ERA5
 
+@pytest.mark.gpu
 def test_datetime(field, model_id, BERT, epoch = 0):
 
     """
@@ -69,6 +70,7 @@ def test_datetime(field, model_id, BERT, epoch = 0):
 
 #############################################################################
 
+@pytest.mark.gpu
 def test_coordinates(field, model_id, BERT, epoch = 0):
     """
     Check that coordinates match between target and prediction. 
@@ -100,6 +102,7 @@ def test_coordinates(field, model_id, BERT, epoch = 0):
 
 #########################################################################
 
+@pytest.mark.gpu
 def test_rmse(field, model_id, BERT, epoch = 0):
     """
     Test that for each field the RMSE does not exceed a certain value. 
