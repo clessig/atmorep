@@ -32,9 +32,9 @@ def prediction(model_id, epoch):
     return test_utils.get_group(test_utils.ATMOREP_PRED, model_id, epoch)
 
 @pytest.fixture(autouse = True) 
-def BERT(request):
+def data_access(request):
     strategy = request.config.getoption("strategy")
-    return (strategy == 'BERT' or strategy == 'temporal_interpolation')
+    return test_utils.DataAccess.construct(strategy)
 
 @pytest.fixture(autouse = True) 
 def strategy(request):
@@ -43,7 +43,7 @@ def strategy(request):
 #TODO: add test for global_forecast vs ERA5
 
 @pytest.mark.gpu
-def test_datetime(field, BERT, target):
+def test_datetime(field, data_access, target):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
@@ -51,23 +51,12 @@ def test_datetime(field, BERT, target):
 
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = (
-        test_utils.get_levels_BERT(target, field)
-        if BERT
-        else test_utils.get_levels_forecast(target, field)
-    )
-    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
+    levels = data_access.get_levels(target, field)
 
     for level in levels:
-        # TODO: make it more elegant
-        level_idx: int = (
-            test_utils.get_level_idx_BERT(levels, level)
-            if BERT
-            else test_utils.get_level_idx_forecast(levels, level)
-        )
-
+        level_idx: int = data_access.get_level_idx(levels, level)
         for s in samples:
-            data, datetime, lats, lons = get_data(target, field, s, level_idx)
+            data, datetime, lats, lons = data_access.get_data(target, field, s, level_idx)
             year, month = datetime.year, str(datetime.month).zfill(2)
 
             era5_path = test_utils.ERA5_FNAME.format(
@@ -84,7 +73,7 @@ def test_datetime(field, BERT, target):
 #############################################################################
 
 @pytest.mark.gpu
-def test_coordinates(field, BERT, target, prediction):
+def test_coordinates(field, data_access, target, prediction):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
@@ -93,22 +82,13 @@ def test_coordinates(field, BERT, target, prediction):
 
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = (
-        test_utils.get_levels_BERT(target, field)
-        if BERT
-        else test_utils.get_levels_forecast(target, field)
-    )
-    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
+    levels = data_access.get_levels(target, field)
 
     for level in levels:
-        level_idx: int = (
-            test_utils.get_level_idx_BERT(levels, level)
-            if BERT
-            else test_utils.get_level_idx_forecast(levels, level)
-        )
+        level_idx: int = data_access.get_level_idx(levels, level)
         for s in samples:
-            _, datetime_target, lats_target, lons_target = get_data(target,field, s, level_idx)
-            _, datetime_pred, lats_pred, lons_pred = get_data(prediction, field, s, level_idx)
+            _, datetime_target, lats_target, lons_target = data_access.get_data(target,field, s, level_idx)
+            _, datetime_pred, lats_pred, lons_pred = data_access.get_data(prediction, field, s, level_idx)
 
             test_utils.test_lats_match(lats_pred, lats_target)
             test_utils.test_lats_in_range(lats_pred)
@@ -119,7 +99,7 @@ def test_coordinates(field, BERT, target, prediction):
 #########################################################################
 
 @pytest.mark.gpu
-def test_rmse(field, BERT, target, prediction):
+def test_rmse(field, data_access, target, prediction):
     """
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
@@ -127,21 +107,12 @@ def test_rmse(field, BERT, target, prediction):
     
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = (
-        test_utils.get_levels_BERT(target, field)
-        if BERT
-        else test_utils.get_levels_forecast(target, field)
-    )
-    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
+    levels = data_access.get_levels(target, field)
     
     for level in levels:
-        level_idx: int = (
-            test_utils.get_level_idx_BERT(levels, level)
-            if BERT
-            else test_utils.get_level_idx_forecast(levels, level)
-        )
+        level_idx: int = data_access.get_level_idx(levels, level)
         for s in samples:
-            sample_target, _, _, _ = get_data(target,field, s, level_idx)
-            sample_pred, _, _, _ = get_data(prediction,field, s, level_idx)
+            sample_target, _, _, _ = data_access.get_data(target,field, s, level_idx)
+            sample_pred, _, _, _ = data_access.get_data(prediction,field, s, level_idx)
 
             assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[field]

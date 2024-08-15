@@ -43,33 +43,61 @@ def get_group(store_path_template: str, model_id: int, epoch: int) -> zarr.Group
     )
     return zarr.group(store)
 
-def get_levels_BERT(data_store: zarr.Group, field: str):
-    return [int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"]]
+class DataAccess(abc.ABC):
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def construct(cls, strategy: str):
+        match strategy:
+            case "BERT":
+                return BERT()
+            case "temporal_interpolation":
+                return BERT()
+            case _:
+                return Forecast()
+            
+    @abc.abstractmethod
+    def get_levels(self, data_store: zarr.Group, field: str):
+        pass
+    
+    @abc.abstractmethod
+    def get_data(self, data_store: zarr.Group, field: str, sample: int, level):
+        pass
+    
+    @abc.abstractmethod
+    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
+        pass
 
-def get_levels_forecast(data_store: zarr.Group, field: str):
-    return data_store[f"{field}/sample=00000"].ml[:]
+class BERT(DataAccess):
+    def get_levels(self, data_store: zarr.Group, field: str):
+        return [int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"]]
 
-def get_data_BERT(data_store: zarr.Group, field: str, sample: int, level: int):
-    atmorep_sample = data_store[f"{field}/sample={sample:05d}/ml={level:05d}"] 
-    data = atmorep_sample.data[0,0] 
-    datetime = pd.Timestamp(atmorep_sample.datetime[0,0])
-    lats = atmorep_sample.lat[0]
-    lons = atmorep_sample.lon[0]
-    return data, datetime, lats, lons
+    def get_data(self, data_store: zarr.Group, field: str, sample: int, level: int):
+        atmorep_sample = data_store[f"{field}/sample={sample:05d}/ml={level:05d}"] 
+        data = atmorep_sample.data[0,0] 
+        datetime = pd.Timestamp(atmorep_sample.datetime[0,0])
+        lats = atmorep_sample.lat[0]
+        lons = atmorep_sample.lon[0]
+        return data, datetime, lats, lons
 
-def get_data_forecast(data_store: zarr.Group, field: str, sample: int,level: int):
-    atmorep_sample = data_store[f"{field}/sample={sample:05d}"]
-    data = atmorep_sample.data[level, 0]
-    datetime = pd.Timestamp(atmorep_sample.datetime[0])
-    lats = atmorep_sample.lat
-    lons = atmorep_sample.lon
-    return data, datetime, lats, lons
+    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
+        return level
 
-def get_level_idx_BERT(levels: np.ndarray, level: int) -> int:
-    return level
+class Forecast(DataAccess):
+    def get_levels(self, data_store: zarr.Group, field: str):
+        return data_store[f"{field}/sample=00000"].ml[:]
 
-def get_level_idx_forecast(levels: np.ndarray, level: int) -> int:
-    return np.where(levels == level)[0].tolist()[0]
+    def get_data(self,data_store: zarr.Group, field: str, sample: int,level: int):
+        atmorep_sample = data_store[f"{field}/sample={sample:05d}"]
+        data = atmorep_sample.data[level, 0]
+        datetime = pd.Timestamp(atmorep_sample.datetime[0])
+        lats = atmorep_sample.lat
+        lons = atmorep_sample.lon
+        return data, datetime, lats, lons
+
+    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
+        return np.where(levels == level)[0].tolist()[0]
 
 ######################################
 
