@@ -104,9 +104,11 @@ def test_coordinates(field, model_id, BERT, epoch = 0):
             _, datetime_target, lats_target, lons_target = get_data(target,field, s, level_idx)
             _, datetime_pred, lats_pred, lons_pred = get_data(pred, field, s, level_idx)
 
-            test_utils.check_lats(lats_pred, lats_target)
-            test_utils.check_lons(lons_pred, lons_target)
-            test_utils.check_datetimes(datetime_pred, datetime_target)
+            test_utils.test_lats_match(lats_pred, lats_target)
+            test_utils.test_lats_in_range(lats_pred)
+            test_utils.test_lons_match(lons_pred, lons_target)
+            test_utils.test_lons_in_range(lons_pred)
+            test_utils.test_datetimes_match(datetime_pred, datetime_target)
 
 #########################################################################
 

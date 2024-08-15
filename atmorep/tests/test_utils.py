@@ -53,18 +53,28 @@ def get_forecast(atmorep, field, sample,level_idx):
 
 ######################################
 
-def check_lats(lats_pred, lats_target):
+
+def test_lats_match(lats_pred, lats_target):
     assert (lats_pred[:] == lats_target[:]).all(), "Mismatch between latitudes"
-    assert (lats_pred[:] <= MAX_LAT).all(), f"latitudes are between {np.amin(lats_pred)}- {np.amax(lats_pred)}"
-    assert (lats_pred[:] >= MIN_LAT).all(), f"latitudes are between {np.amin(lats_pred)}- {np.amax(lats_pred)}"
 
-def check_lons(lons_pred, lons_target):
-    assert (lons_pred[:] == lons_target[:]).all(), "Mismatch between longitudes"
-    assert (lons_pred[:] >= MIN_LON).all(), "longitudes are between {np.amin(lons_pred)}- {np.amax(lons_pred)}"
-    assert (lons_pred[:] <= MAX_LON).all(), "longitudes are between {np.amin(lons_pred)}- {np.amax(lons_pred)}"
 
-def check_datetimes(datetimes_pred, datetimes_target):
-    assert (datetimes_pred == datetimes_target), "Mismatch between datetimes"
+def test_lats_in_range(lats_pred):
+    in_range = MIN_LAT <= lats_pred[:] <= MAX_LAT  # TODO: check syntax for np arrays
+    assert (in_range).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
+
+
+def test_lons_match(lons_pred, lons_target):
+    assert (lons_pred[:] == lons_target[:]).all(), "Mismatch between latitudes"
+
+
+def test_lons_in_range(lons_pred):
+    in_range = MIN_LON <= lons_pred[:] <= MAX_LON  # TODO: check syntax for np arrays
+    assert (in_range).all(), f"latitudes outside of between {MIN_LON} - {MAX_LON}"
+
+
+def test_datetimes_match(datetimes_pred, datetimes_target):
+    assert datetimes_pred == datetimes_target, "Mismatch between datetimes"
+
 
 ######################################
 
