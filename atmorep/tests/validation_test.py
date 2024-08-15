@@ -67,7 +67,7 @@ def test_datetime(field, model_id, BERT, epoch = 0):
             if not os.path.isfile(era5_path):
                 warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
                 continue
-            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[grib_index(field)].sel(time = datetime, latitude = lats, longitude = lons)
+            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[test_utils.FIELD_GRIB_IDX[field]].sel(time = datetime, latitude = lats, longitude = lons)
 
             #assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
             assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
@@ -138,4 +138,4 @@ def test_rmse(field, model_id, BERT, epoch = 0):
             sample_target, _, _, _ = get_data(target,field, s, level_idx)
             sample_pred, _, _, _ = get_data(pred,field, s, level_idx)
 
-            assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.get_max_RMSE(field)
+            assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[field]
