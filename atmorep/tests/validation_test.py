@@ -11,6 +11,8 @@ import atmorep.tests.test_utils as test_utils
 
 # run it with e.g. pytest -s atmorep/tests/validation_test.py --field temperature --model_id ztsut0mr --strategy BERT
 
+N_SAMPLES_MAX = 50
+
 @pytest.fixture
 def field(request):
     return request.config.getoption("field")
@@ -49,8 +51,7 @@ def test_datetime(field, data_access, target):
     Loop over all levels individually. 50 random samples for each level.
     """
 
-    nsamples = min(len(target[field]), 50)
-    samples = rnd.sample(range(len(target[field])), nsamples)
+    samples = test_utils.get_samples(target, field, N_SAMPLES_MAX)
     levels = data_access.get_levels(target, field)
 
     for s in samples:
@@ -80,8 +81,7 @@ def test_coordinates(field, data_access, target, prediction):
     50 random samples.
     """
 
-    nsamples = min(len(target[field]), 50)
-    samples = rnd.sample(range(len(target[field])), nsamples)
+    samples = test_utils.get_samples(target, field, N_SAMPLES_MAX)
     levels = data_access.get_levels(target, field)
 
     for s in samples:
@@ -105,8 +105,7 @@ def test_rmse(field, data_access, target, prediction):
     50 random samples.
     """
     
-    nsamples = min(len(target[field]), 50)
-    samples = rnd.sample(range(len(target[field])), nsamples)
+    samples = test_utils.get_samples(target, field, N_SAMPLES_MAX)
     levels = data_access.get_levels(target, field)
     
     for s in samples:

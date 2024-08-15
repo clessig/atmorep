@@ -129,3 +129,7 @@ def test_datetimes_match(datetimes_pred, datetimes_target):
 #calculate RMSE
 def compute_RMSE(pred, target):
     return np.sqrt(np.mean((pred-target)**2))
+
+def get_samples(data_store: zarr.Group, field: str, n_max: int) -> list[int]:
+    nsamples = min(len(data_store[field]), n_max)
+    return rnd.sample(range(len(data_store[field])), nsamples)
