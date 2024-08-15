@@ -36,24 +36,30 @@ FIELD_GRIB_IDX = {
 
 ##################################################################
 
-def get_group(store_path_template: str, model_id: int, epoch: int):
+
+def get_group(store_path_template: str, model_id: int, epoch: int) -> zarr.Group:
     store = zarr.ZipStore(
         store_path_template.format(model_id, model_id, str(epoch).zfill(5))
     )
-    data = zarr.group(store)
-    return data
+    return zarr.group(store)
 
-def get_BERT(atmorep, field, sample, level):
-    atmorep_sample = atmorep[f"{field}/sample={sample:05d}/ml={level:05d}"] 
+def get_levels_BERT(data_store: zarr.Group, field: str):
+    return [int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"]]
+
+def get_levels_forecast(data_store: zarr.Group, field: str):
+    return data_store[f"{field}/sample=00000"].ml[:]
+
+def get_data_BERT(data_store: zarr.Group, field: str, sample: int, level: int):
+    atmorep_sample = data_store[f"{field}/sample={sample:05d}/ml={level:05d}"] 
     data = atmorep_sample.data[0,0] 
     datetime = pd.Timestamp(atmorep_sample.datetime[0,0])
     lats = atmorep_sample.lat[0]
     lons = atmorep_sample.lon[0]
     return data, datetime, lats, lons
 
-def get_forecast(atmorep, field, sample,level_idx):
-    atmorep_sample = atmorep[f"{field}/sample={sample:05d}"]
-    data = atmorep_sample.data[level_idx, 0]
+def get_data_forecast(data_store: zarr.Group, field: str, sample: int,level: int):
+    atmorep_sample = data_store[f"{field}/sample={sample:05d}"]
+    data = atmorep_sample.data[level, 0]
     datetime = pd.Timestamp(atmorep_sample.datetime[0])
     lats = atmorep_sample.lat
     lons = atmorep_sample.lon

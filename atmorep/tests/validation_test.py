@@ -51,9 +51,12 @@ def test_datetime(field, BERT, target):
 
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
-
-    get_data = test_utils.get_BERT if BERT else test_utils.get_forecast
+    levels = (
+        test_utils.get_levels_BERT(target, field)
+        if BERT
+        else test_utils.get_levels_forecast(target, field)
+    )
+    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
 
     for level in levels:
         #TODO: make it more elegant
@@ -86,9 +89,12 @@ def test_coordinates(field, BERT, target, prediction):
 
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
-
-    get_data = test_utils.get_BERT if BERT else test_utils.get_forecast
+    levels = (
+        test_utils.get_levels_BERT(target, field)
+        if BERT
+        else test_utils.get_levels_forecast(target, field)
+    )
+    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
 
     for level in levels:
         level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
@@ -113,9 +119,12 @@ def test_rmse(field, BERT, target, prediction):
     
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
-    
-    get_data = test_utils.get_BERT if BERT else test_utils.get_forecast
+    levels = (
+        test_utils.get_levels_BERT(target, field)
+        if BERT
+        else test_utils.get_levels_forecast(target, field)
+    )
+    get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
     
     for level in levels:
         level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
