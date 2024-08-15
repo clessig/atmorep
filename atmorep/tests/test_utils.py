@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd 
+import zarr
 
 
 ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
@@ -34,6 +35,13 @@ FIELD_GRIB_IDX = {
 }
 
 ##################################################################
+
+def get_group(store_path_template: str, model_id: int, epoch: int):
+    store = zarr.ZipStore(
+        store_path_template.format(model_id, model_id, str(epoch).zfill(5))
+    )
+    data = zarr.group(store)
+    return data
 
 def get_BERT(atmorep, field, sample, level):
     atmorep_sample = atmorep[f"{field}/sample={sample:05d}/ml={level:05d}"] 

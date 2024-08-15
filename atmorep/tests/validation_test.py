@@ -23,6 +23,14 @@ def model_id(request):
 def epoch(request):
     request.config.getoption("epoch")
 
+@pytest.fixture
+def target(model_id, epoch):
+    return test_utils.get_group(test_utils.ATMOREP_TARGET, model_id, epoch)
+
+@pytest.fixture
+def prediction(model_id, epoch):
+    return test_utils.get_group(test_utils.ATMOREP_PRED, model_id, epoch)
+
 @pytest.fixture(autouse = True) 
 def BERT(request):
     strategy = request.config.getoption("strategy")
@@ -35,21 +43,15 @@ def strategy(request):
 #TODO: add test for global_forecast vs ERA5
 
 @pytest.mark.gpu
-def test_datetime(field, model_id, BERT, epoch = 0):
-
+def test_datetime(field, BERT, target):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
     """
 
-    store = zarr.ZipStore(
-        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    atmorep = zarr.group(store)
-
-    nsamples = min(len(atmorep[field]), 50)
-    samples = rnd.sample(range(len(atmorep[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in atmorep[f"{field}/sample=00000"]] if BERT else atmorep[f"{field}/sample=00000"].ml[:]
+    nsamples = min(len(target[field]), 50)
+    samples = rnd.sample(range(len(target[field])), nsamples)
+    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
 
     get_data = test_utils.get_BERT if BERT else test_utils.get_forecast
 
@@ -58,7 +60,7 @@ def test_datetime(field, model_id, BERT, epoch = 0):
         level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
 
         for s in samples:
-            data, datetime, lats, lons = get_data(atmorep, field, s, level_idx)
+            data, datetime, lats, lons = get_data(target, field, s, level_idx)
             year, month = datetime.year, str(datetime.month).zfill(2)
 
             era5_path = test_utils.ERA5_FNAME.format(
@@ -75,22 +77,12 @@ def test_datetime(field, model_id, BERT, epoch = 0):
 #############################################################################
 
 @pytest.mark.gpu
-def test_coordinates(field, model_id, BERT, epoch = 0):
+def test_coordinates(field, BERT, target, prediction):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
     50 random samples.
     """
-
-    store_t = zarr.ZipStore(
-        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    target = zarr.group(store_t)
-
-    store_p = zarr.ZipStore(
-        test_utils.ATMOREP_PRED.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    pred = zarr.group(store_p)
 
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
@@ -102,7 +94,7 @@ def test_coordinates(field, model_id, BERT, epoch = 0):
         level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
         for s in samples:
             _, datetime_target, lats_target, lons_target = get_data(target,field, s, level_idx)
-            _, datetime_pred, lats_pred, lons_pred = get_data(pred, field, s, level_idx)
+            _, datetime_pred, lats_pred, lons_pred = get_data(prediction, field, s, level_idx)
 
             test_utils.test_lats_match(lats_pred, lats_target)
             test_utils.test_lats_in_range(lats_pred)
@@ -113,20 +105,11 @@ def test_coordinates(field, model_id, BERT, epoch = 0):
 #########################################################################
 
 @pytest.mark.gpu
-def test_rmse(field, model_id, BERT, epoch = 0):
+def test_rmse(field, BERT, target, prediction):
     """
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
     """
-    store_t = zarr.ZipStore(
-        test_utils.ATMOREP_TARGET.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    target = zarr.group(store_t)
-
-    store_p = zarr.ZipStore(
-        test_utils.ATMOREP_PRED.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    pred = zarr.group(store_p)
     
     nsamples = min(len(target[field]), 50)
     samples = rnd.sample(range(len(target[field])), nsamples)
@@ -138,6 +121,6 @@ def test_rmse(field, model_id, BERT, epoch = 0):
         level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
         for s in samples:
             sample_target, _, _, _ = get_data(target,field, s, level_idx)
-            sample_pred, _, _, _ = get_data(pred,field, s, level_idx)
+            sample_pred, _, _, _ = get_data(prediction,field, s, level_idx)
 
             assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[field]
