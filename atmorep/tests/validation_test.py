@@ -53,9 +53,9 @@ def test_datetime(field, data_access, target):
     samples = rnd.sample(range(len(target[field])), nsamples)
     levels = data_access.get_levels(target, field)
 
-    for level in levels:
-        level_idx: int = data_access.get_level_idx(levels, level)
-        for s in samples:
+    for s in samples:
+        for level in levels:
+            level_idx: int = data_access.get_level_idx(levels, level)
             data, datetime, lats, lons = data_access.get_data(target, field, s, level_idx)
             year, month = datetime.year, str(datetime.month).zfill(2)
 
@@ -84,9 +84,9 @@ def test_coordinates(field, data_access, target, prediction):
     samples = rnd.sample(range(len(target[field])), nsamples)
     levels = data_access.get_levels(target, field)
 
-    for level in levels:
-        level_idx: int = data_access.get_level_idx(levels, level)
-        for s in samples:
+    for s in samples:
+        for level in levels:
+            level_idx: int = data_access.get_level_idx(levels, level)
             _, datetime_target, lats_target, lons_target = data_access.get_data(target,field, s, level_idx)
             _, datetime_pred, lats_pred, lons_pred = data_access.get_data(prediction, field, s, level_idx)
 
@@ -109,9 +109,9 @@ def test_rmse(field, data_access, target, prediction):
     samples = rnd.sample(range(len(target[field])), nsamples)
     levels = data_access.get_levels(target, field)
     
-    for level in levels:
-        level_idx: int = data_access.get_level_idx(levels, level)
-        for s in samples:
+    for s in samples:
+        for level in levels:
+            level_idx: int = data_access.get_level_idx(levels, level)
             sample_target, _, _, _ = data_access.get_data(target,field, s, level_idx)
             sample_pred, _, _, _ = data_access.get_data(prediction,field, s, level_idx)
 
