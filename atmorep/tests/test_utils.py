@@ -65,6 +65,12 @@ def get_data_forecast(data_store: zarr.Group, field: str, sample: int,level: int
     lons = atmorep_sample.lon
     return data, datetime, lats, lons
 
+def get_level_idx_BERT(levels: np.ndarray, level: int) -> int:
+    return level
+
+def get_level_idx_forecast(levels: np.ndarray, level: int) -> int:
+    return np.where(levels == level)[0].tolist()[0]
+
 ######################################
 
 

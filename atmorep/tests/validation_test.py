@@ -59,8 +59,12 @@ def test_datetime(field, BERT, target):
     get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
 
     for level in levels:
-        #TODO: make it more elegant
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
+        # TODO: make it more elegant
+        level_idx: int = (
+            test_utils.get_level_idx_BERT(levels, level)
+            if BERT
+            else test_utils.get_level_idx_forecast(levels, level)
+        )
 
         for s in samples:
             data, datetime, lats, lons = get_data(target, field, s, level_idx)
@@ -97,7 +101,11 @@ def test_coordinates(field, BERT, target, prediction):
     get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
 
     for level in levels:
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
+        level_idx: int = (
+            test_utils.get_level_idx_BERT(levels, level)
+            if BERT
+            else test_utils.get_level_idx_forecast(levels, level)
+        )
         for s in samples:
             _, datetime_target, lats_target, lons_target = get_data(target,field, s, level_idx)
             _, datetime_pred, lats_pred, lons_pred = get_data(prediction, field, s, level_idx)
@@ -127,7 +135,11 @@ def test_rmse(field, BERT, target, prediction):
     get_data = test_utils.get_data_BERT if BERT else test_utils.get_data_forecast
     
     for level in levels:
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
+        level_idx: int = (
+            test_utils.get_level_idx_BERT(levels, level)
+            if BERT
+            else test_utils.get_level_idx_forecast(levels, level)
+        )
         for s in samples:
             sample_target, _, _, _ = get_data(target,field, s, level_idx)
             sample_pred, _, _, _ = get_data(prediction,field, s, level_idx)
