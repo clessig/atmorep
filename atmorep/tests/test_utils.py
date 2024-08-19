@@ -9,10 +9,6 @@ import strenum
 from collections.abc import Iterable
 
 
-ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
-ATMOREP_PRED = r"./results/id{}/results_id{}_epoch{}_pred.zarr"
-ATMOREP_TARGET = r"./results/id{}/results_id{}_epoch{}_target.zarr"
-
 MAX_LAT = 90.
 MIN_LAT = -90.
 MAX_LON = 0.
@@ -40,29 +36,22 @@ FIELD_GRIB_IDX = {
     "specific_humidity": "q",
 }
 
+class OutputType(strenum.StrEnum):
+    prediction = "prediction"
+    target = "target"
+
+ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
+OUTPUT_PATH_TEMPLATE = {
+    OutputType.prediction: r"./results/id{}/results_id{}_epoch{}_pred.zarr",
+    OutputType.target: r"./results/id{}/results_id{}_epoch{}_target.zarr"
+}
+
 ##################################################################
-
-
-def get_group(store_path_template: str, model_id: int, epoch: int) -> zarr.Group:
-    store = zarr.ZipStore(
-        store_path_template.format(model_id, model_id, str(epoch).zfill(5))
-    )
-    return zarr.group(store)
 
 class DataAccess(abc.ABC):
     def __init__(self):
         pass
     
-    @classmethod
-    def construct(cls, strategy: str):
-        match strategy:
-            case "BERT":
-                return BERT()
-            case "temporal_interpolation":
-                return BERT()
-            case _:
-                return Forecast()
-            
     @abc.abstractmethod
     def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
         pass
@@ -114,9 +103,78 @@ class Forecast(DataAccess):
         return np.where(levels == level)[0].tolist()[0] # multiple indexes per lvl ?
 
 
+class ValidationConfig:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = object.__new__(cls)
+
+        return cls._instance
+    
+
+    def __init__(self, field: str, model_id: str, epoch: int, strategy: str):
+        self.field = field
+        self.model_id = model_id
+        self.epoch = epoch
+        self.strategy = strategy
+    
+    @classmethod
+    def get(cls) -> "ValidationConfig":
+        if cls._instance is None:
+            raise RuntimeError("try to get uninitialized Validation Config.")
+        return cls._instance
+    
+    @classmethod
+    def set(cls, field: str, model_id: str, epoch: int, strategy: str):
+        cls(field, model_id, epoch, strategy) # type: ignore
+    
+    @property
+    def data_access(self) -> DataAccess:
+        match self.strategy:
+            case "BERT":
+                return BERT()
+            case "temporal_interpolation":
+                return BERT()
+            case _:
+                return Forecast()
+        
+    def get_zarr(self, output_type: OutputType) -> zarr.Group:
+        store_path_template = OUTPUT_PATH_TEMPLATE[output_type]
+        store = zarr.ZipStore(
+            store_path_template.format(self.model_id, self.model_id, str(self.epoch).zfill(5))
+        )
+        return zarr.group(store)
+
+    def get_levels(
+        self, output_type: OutputType = OutputType.target
+    ) -> NDArray[np.int64]:
+        data_store = self.get_zarr(output_type)
+        return self.data_access.get_levels(data_store, self.field)
+    
+    def get_samples(self, n_max: int) -> list[int]:
+        data_store = self.get_zarr(OutputType.target)
+        nsamples = min(len(data_store[self.field]), n_max)
+        return rnd.sample(range(len(data_store[self.field])), nsamples)
+    
+    def samples_and_levels(
+        self, resample_lvls=False, n_samples_max=50
+    ) -> Iterable[tuple[int, int]]:
+        levels = self.get_levels()
+        if resample_lvls:
+            iteration_tuples = (
+                (sample, lvl)
+                for sample in self.get_samples(n_samples_max)
+                for lvl in levels
+            )
+        else:
+            samples = self.get_samples(n_samples_max)
+            iteration_tuples = it.product(samples, levels)
+        
+        return iteration_tuples
+
 
 ######################################
-
 
 def test_lats_match(lats_pred, lats_target):
     assert (lats_pred[:] == lats_target[:]).all(), "Mismatch between latitudes"
@@ -145,7 +203,3 @@ def test_datetimes_match(datetimes_pred, datetimes_target):
 # calculate RMSE
 def compute_RMSE(pred: NDArray[np.float64], target: NDArray[np.float64]) -> float:
     return np.sqrt(np.mean((pred-target)**2))
-
-def get_samples(data_store: zarr.Group, field: str, n_max: int) -> list[int]:
-    nsamples = min(len(data_store[field]), n_max)
-    return rnd.sample(range(len(data_store[field])), nsamples)
