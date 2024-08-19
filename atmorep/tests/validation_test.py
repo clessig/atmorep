@@ -36,9 +36,6 @@ def test_datetime(sample, level, target, config: test_utils.ValidationConfig):
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
     """
-    datetime_inner(sample, level, target, config)
-
-def datetime_inner(sample: int, level: int, target, config: test_utils.ValidationConfig):    
     levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
     
@@ -75,12 +72,6 @@ def test_coordinates(sample, level, target, prediction, config: test_utils.Valid
     50 random samples.
     """
 
-    coordinates_inner(sample, level, target, prediction, config)
-
-
-def coordinates_inner(
-    s, level, target, prediction, config: test_utils.ValidationConfig
-):
     levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
     _, datetime_target, lats_target, lons_target = config.data_access.get_data(target,config.field, s, level_idx)
@@ -92,7 +83,6 @@ def coordinates_inner(
     test_utils.test_lons_in_range(lons_pred)
     test_utils.test_datetimes_match(datetime_pred, datetime_target)
 
-
 @pytest.mark.gpu
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
@@ -103,12 +93,6 @@ def test_rmse(sample, level, target, prediction, config: test_utils.ValidationCo
     50 random samples.
     """
 
-    rmse_inner(sample, level, target, prediction, config)
-
-
-def rmse_inner(
-    sample, level, target, prediction, config: test_utils.ValidationConfig
-):
     levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
     sample_target, _, _, _ = config.data_access.get_data(target, config.field, sample, level_idx)
