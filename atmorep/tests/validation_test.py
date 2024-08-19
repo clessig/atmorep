@@ -45,7 +45,7 @@ def strategy(request):
 #TODO: add test for global_forecast vs ERA5
 
 @pytest.mark.gpu
-def test_datetime(field, data_access, target):
+def test_datetime(samples, levels, field, data_access, target):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
@@ -56,20 +56,25 @@ def test_datetime(field, data_access, target):
 
     for s in samples:
         for level in levels:
-            level_idx: int = data_access.get_level_idx(levels, level)
-            data, datetime, lats, lons = data_access.get_data(target, field, s, level_idx)
-            year, month = datetime.year, str(datetime.month).zfill(2)
+            datetime_inner(s, level, field, data_access, levels, target)
 
-            era5_path = test_utils.ERA5_FNAME.format(
-                field, level, field, year, month, level
-            )
-            if not os.path.isfile(era5_path):
-                warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
-                continue
-            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[test_utils.FIELD_GRIB_IDX[field]].sel(time = datetime, latitude = lats, longitude = lons)
+def datetime_inner(sample: int, level: int, field, data_access, levels, target):
+    level_idx: int = data_access.get_level_idx(levels, level)
+    data, datetime, lats, lons = data_access.get_data(
+        target, field, sample, level_idx
+    )
+    year, month = datetime.year, str(datetime.month).zfill(2)
 
-            #assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
-            assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+    era5_path = test_utils.ERA5_FNAME.format(
+        field, level, field, year, month, level
+    )
+    if not os.path.isfile(era5_path):
+        warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
+    else:
+        era5 = xr.open_dataset(era5_path, engine = "cfgrib")[test_utils.FIELD_GRIB_IDX[field]].sel(time = datetime, latitude = lats, longitude = lons)
+
+        # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+        assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
 #############################################################################
 
@@ -86,17 +91,23 @@ def test_coordinates(field, data_access, target, prediction):
 
     for s in samples:
         for level in levels:
-            level_idx: int = data_access.get_level_idx(levels, level)
-            _, datetime_target, lats_target, lons_target = data_access.get_data(target,field, s, level_idx)
-            _, datetime_pred, lats_pred, lons_pred = data_access.get_data(prediction, field, s, level_idx)
-
-            test_utils.test_lats_match(lats_pred, lats_target)
-            test_utils.test_lats_in_range(lats_pred)
-            test_utils.test_lons_match(lons_pred, lons_target)
-            test_utils.test_lons_in_range(lons_pred)
-            test_utils.test_datetimes_match(datetime_pred, datetime_target)
+            coordinates_inner(
+                s, level, field, data_access, target, prediction, levels
+            )
 
 #########################################################################
+
+def coordinates_inner(s, level, field, data_access, target, prediction, levels):
+    level_idx: int = data_access.get_level_idx(levels, level)
+    _, datetime_target, lats_target, lons_target = data_access.get_data(target,field, s, level_idx)
+    _, datetime_pred, lats_pred, lons_pred = data_access.get_data(prediction, field, s, level_idx)
+
+    test_utils.test_lats_match(lats_pred, lats_target)
+    test_utils.test_lats_in_range(lats_pred)
+    test_utils.test_lons_match(lons_pred, lons_target)
+    test_utils.test_lons_in_range(lons_pred)
+    test_utils.test_datetimes_match(datetime_pred, datetime_target)
+    
 
 @pytest.mark.gpu
 def test_rmse(field, data_access, target, prediction):
@@ -110,8 +121,12 @@ def test_rmse(field, data_access, target, prediction):
     
     for s in samples:
         for level in levels:
-            level_idx: int = data_access.get_level_idx(levels, level)
-            sample_target, _, _, _ = data_access.get_data(target,field, s, level_idx)
-            sample_pred, _, _, _ = data_access.get_data(prediction,field, s, level_idx)
+            rmse_inner(level, levels, s, field, target, prediction, data_access)
+            
 
-            assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[field]
+def rmse_inner(level, levels, sample, field, target, prediction, data_access):
+    level_idx: int = data_access.get_level_idx(levels, level)
+    sample_target, _, _, _ = data_access.get_data(target,field, sample, level_idx)
+    sample_pred, _, _, _ = data_access.get_data(prediction,field, sample, level_idx)
+
+    assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[field]
