@@ -18,27 +18,30 @@ def config():
     return test_utils.ValidationConfig.get()
 
 @pytest.fixture(scope="module")
-def target():
-    return test_utils.ValidationConfig.get().get_zarr(
+def target(config):
+    return config.get_zarr(
         test_utils.OutputType.target
     )
 
 @pytest.fixture(scope="module")
-def prediction():
-    return test_utils.ValidationConfig.get().get_zarr(
+def prediction(config):
+    return config.get_zarr(
         test_utils.OutputType.prediction
     )
+
+@pytest.fixture(scope="module")
+def levels(config):
+    return config.get_levels(test_utils.OutputType.target)
 
 
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
-def test_datetime(sample, level, target, config: test_utils.ValidationConfig):
+def test_datetime(sample, level, levels, target, config: test_utils.ValidationConfig):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
     """
-    levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
     
     data, datetime, lats, lons = config.data_access.get_data(
@@ -67,17 +70,18 @@ def test_datetime(sample, level, target, config: test_utils.ValidationConfig):
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
-def test_coordinates(sample, level, target, prediction, config: test_utils.ValidationConfig):
+def test_coordinates(
+    sample, level, levels, target, prediction, config: test_utils.ValidationConfig
+):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
     50 random samples.
     """
 
-    levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
-    _, datetime_target, lats_target, lons_target = config.data_access.get_data(target,config.field, s, level_idx)
-    _, datetime_pred, lats_pred, lons_pred = config.data_access.get_data(prediction, config.field, s, level_idx)
+    _, datetime_target, lats_target, lons_target = config.data_access.get_data(target,config.field, sample, level_idx)
+    _, datetime_pred, lats_pred, lons_pred = config.data_access.get_data(prediction, config.field, sample, level_idx)
 
     test_utils.test_lats_match(lats_pred, lats_target)
     test_utils.test_lats_in_range(lats_pred)
@@ -89,13 +93,14 @@ def test_coordinates(sample, level, target, prediction, config: test_utils.Valid
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
-def test_rmse(sample, level, target, prediction, config: test_utils.ValidationConfig):
+def test_rmse(
+    sample, level, levels, target, prediction, config: test_utils.ValidationConfig
+    ):
     """
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
     """
 
-    levels = config.get_levels(test_utils.OutputType.target)
     level_idx: int = config.data_access.get_level_idx(levels, level)
     sample_target, _, _, _ = config.data_access.get_data(target, config.field, sample, level_idx)
     sample_pred, _, _, _ = config.data_access.get_data(prediction, config.field, sample, level_idx)
