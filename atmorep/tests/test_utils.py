@@ -1,6 +1,12 @@
+import abc
+from numpy.typing import NDArray
 import numpy as np
 import pandas as pd 
 import zarr
+import random as rnd
+import itertools as it
+import strenum
+from collections.abc import Iterable
 
 
 ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
@@ -58,7 +64,7 @@ class DataAccess(abc.ABC):
                 return Forecast()
             
     @abc.abstractmethod
-    def get_levels(self, data_store: zarr.Group, field: str):
+    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
         pass
     
     @abc.abstractmethod
@@ -66,38 +72,48 @@ class DataAccess(abc.ABC):
         pass
     
     @abc.abstractmethod
-    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
+    def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
         pass
 
 class BERT(DataAccess):
-    def get_levels(self, data_store: zarr.Group, field: str):
-        return [int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"]]
+
+    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
+        iterable = (int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"])
+        return np.fromiter(iterable, int)
 
     def get_data(self, data_store: zarr.Group, field: str, sample: int, level: int):
-        atmorep_sample = data_store[f"{field}/sample={sample:05d}/ml={level:05d}"] 
-        data = atmorep_sample.data[0,0] 
-        datetime = pd.Timestamp(atmorep_sample.datetime[0,0])
-        lats = atmorep_sample.lat[0]
-        lons = atmorep_sample.lon[0]
+        data_sample: NDArray[np.int64] = data_store[
+            f"{field}/sample={sample:05d}/ml={level:05d}"
+        ] # type: ignore
+        data = data_sample.data[0,0] # type: ignore
+        datetime = pd.Timestamp(data_sample.datetime[0,0]) # type: ignore
+        lats = data_sample.lat[0] # type: ignore
+        lons = data_sample.lon[0] # type: ignore
         return data, datetime, lats, lons
 
-    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
+    def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
         return level
 
+
 class Forecast(DataAccess):
-    def get_levels(self, data_store: zarr.Group, field: str):
-        return data_store[f"{field}/sample=00000"].ml[:]
+    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
+        levels: NDArray[np.int64] = data_store[f"{field}/sample=00000"].ml[:]  # type: ignore (custom metadata)
+        print(levels)
+        return levels
 
     def get_data(self,data_store: zarr.Group, field: str, sample: int,level: int):
-        atmorep_sample = data_store[f"{field}/sample={sample:05d}"]
-        data = atmorep_sample.data[level, 0]
-        datetime = pd.Timestamp(atmorep_sample.datetime[0])
-        lats = atmorep_sample.lat
-        lons = atmorep_sample.lon
+        # ignore custom metadata attributes of zarr groups
+        data_sample = data_store[f"{field}/sample={sample:05d}"]
+        data = data_sample.data[level, 0] # type: ignore
+        datetime = pd.Timestamp(data_sample.datetime[0]) # type: ignore
+        lats = data_sample.lat # type: ignore
+        lons = data_sample.lon # type: ignore
         return data, datetime, lats, lons
 
     def get_level_idx(self, levels: np.ndarray, level: int) -> int:
-        return np.where(levels == level)[0].tolist()[0]
+        return np.where(levels == level)[0].tolist()[0] # multiple indexes per lvl ?
+
+
 
 ######################################
 
@@ -126,8 +142,8 @@ def test_datetimes_match(datetimes_pred, datetimes_target):
 
 ######################################
 
-#calculate RMSE
-def compute_RMSE(pred, target):
+# calculate RMSE
+def compute_RMSE(pred: NDArray[np.float64], target: NDArray[np.float64]) -> float:
     return np.sqrt(np.mean((pred-target)**2))
 
 def get_samples(data_store: zarr.Group, field: str, n_max: int) -> list[int]:
