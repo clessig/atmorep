@@ -30,7 +30,9 @@ def prediction():
     )
 
 
-@pytest.mark.parametrize(("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels())
+@pytest.mark.parametrize(
+    ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
+)
 def test_datetime(sample, level, target, config: test_utils.ValidationConfig):
     """
     Check against ERA5 timestamps.
