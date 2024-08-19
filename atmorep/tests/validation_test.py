@@ -13,6 +13,9 @@ import atmorep.tests.test_utils as test_utils
 N_SAMPLES_MAX = 50
 RESAMPLE_LVLS = False
 
+@pytest.fixture(scope="module")
+def config():
+    return test_utils.ValidationConfig.get()
 
 @pytest.fixture(scope="module")
 def target():
@@ -28,13 +31,12 @@ def prediction():
 
 
 
-def test_datetime(target):
+def test_datetime(target, config: test_utils.ValidationConfig):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
     """
 
-    config = test_utils.ValidationConfig.get()
     iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
     for sample, level in iteration_tuples:
@@ -65,18 +67,15 @@ def datetime_inner(sample: int, level: int, target, config: test_utils.Validatio
         # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
         assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
-#############################################################################
 
 @pytest.mark.gpu
-def test_coordinates(target, prediction):
+def test_coordinates(target, prediction, config: test_utils.ValidationConfig):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
     50 random samples.
     """
 
-    config = test_utils.ValidationConfig.get()
-    config = test_utils.ValidationConfig.get()
     iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
     for sample, level in iteration_tuples:
@@ -101,14 +100,12 @@ def coordinates_inner(
 
 
 @pytest.mark.gpu
-def test_rmse(target, prediction):
+def test_rmse(target, prediction, config: test_utils.ValidationConfig):
     """
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
     """
 
-    config = test_utils.ValidationConfig.get()
-    config = test_utils.ValidationConfig.get()
     iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
     for sample, level in iteration_tuples:
