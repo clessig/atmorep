@@ -13,6 +13,7 @@ import atmorep.tests.test_utils as test_utils
 N_SAMPLES_MAX = 50
 RESAMPLE_LVLS = False
 
+
 @pytest.fixture(scope="module")
 def target():
     return test_utils.ValidationConfig.get().get_zarr(
@@ -34,12 +35,10 @@ def test_datetime(target):
     """
 
     config = test_utils.ValidationConfig.get()
-    samples = config.get_samples(N_SAMPLES_MAX)
-    levels = config.get_levels(test_utils.OutputType.target)
+    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
-    for s in samples:
-        for level in levels:
-            datetime_inner(s, level, target, config)
+    for sample, level in iteration_tuples:
+        datetime_inner(sample, level, target, config)
 
 def datetime_inner(sample: int, level: int, target, config: test_utils.ValidationConfig):    
     levels = config.get_levels(test_utils.OutputType.target)
@@ -77,14 +76,12 @@ def test_coordinates(target, prediction):
     """
 
     config = test_utils.ValidationConfig.get()
-    samples = config.get_samples(N_SAMPLES_MAX)
-    levels = config.get_levels(test_utils.OutputType.target)
+    config = test_utils.ValidationConfig.get()
+    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
-
-    for s in samples:
-        for level in levels:
-            coordinates_inner(
-                s, level, target, prediction, config
+    for sample, level in iteration_tuples:
+        coordinates_inner(
+                sample, level, target, prediction, config
             )
 
 
@@ -111,12 +108,11 @@ def test_rmse(target, prediction):
     """
 
     config = test_utils.ValidationConfig.get()
-    samples = config.get_samples(N_SAMPLES_MAX)
-    levels = config.get_levels(test_utils.OutputType.target)
+    config = test_utils.ValidationConfig.get()
+    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
 
-    for s in samples:
-        for level in levels:
-            rmse_inner(s, level, target, prediction, config)
+    for sample, level in iteration_tuples:
+        rmse_inner(sample, level, target, prediction, config)
 
 
 def rmse_inner(
