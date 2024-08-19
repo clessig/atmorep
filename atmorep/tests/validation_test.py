@@ -30,17 +30,13 @@ def prediction():
     )
 
 
-
-def test_datetime(target, config: test_utils.ValidationConfig):
+@pytest.mark.parametrize(("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels())
+def test_datetime(sample, level, target, config: test_utils.ValidationConfig):
     """
     Check against ERA5 timestamps.
     Loop over all levels individually. 50 random samples for each level.
     """
-
-    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
-
-    for sample, level in iteration_tuples:
-        datetime_inner(sample, level, target, config)
+    datetime_inner(sample, level, target, config)
 
 def datetime_inner(sample: int, level: int, target, config: test_utils.ValidationConfig):    
     levels = config.get_levels(test_utils.OutputType.target)
@@ -69,19 +65,17 @@ def datetime_inner(sample: int, level: int, target, config: test_utils.Validatio
 
 
 @pytest.mark.gpu
-def test_coordinates(target, prediction, config: test_utils.ValidationConfig):
+@pytest.mark.parametrize(
+    ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
+)
+def test_coordinates(sample, level, target, prediction, config: test_utils.ValidationConfig):
     """
     Check that coordinates match between target and prediction. 
     Check also that latitude and longitudes are in geographical coordinates
     50 random samples.
     """
 
-    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
-
-    for sample, level in iteration_tuples:
-        coordinates_inner(
-                sample, level, target, prediction, config
-            )
+    coordinates_inner(sample, level, target, prediction, config)
 
 
 def coordinates_inner(
@@ -100,16 +94,16 @@ def coordinates_inner(
 
 
 @pytest.mark.gpu
-def test_rmse(target, prediction, config: test_utils.ValidationConfig):
+@pytest.mark.parametrize(
+    ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
+)
+def test_rmse(sample, level, target, prediction, config: test_utils.ValidationConfig):
     """
     Test that for each field the RMSE does not exceed a certain value. 
     50 random samples.
     """
 
-    iteration_tuples = config.samples_and_levels(RESAMPLE_LVLS, N_SAMPLES_MAX)
-
-    for sample, level in iteration_tuples:
-        rmse_inner(sample, level, target, prediction, config)
+    rmse_inner(sample, level, target, prediction, config)
 
 
 def rmse_inner(
