@@ -1,5 +1,6 @@
 import abc
 from numpy.typing import NDArray
+from typing import Any
 import numpy as np
 import pandas as pd 
 import zarr
@@ -51,15 +52,17 @@ OUTPUT_PATH_TEMPLATE = {
 class DataAccess(abc.ABC):
     def __init__(self):
         pass
-    
+
     @abc.abstractmethod
     def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
         pass
-    
+
     @abc.abstractmethod
-    def get_data(self, data_store: zarr.Group, field: str, sample: int, level):
+    def get_data(
+        self, data_store: zarr.Group, field: str, sample: int, level
+    ) -> tuple[Any, Any, Any, Any]:
         pass
-    
+
     @abc.abstractmethod
     def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
         pass
@@ -70,7 +73,9 @@ class BERT(DataAccess):
         iterable = (int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"])
         return np.fromiter(iterable, int)
 
-    def get_data(self, data_store: zarr.Group, field: str, sample: int, level: int):
+    def get_data(
+        self, data_store: zarr.Group, field: str, sample: int, level: int
+    ) -> tuple[Any, Any, Any, Any]:
         data_sample: NDArray[np.int64] = data_store[
             f"{field}/sample={sample:05d}/ml={level:05d}"
         ] # type: ignore
@@ -90,7 +95,9 @@ class Forecast(DataAccess):
         print(levels)
         return levels
 
-    def get_data(self,data_store: zarr.Group, field: str, sample: int,level: int):
+    def get_data(
+        self,data_store: zarr.Group, field: str, sample: int,level: int
+    ) -> tuple[Any, Any, Any, Any]:
         # ignore custom metadata attributes of zarr groups
         data_sample = data_store[f"{field}/sample={sample:05d}"]
         data = data_sample.data[level, 0] # type: ignore
@@ -201,5 +208,7 @@ def test_datetimes_match(datetimes_pred, datetimes_target):
 ######################################
 
 # calculate RMSE
-def compute_RMSE(pred: NDArray[np.float64], target: NDArray[np.float64]) -> float:
+def compute_RMSE(
+    pred: NDArray[np.float64], target: NDArray[np.float64]
+) -> NDArray[np.float64]:
     return np.sqrt(np.mean((pred-target)**2))
