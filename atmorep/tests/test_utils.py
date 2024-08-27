@@ -12,8 +12,8 @@ from collections.abc import Iterable
 
 MAX_LAT = 90.
 MIN_LAT = -90.
-MAX_LON = 0.
-MIN_LON = 360.
+MIN_LON = 0.
+MAX_LON = 360.
 
 FIELD_MAX_RMSE = {
     "temperature": 3,
@@ -92,7 +92,6 @@ class BERT(DataAccess):
 class Forecast(DataAccess):
     def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
         levels: NDArray[np.int64] = data_store[f"{field}/sample=00000"].ml[:]  # type: ignore (custom metadata)
-        print(levels)
         return levels
 
     def get_data(
@@ -113,7 +112,7 @@ class Forecast(DataAccess):
 class ValidationConfig:
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = object.__new__(cls)
 
@@ -184,21 +183,23 @@ class ValidationConfig:
 ######################################
 
 def test_lats_match(lats_pred, lats_target):
-    assert (lats_pred[:] == lats_target[:]).all(), "Mismatch between latitudes"
+    assert np.all(lats_pred[:] == lats_target[:]), "Mismatch between latitudes"
 
 
 def test_lats_in_range(lats_pred):
-    in_range = MIN_LAT <= lats_pred[:] <= MAX_LAT  # TODO: check syntax for np arrays
-    assert (in_range).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
+    bigger_min = MIN_LAT <= lats_pred[:]
+    smaller_max = lats_pred[:] <= MAX_LAT
+    assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
 
 
 def test_lons_match(lons_pred, lons_target):
-    assert (lons_pred[:] == lons_target[:]).all(), "Mismatch between latitudes"
+    assert np.all(lons_pred[:] == lons_target[:]), "Mismatch between latitudes"
 
 
 def test_lons_in_range(lons_pred):
-    in_range = MIN_LON <= lons_pred[:] <= MAX_LON  # TODO: check syntax for np arrays
-    assert (in_range).all(), f"latitudes outside of between {MIN_LON} - {MAX_LON}"
+    bigger_min = MIN_LON <= lons_pred[:]
+    smaller_max = lons_pred[:] <= MAX_LON
+    assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LON} - {MAX_LON}"
 
 
 def test_datetimes_match(datetimes_pred, datetimes_target):
