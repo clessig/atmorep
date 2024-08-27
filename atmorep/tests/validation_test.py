@@ -66,7 +66,6 @@ def test_datetime(sample, level, levels, target, config: test_utils.ValidationCo
         assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
 
-@pytest.mark.gpu
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
@@ -89,7 +88,6 @@ def test_coordinates(
     test_utils.test_lons_in_range(lons_pred)
     test_utils.test_datetimes_match(datetime_pred, datetime_target)
 
-@pytest.mark.gpu
 @pytest.mark.parametrize(
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
