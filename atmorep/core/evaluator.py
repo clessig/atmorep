@@ -121,7 +121,7 @@ class Evaluator( Trainer_BERT) :
       fields = [field[0] for field in cf.fields_prediction]
       for field in fields:
         pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id, "--strategy", cf.BERT_strategy])
-
+      
   ##############################################
   @staticmethod
   def BERT( cf, model_id, model_epoch, devices, args = {}) :
@@ -220,6 +220,9 @@ class Evaluator( Trainer_BERT) :
     cf.num_samples_validate = 128
     Evaluator.parse_args( cf, args)
     utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
+    cf.batch_size = 10 # Asma: Cluster limitation
+    cf.batch_size_validation = 10 # Asma: Cluster limitation
+    cf.years_val = [2021] # Asma: quick fix cuz was using model_id 3qou60es
     Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
