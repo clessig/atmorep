@@ -39,13 +39,6 @@ def temporal_interpolation(request): # Asma
     strategy = request.config.getoption("strategy")
     return strategy == 'temporal_interpolation'
 
-# Asma - to be deleted
-# @pytest.fixture(autouse = True) # Asma, didn't add this to Issue Todo
-# def idx_time_mask(request):
-#     print(f'request.config.getoption("idx_time_mask") = {request.config.getoption("idx_time_mask")}')
-#     plop = 
-#     return request.config.getoption("idx_time_mask")
-
 #TODO: add test for global_forecast vs ERA5
 
 def test_datetime(field, model_id, BERT, epoch = 0):
