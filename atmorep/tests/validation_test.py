@@ -4,6 +4,7 @@ import cfgrib
 import xarray as xr
 import numpy as np 
 import random as rnd
+import json
 import warnings
 import os
 
@@ -28,9 +29,22 @@ def BERT(request):
     strategy = request.config.getoption("strategy")
     return (strategy == 'BERT' or strategy == 'temporal_interpolation')
 
+# Asma: What is the purpose of this function?
 @pytest.fixture(autouse = True) 
 def strategy(request):
     return request.config.getoption("strategy")
+
+@pytest.fixture(autouse = True) 
+def temporal_interpolation(request): # Asma
+    strategy = request.config.getoption("strategy")
+    return strategy == 'temporal_interpolation'
+
+# Asma - to be deleted
+# @pytest.fixture(autouse = True) # Asma, didn't add this to Issue Todo
+# def idx_time_mask(request):
+#     print(f'request.config.getoption("idx_time_mask") = {request.config.getoption("idx_time_mask")}')
+#     plop = 
+#     return request.config.getoption("idx_time_mask")
 
 #TODO: add test for global_forecast vs ERA5
 
@@ -60,7 +74,7 @@ def test_datetime(field, model_id, BERT, epoch = 0):
 
             era5_path = era5_fname().format(field, level, field, year, month, level)
             if not os.path.isfile(era5_path):
-                warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
+                warnings.warn(UserWarning((f"era5_path = {era5_path} Timestamp {datetime} not found in ERA5. Skipping")))
                 continue
             era5 = xr.open_dataset(era5_path, engine = "cfgrib")[grib_index(field)].sel(time = datetime, latitude = lats, longitude = lons)
 
@@ -124,3 +138,46 @@ def test_rmse(field, model_id, BERT, epoch = 0):
             sample_pred, _, _, _ = get_data(pred,field, s, level_idx)
 
             assert compute_RMSE(sample_target, sample_pred).mean() < get_max_RMSE(field)
+
+##################################################################################
+# Asma c:
+
+# def test_target_vs_era5(field, model_id, BERT, epoch = 0):
+#     print(f"Hello world!")
+#     return 0
+
+def test_idx_time_mask(field, model_id, BERT, epoch = 0):
+
+    """
+    Check against ERA5 timestamps, if the right time stamps are being masked
+    Loop over all levels individually. 5 random samples for each level.
+    """
+    if temporal_interpolation:
+        store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
+        target = zarr.group(store_t)
+
+        store_s = zarr.ZipStore(atmorep_source().format(model_id, model_id, str(epoch).zfill(5)))
+        source = zarr.group(store_s)
+
+        nsamples = min(len(atmorep_target[field]), 5)
+        samples = rnd.sample(range(len(atmorep_target[field])), nsamples)
+        levels = [int(f.split("=")[1]) for f in atmorep_target[f"{field}/sample=00000"]]
+
+        with open(atmorep_json().format(model_id, model_id), 'r') as file_model_json:
+            model_json = json.load(file_model_json)
+            
+        idx_time_mask = model_json['idx_time_mask']
+        warnings.warn(UserWarning((f"idx_time_mask is {idx_time_mask} and is of type {type(idx_time_mask)}")))
+    # levels = [int(f.split("=")[1]) for f in atmorep_target[f"{field}/sample=00000"]] if BERT else atmorep_target[f"{field}/sample=00000"].ml[:]
+        # get_data = get_BERT # Asma: useless
+        for level in levels:
+            level_idx = level
+            for s in samples:
+                data_target, datetime_target, lats_target, lons_target = get_BERT(target,field, s, level_idx)
+                data_source, datetime_source, lats_source, lons_source= get_BERT(source, field, s, level_idx)
+
+                check_masked_timesteps(datetime_target, datetime_source, idx_time_mask)
+                check_masked_timesteps2(datetime_target, datetime_source, idx_time_mask)
+                # check_masked_data(data_target, data_source, idx_time_mask)
+    else:
+        warnings.warn(UserWarning((f"Strategy is {strategy}")))
