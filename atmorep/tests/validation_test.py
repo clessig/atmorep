@@ -59,34 +59,31 @@ class TestValidateOutput:
     
     
     def test_datetime(
-        self, sample, level, levels, target, config: test_utils.ValidationConfig
+        self, target_data, level, config: test_utils.ValidationConfig
     ):
         """
         Check against ERA5 timestamps.
         Loop over all levels individually. 50 random samples for each level.
         """
-        level_idx: int = config.data_access.get_level_idx(levels, level)
-        
-        data, datetime, lats, lons = config.data_access.get_data(
-            target,
-            config.field,
-            sample,
-            level_idx,
-        )
-        year, month = datetime.year, str(datetime.month).zfill(2)
+        year = target_data.datetime.year
+        month = str(target_data.datetime.month).zfill(2)
 
         era5_path = test_utils.ERA5_FNAME.format(
             config.field, level, config.field, year, month, level
         )
         if not os.path.isfile(era5_path):
-            warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
+            warnings.warn(UserWarning((f"Timestamp {target_data.datetime} not found in ERA5. Skipping")))
         else:
             era5 = xr.open_dataset(era5_path, engine = "cfgrib")[
                 test_utils.FIELD_GRIB_IDX[config.field]
-            ].sel(time = datetime, latitude = lats, longitude = lons)
+            ].sel(
+                time = target_data.datetime,
+                latitude = target_data.lats,
+                longitude = target_data.lons
+            )
 
             # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
-            assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+            assert np.isclose(target_data.data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
 
     def test_lats_match(self, target_data, prediction_data):
