@@ -38,17 +38,17 @@ def levels(config):
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
 class TestValidateOutput:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture
     def level_idx(self, levels, level, config: test_utils.ValidationConfig) -> int:
         return config.data_access.get_level_idx(levels, level)
     
-    @pytest.fixture(autouse=True)
+    @pytest.fixture
     def target_data(
         self, sample, level_idx, target, config:test_utils.ValidationConfig
     ) -> test_utils.GroupData:
         return config.data_access.get_data(target,config.field, sample, level_idx)
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture
     def prediction_data(
         self, sample, level_idx, prediction, config:test_utils.ValidationConfig
     ) -> test_utils.GroupData:
@@ -85,33 +85,29 @@ class TestValidateOutput:
             # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
             assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
-    def test_coordinates(
-        self, sample, level, levels, target, prediction, config: test_utils.ValidationConfig
-    ):
+    def test_coordinates(self, target_data, prediction_data):
         """
         Check that coordinates match between target and prediction. 
         Check also that latitude and longitudes are in geographical coordinates
         50 random samples.
         """
         
-        _, datetime_target, lats_target, lons_target = target_data
-        _, datetime_pred, lats_pred, lons_pred = prediction_data
-
-        test_utils.test_lats_match(lats_pred, lats_target)
-        test_utils.test_lats_in_range(lats_pred)
-        test_utils.test_lons_match(lons_pred, lons_target)
-        test_utils.test_lons_in_range(lons_pred)
-        test_utils.test_datetimes_match(datetime_pred, datetime_target)
+        test_utils.test_lats_match(prediction_data.lats, prediction_data.lats)
+        test_utils.test_lats_in_range(prediction_data.lats)
+        test_utils.test_lons_match(prediction_data.lons, prediction_data.lons)
+        test_utils.test_lons_in_range(prediction_data.lons)
+        test_utils.test_datetimes_match(
+            prediction_data.datetime, target_data.datetime
+        )
 
     def test_rmse(
-        self, sample, level, levels, target, prediction, config: test_utils.ValidationConfig
-        ):
+        self, target_data, prediction_data, config: test_utils.ValidationConfig
+    ):
         """
         Test that for each field the RMSE does not exceed a certain value. 
         50 random samples.
         """
         
-        sample_target, _, _, _ = target_data
-        sample_pred, _, _, _ = prediction_data
-
-        assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[config.field]
+        assert test_utils.compute_RMSE(
+            target_data.data, prediction_data.data
+        ).mean() < test_utils.FIELD_MAX_RMSE[config.field]
