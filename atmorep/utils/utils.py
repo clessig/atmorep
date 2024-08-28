@@ -82,10 +82,16 @@ class Config :
     json_str = json.dumps(self.__dict__ )
 
     # save in directory with model files
-    dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
+    # Asma: temporary fix for writing results 
+    # Asma TODO: do the same for models
+    dirname = Path( config.path_models, 'id{}'.format( wandb.run.id))
+    # dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
     if not os.path.exists(dirname):
       os.makedirs( dirname)
-    fname =Path(config.path_results,'models/id{}/model_id{}.json'.format(wandb.run.id,wandb.run.id))
+    # Asma: temporary fix for writing results 
+    # Asma TODO: do the same for models
+    fname =Path(config.path_models,'id{}/model_id{}.json'.format(wandb.run.id,wandb.run.id))
+    # fname =Path(config.path_results,'models/id{}/model_id{}.json'.format(wandb.run.id,wandb.run.id))
     with open(fname, 'w') as f :
       f.write( json_str)
 
