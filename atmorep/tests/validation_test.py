@@ -1,6 +1,4 @@
 import pytest
-import zarr
-import cfgrib 
 import xarray as xr
 import numpy as np 
 import warnings
@@ -12,6 +10,11 @@ import atmorep.tests.test_utils as test_utils
 
 N_SAMPLES_MAX = 50
 RESAMPLE_LVLS = False
+
+MAX_LAT = 90.
+MIN_LAT = -90.
+MIN_LON = 0.
+MAX_LON = 360.
 
 @pytest.fixture(scope="module")
 def config():
@@ -85,20 +88,29 @@ class TestValidateOutput:
             # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
             assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
 
-    def test_coordinates(self, target_data, prediction_data):
-        """
-        Check that coordinates match between target and prediction. 
-        Check also that latitude and longitudes are in geographical coordinates
-        50 random samples.
-        """
-        
-        test_utils.test_lats_match(prediction_data.lats, prediction_data.lats)
-        test_utils.test_lats_in_range(prediction_data.lats)
-        test_utils.test_lons_match(prediction_data.lons, prediction_data.lons)
-        test_utils.test_lons_in_range(prediction_data.lons)
-        test_utils.test_datetimes_match(
-            prediction_data.datetime, target_data.datetime
-        )
+
+    def test_lats_match(self, target_data, prediction_data):
+        assert np.all(prediction_data.lats[:] == target_data.lats[:]), "Mismatch between latitudes"
+
+
+    def test_lats_in_range(self, prediction_data):
+        bigger_min = MIN_LAT <= prediction_data.lats[:]
+        smaller_max = prediction_data.lats[:] <= MAX_LAT
+        assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
+
+
+    def test_lons_match(self, predction_data, target_data):
+        assert np.all(predction_data.lons[:] == target_data.lons[:]), "Mismatch between latitudes"
+
+
+    def test_lons_in_range(self, prediction_data):
+        bigger_min = MIN_LON <= prediction_data.lons[:]
+        smaller_max = prediction_data.lons[:] <= MAX_LON
+        assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LON} - {MAX_LON}"
+
+
+    def test_datetimes_match(self, prediction_data, target_data):
+        assert prediction_data.datetime == target_data.datetime, "Mismatch between datetimes"
 
     def test_rmse(
         self, target_data, prediction_data, config: test_utils.ValidationConfig
