@@ -68,7 +68,7 @@ class TestValidateOutput:
         year = target_data.datetime.year
         month = str(target_data.datetime.month).zfill(2)
 
-        era5_path = test_utils.ERA5_FNAME.format(
+        era5_path = test_utils.ERA5_FILE_TEMPLATE.format(
             config.field, level, config.field, year, month, level
         )
         if not os.path.isfile(era5_path):

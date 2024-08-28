@@ -37,7 +37,11 @@ class OutputType(strenum.StrEnum):
     prediction = "prediction"
     target = "target"
 
-ERA5_FNAME = r"/gpfs/scratch/ehpc03/data/{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
+ERA5_PATH_PREFIX_BSC = r"/gpfs/scratch/ehpc03/data/"
+ERA5_PATH_PREFIX_JSC = r"/p/data1/slmet/met_data/ecmwf/era5_reduced_level/ml_levels/"
+
+ERA5_FILE_TEMPLATE = ERA5_PATH_PREFIX_JSC + r"{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
+
 OUTPUT_PATH_TEMPLATE = {
     OutputType.prediction: r"./results/id{}/results_id{}_epoch{}_pred.zarr",
     OutputType.target: r"./results/id{}/results_id{}_epoch{}_target.zarr"
