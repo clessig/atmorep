@@ -1,4 +1,7 @@
 import abc
+from collections import namedtuple
+import datetime
+from dataclasses import dataclass
 from numpy.typing import NDArray
 from typing import Any
 import numpy as np
@@ -49,6 +52,8 @@ OUTPUT_PATH_TEMPLATE = {
 
 ##################################################################
 
+GroupData = namedtuple("GroupData", ["data", "datetime", "lats", "lons"])
+
 class DataAccess(abc.ABC):
     def __init__(self):
         pass
@@ -60,7 +65,7 @@ class DataAccess(abc.ABC):
     @abc.abstractmethod
     def get_data(
         self, data_store: zarr.Group, field: str, sample: int, level
-    ) -> tuple[Any, Any, Any, Any]:
+    ) -> GroupData:
         pass
 
     @abc.abstractmethod
@@ -75,7 +80,7 @@ class BERT(DataAccess):
 
     def get_data(
         self, data_store: zarr.Group, field: str, sample: int, level: int
-    ) -> tuple[Any, Any, Any, Any]:
+    ) -> GroupData:
         data_sample: NDArray[np.int64] = data_store[
             f"{field}/sample={sample:05d}/ml={level:05d}"
         ] # type: ignore
@@ -83,11 +88,10 @@ class BERT(DataAccess):
         datetime = pd.Timestamp(data_sample.datetime[0,0]) # type: ignore
         lats = data_sample.lat[0] # type: ignore
         lons = data_sample.lon[0] # type: ignore
-        return data, datetime, lats, lons
+        return GroupData(data, datetime, lats, lons)
 
     def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
         return level
-
 
 class Forecast(DataAccess):
     def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
@@ -95,15 +99,15 @@ class Forecast(DataAccess):
         return levels
 
     def get_data(
-        self,data_store: zarr.Group, field: str, sample: int,level: int
-    ) -> tuple[Any, Any, Any, Any]:
+        self,data_store: zarr.Group, field: str, sample: int, level: int
+    ) -> GroupData:
         # ignore custom metadata attributes of zarr groups
         data_sample = data_store[f"{field}/sample={sample:05d}"]
         data = data_sample.data[level, 0] # type: ignore
         datetime = pd.Timestamp(data_sample.datetime[0]) # type: ignore
         lats = data_sample.lat # type: ignore
         lons = data_sample.lon # type: ignore
-        return data, datetime, lats, lons
+        return GroupData(data, datetime, lats, lons)
 
     def get_level_idx(self, levels: np.ndarray, level: int) -> int:
         return np.where(levels == level)[0].tolist()[0] # multiple indexes per lvl ?

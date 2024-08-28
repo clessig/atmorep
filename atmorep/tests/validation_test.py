@@ -38,7 +38,26 @@ def levels(config):
     ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
 )
 class TestValidateOutput:
-    def test_datetime(self, sample, level, levels, target, config: test_utils.ValidationConfig):
+    @pytest.fixture(autouse=True)
+    def level_idx(self, levels, level, config: test_utils.ValidationConfig) -> int:
+        return config.data_access.get_level_idx(levels, level)
+    
+    @pytest.fixture(autouse=True)
+    def target_data(
+        self, sample, level_idx, target, config:test_utils.ValidationConfig
+    ) -> test_utils.GroupData:
+        return config.data_access.get_data(target,config.field, sample, level_idx)
+
+    @pytest.fixture(autouse=True)
+    def prediction_data(
+        self, sample, level_idx, prediction, config:test_utils.ValidationConfig
+    ) -> test_utils.GroupData:
+        return config.data_access.get_data(prediction,config.field, sample, level_idx)
+    
+    
+    def test_datetime(
+        self, sample, level, levels, target, config: test_utils.ValidationConfig
+    ):
         """
         Check against ERA5 timestamps.
         Loop over all levels individually. 50 random samples for each level.
@@ -74,10 +93,9 @@ class TestValidateOutput:
         Check also that latitude and longitudes are in geographical coordinates
         50 random samples.
         """
-
-        level_idx: int = config.data_access.get_level_idx(levels, level)
-        _, datetime_target, lats_target, lons_target = config.data_access.get_data(target,config.field, sample, level_idx)
-        _, datetime_pred, lats_pred, lons_pred = config.data_access.get_data(prediction, config.field, sample, level_idx)
+        
+        _, datetime_target, lats_target, lons_target = target_data
+        _, datetime_pred, lats_pred, lons_pred = prediction_data
 
         test_utils.test_lats_match(lats_pred, lats_target)
         test_utils.test_lats_in_range(lats_pred)
@@ -92,9 +110,8 @@ class TestValidateOutput:
         Test that for each field the RMSE does not exceed a certain value. 
         50 random samples.
         """
-
-        level_idx: int = config.data_access.get_level_idx(levels, level)
-        sample_target, _, _, _ = config.data_access.get_data(target, config.field, sample, level_idx)
-        sample_pred, _, _, _ = config.data_access.get_data(prediction, config.field, sample, level_idx)
+        
+        sample_target, _, _, _ = target_data
+        sample_pred, _, _, _ = prediction_data
 
         assert test_utils.compute_RMSE(sample_target, sample_pred).mean() < test_utils.FIELD_MAX_RMSE[config.field]
