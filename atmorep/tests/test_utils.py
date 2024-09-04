@@ -1,5 +1,6 @@
 import abc
 from collections import namedtuple
+import typing
 from numpy.typing import NDArray
 from typing import Any
 import numpy as np
@@ -9,6 +10,9 @@ import random as rnd
 import itertools as it
 import strenum
 from collections.abc import Iterable
+from pathlib import Path
+import json
+from atmorep.utils.config import Config
 
 
 FIELD_MAX_RMSE = {
@@ -110,21 +114,17 @@ class Forecast(DataAccess):
         return np.where(levels == level)[0].tolist()[0] # multiple indexes per lvl ?
 
 
-class ValidationConfig:
+class ValidationConfig(Config):
     _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = object.__new__(cls)
-
-        return cls._instance
     
-
-    def __init__(self, field: str, model_id: str, epoch: int, strategy: str):
-        self.field = field
-        self.model_id = model_id
-        self.epoch = epoch
-        self.strategy = strategy
+    @classmethod
+    def from_result(cls, result_dir: Path) -> typing.Self:
+        _model_id = result_dir.stem.removeprefix("id")
+        
+        run_config_path = result_dir / f"model_id{_model_id}.json"
+        
+        return cls.from_json(run_config_path)
+    
     
     @classmethod
     def get(cls) -> "ValidationConfig":
@@ -133,8 +133,24 @@ class ValidationConfig:
         return cls._instance
     
     @classmethod
-    def set(cls, field: str, model_id: str, epoch: int, strategy: str):
-        cls(field, model_id, epoch, strategy) # type: ignore
+    def set(cls, instance: typing.Self):
+        cls._instance = instance
+        
+    @property
+    def model_id(self):
+        return self.id
+    
+    @property
+    def strategy(self):
+        return self.masking_strategy
+    
+    @property
+    def epoch(self):
+        return 0
+        
+    @property
+    def field(self) -> str:
+        return self.field_names[0]
     
     @property
     def data_access(self) -> DataAccess:
@@ -158,7 +174,7 @@ class ValidationConfig:
     ) -> NDArray[np.int64]:
         data_store = self.get_zarr(output_type)
         return self.data_access.get_levels(data_store, self.field)
-    
+      
     def get_samples(self, n_max: int) -> list[int]:
         data_store = self.get_zarr(OutputType.target)
         nsamples = min(len(data_store[self.field]), n_max)
