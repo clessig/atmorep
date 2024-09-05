@@ -180,6 +180,23 @@ class ValidationConfig(Config):
         nsamples = min(len(data_store[self.field]), n_max)
         return rnd.sample(range(len(data_store[self.field])), nsamples)
     
+    
+    def get_timestamps_from_data(self):
+        data_store = self.get_zarr(OutputType.prediction)
+        n_samples = len(data_store[self.field])
+        datetimes = np.empty(
+            (
+                n_samples,
+                self.fields[0].token_size.time*self.forecast_num_tokens
+            ),
+            dtype="datetime64[h]"
+        )
+        for sample_key, value in data_store[self.field].groups():
+            i = int(sample_key.split("=")[1])
+            datetimes[i] = value.datetime
+        
+        return np.unique(datetimes)
+    
     def samples_and_levels(
         self, resample_lvls=False, n_samples_max=50
     ) -> Iterable[tuple[int, int]]:

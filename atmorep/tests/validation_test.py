@@ -120,3 +120,9 @@ class TestValidateOutput:
         assert test_utils.compute_RMSE(
             target_data.data, prediction_data.data
         ).mean() < test_utils.FIELD_MAX_RMSE[config.field]
+    
+def test_has_expected_timestamps(config: test_utils.ValidationConfig):
+    actual = config.get_timestamps_from_data()
+    expected = config.timesteps
+    is_present = np.isin(expected, actual)
+    assert is_present.all(), f"missing expected timestamps: {expected[~is_present]}, given: {actual}"
