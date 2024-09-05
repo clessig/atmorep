@@ -241,7 +241,7 @@ def train() :
 ####################################################################################################
 if __name__ == '__main__':
   
-  #try :
+  try :
 
     train()
 
@@ -249,9 +249,9 @@ if __name__ == '__main__':
     #  Trainer = Trainer_BERT
     #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
 
-  # except :
+  except :
     
-  #   extype, value, tb = sys.exc_info()
-  #   traceback.print_exc()
-  #   pdb.post_mortem(tb)
+    extype, value, tb = sys.exc_info()
+    traceback.print_exc()
+    pdb.post_mortem(tb)
 
