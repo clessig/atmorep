@@ -185,7 +185,7 @@ class Trainer_Base() :
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
 
       self.train( epoch)
-
+      
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
 
@@ -231,7 +231,6 @@ class Trainer_Base() :
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
-        #breakpoint()
         loss, mse_loss, losses = self.loss( preds, batch_idx, tmksd_list, weight_list)
       
       self.grad_scaler.scale(loss).backward()

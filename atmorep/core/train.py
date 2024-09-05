@@ -31,7 +31,7 @@ from atmorep.utils.utils import init_torch
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task =  int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -82,7 +82,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -106,17 +106,22 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
-  #                              [ 96, 105, 114, 123, 137 ], 
-  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
-  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
-  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
-                                [ 96, 105, 114, 123, 137 ], 
-                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
-
+  cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
+                               [ 96, 105, 114, 123, 137 ], 
+                               [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ] ]
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
+  # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
   # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
@@ -176,7 +181,7 @@ def train() :
   cf.net_tail_num_nets = 16
   cf.net_tail_num_layers = 0
   # loss
-  cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
+  cf.losses = ['crps'] #['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
   # training
   cf.optimizer_zero = False
   cf.lr_start = 5. * 10e-7
@@ -236,17 +241,17 @@ def train() :
 ####################################################################################################
 if __name__ == '__main__':
   
-  try :
+  #try :
 
     train()
 
-    #  wandb_id, epoch, epoch_continue = '1jh2qvrx', 392, 392
+    #  wandb_id, epoch, epoch_continue = 'kqlxntd8', 0, -1 #'1jh2qvrx', 392, 392
     #  Trainer = Trainer_BERT
     #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
 
-  except :
+  # except :
     
-    extype, value, tb = sys.exc_info()
-    traceback.print_exc()
-    pdb.post_mortem(tb)
+  #   extype, value, tb = sys.exc_info()
+  #   traceback.print_exc()
+  #   pdb.post_mortem(tb)
 

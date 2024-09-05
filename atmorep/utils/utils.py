@@ -370,12 +370,10 @@ def CRPS( y, mu, std_dev) :
 
 ########################################
 # def kernel_crps_ps( target, ens) :
-#   #breakpoint()
 #   val = ps.crps_ensemble(target.cpu().detach().numpy(), ens.permute([1,2,0]).cpu().detach().numpy())
 #   return torch.tensor(val)
 
 def kernel_crps( target, ens, fair = True) :
-  #breakpoint()
   ens_size = ens.shape[0]
   mae = torch.cat( [(target - mem).abs().mean().unsqueeze(0) for mem in ens], 0).mean()
 
@@ -384,7 +382,7 @@ def kernel_crps( target, ens, fair = True) :
 
   coef = -1.0 / (2.0 * ens_size * (ens_size - 1)) if fair else -1.0 / (2.0 * ens_size**2)
   temp = [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]
-  # breakpoint()
+
   ens_var = coef * torch.tensor( [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]).sum()
   ens_var /= (ens.shape[1]*ens.shape[2])
 
