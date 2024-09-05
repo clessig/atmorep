@@ -192,9 +192,9 @@ class ValidationConfig(Config):
             )
         else:
             samples = self.get_samples(n_samples_max)
-            iteration_tuples = it.product(samples, levels)
+            iteration_items = list(it.product(samples, levels))
         
-        return iteration_tuples
+        return iteration_items
 
 
 # calculate RMSE

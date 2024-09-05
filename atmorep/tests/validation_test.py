@@ -96,8 +96,8 @@ class TestValidateOutput:
         assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
 
 
-    def test_lons_match(self, predction_data, target_data):
-        assert np.all(predction_data.lons[:] == target_data.lons[:]), "Mismatch between latitudes"
+    def test_lons_match(self, prediction_data, target_data):
+        assert np.all(prediction_data.lons[:] == target_data.lons[:]), "Mismatch between latitudes"
 
 
     def test_lons_in_range(self, prediction_data):
