@@ -413,11 +413,7 @@ class AtmoRep( torch.nn.Module) :
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight']
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight']
 
-      else:
-        dim_mw = self.encoders[0].heads[0].proj_heads_other[0].weight.shape
-        mw = torch.tensor(np.zeros(dim_mw))
-      
-      mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
+        mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
      
     #decoder
     for iblock in range(0, 19, 2) : 
