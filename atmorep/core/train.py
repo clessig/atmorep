@@ -82,9 +82,11 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  master_addr = os.environ.get('MASTER_ADDR', '-1')
+  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_GPUS_ON_NODE', '1')[0] ))
+  num_accs_per_task = num_accs_per_task if master_addr != '-1' else 1
   device = init_torch( num_accs_per_task)
-  with_ddp = True
+  with_ddp = True if master_addr != '-1' else False
   par_rank, par_size = setup_ddp( with_ddp)
 
   # torch.cuda.set_sync_debug_mode(1)
@@ -146,7 +148,7 @@ def train() :
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 6
   
   # additional infos
   cf.size_token_info = 8
