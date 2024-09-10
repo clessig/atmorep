@@ -165,3 +165,11 @@ cython_debug/
 # image files
 *.png
 
+# more to ignore
+booster_slurm_atmorep_evaluate.sh
+booster_slurm_atmorep_train.sh
+data
+hdfml_slurm_atmorep_evaluate.sh
+logs/
+models/
+wandb/
