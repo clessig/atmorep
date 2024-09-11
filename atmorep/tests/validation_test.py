@@ -6,7 +6,7 @@ import os
 
 import atmorep.tests.test_utils as test_utils
 
-# run it with e.g. pytest -s atmorep/tests/validation_test.py results/idztsut0mr
+# run it with e.g. pytest -s atmorep/tests/validation_test.py --result results/idztsut0mr
 
 N_SAMPLES_MAX = 50
 RESAMPLE_LVLS = False
