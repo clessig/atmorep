@@ -273,7 +273,8 @@ class Trainer_Base() :
                             torch.mean( preds[0][1]), samples_sec ), flush=True)
     
           # save model (use -2 as epoch to indicate latest, stored without epoch specification)
-          self.save( -2)
+          if batch_idx % cf.model_log_frequency == 0 :
+            self.save( -2)
 
         # reset
         loss_total = [[] for i in range(len(cf.losses)) ]
@@ -500,8 +501,15 @@ class Trainer_Base() :
       if 'kernel_crps' in self.cf.losses :
         kcrps_loss = torch.mean( kernel_crps( target,torch.transpose( pred[2], 1, 0)))
         losses['kernel_crps'].append( kcrps_loss)
-
-        
+    
+    #TODO: uncomment it and add it when running in debug mode
+    # for ifield, field in enumerate(cf.fields):
+    #   ifield_loss = 0
+    #   for key in losses :  
+    #     ifield_loss += losses[key][ifield].to(self.device_out)
+    #   ifield_loss /= len(losses.keys())
+    #   print("LOSS :", field[0], ifield_loss, flush = True)
+          
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :

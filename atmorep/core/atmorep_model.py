@@ -17,6 +17,7 @@
 import torch
 import numpy as np
 import code
+import os
 # code.interact(local=locals())
 
 # import horovod.torch as hvd
@@ -239,11 +240,10 @@ class AtmoRep( torch.nn.Module) :
         # TODO: inconsistent with embeds_token_info -> version that can handle both
         #       we could imply use the file name: embed_token_info vs embeds_token_info
         name = 'AtmoRep' + '_embeds_token_info'
-        mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
-        
-        if mloaded == None: #backward compatibility
+        if not os.path.exists(get_model_filename( name, field_info[1][4][0], field_info[1][4][1])):
           name = 'AtmoRep' + '_embed_token_info'
-          mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
+
+        mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
       
         if "weight" not in mloaded.keys(): #TODO: get rid of this
           mloaded["weight"] = mloaded["0.weight"]

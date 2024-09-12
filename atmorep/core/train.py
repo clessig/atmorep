@@ -190,6 +190,7 @@ def train() :
   cf.weight_decay = 0.05 #0.1
   cf.lr_decay_rate = 1.025
   cf.lr_start_epochs = 3
+  cf.model_log_frequency = 256 #save checkpoint every X batches
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
   cf.BERT_strategy = 'BERT'

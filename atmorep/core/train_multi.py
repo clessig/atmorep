@@ -82,7 +82,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -130,16 +130,16 @@ def train() :
                 [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0, ['j8dwr5qj', -2] ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 1, ['0tlnm5up', -2] ], 
+                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 0, ['0tlnm5up', -2] ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ], 
-                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2, ['tts78c9l', -2] ], 
+                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0, ['tts78c9l', -2] ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3, ['9l1errbo', -2] ], 
+                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0, ['9l1errbo', -2] ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3, ['yvefro1u', -2] ], 
+                [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 0, ['yvefro1u', -2] ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
                 # ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3, ['3kdutwqb', 900]], 
@@ -152,6 +152,35 @@ def train() :
                           ['specific_humidity', 0.15], ['velocity_z', 0.1], ['temperature', 0.2]
              #             ['total_precip', 0.1] 
               ]
+
+
+#   cf.fields = [   #[ 'temperature', [ 1, 1024, ['velocity_u'], 0, ['3qou60es', -2] ],
+#   #              #    [ 'temperature', [ 1, 1024, ['velocity_u', 'velocity_v', 'specific_humidity'], 3, ['2147fkco', 87] ],
+#   #                             [ 96, 105, 114, 123, 137 ],
+#   #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
+#                 #[ 'velocity_u', [ 1, 2048, ['velocity_u', 'temperature'], 0, ['dys79lgw', 82] ],
+#        	       	 [ 'velocity_u', [ 1, 2048, ['velocity_v'], 0, ['dys79lgw', -2] ],
+#                                  [ 96, 105, 114, 123, 137 ],
+#                                  [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+#                 [ 'velocity_v', [ 1, 2048, ['velocity_u'], 0, ['22j6gysw', 82] ],
+#                                 [ 96, 105, 114, 123, 137 ],
+#                                 [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+#   #               [ 'specific_humidity', [ 1, 2048, ['velocity_u', 'velocity_v', 'temperature'], 2, ['1565pb1f', 62] ],
+#   #                             [ 96, 105, 114, 123, 137 ],
+#   #                             [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
+#   #               [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3, ['3cb4q6sl', 190] ],
+#   #                             [ 96, 105, 114, 123, 137 ],
+#   #                             [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'global' ],
+# #                  
+#    #              ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3, ['3kdutwqb', 900]],
+#    #                            [0],
+#    #                            [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] ]
+#    #cf.fields_prediction = [['velocity_u', 0.225], ['velocity_v', 0.225],
+#    #                        ['specific_humidity', 0.15], ['velocity_z', 0.1], ['temperature', 0.2],
+#    #                        ['total_precip', 0.1] ]
+#   ]
+
+#   cf.fields_prediction = [['velocity_u', 0.5], ['velocity_v', 0.5]]
 
   cf.fields_targets = []
 
@@ -201,12 +230,15 @@ def train() :
   cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
   # training
   cf.optimizer_zero = False
-  cf.lr_start = 5. * 10e-7
-  cf.lr_max = 0.00005*3
-  cf.lr_min = 0.00004 #0.00002
-  cf.weight_decay = 0.05 #0.1
+  
+  cf.lr_start = 0.00001 #5. * 10e-7
+  cf.lr_max = 0.00002
+  cf.lr_min = 0.00001
+  cf.weight_decay = 0.025 #0.1
   cf.lr_decay_rate = 1.025
   cf.lr_start_epochs = 3
+  cf.model_log_frequency = 256 #save checkpoint every X batches
+
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
   cf.BERT_strategy = 'BERT'
