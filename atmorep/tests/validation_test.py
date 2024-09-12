@@ -49,13 +49,13 @@ class TestValidateOutput:
     def target_data(
         self, sample, level_idx, target, config:test_utils.ValidationConfig
     ) -> test_utils.GroupData:
-        return config.data_access.get_data(target,config.field, sample, level_idx)
+        return config.data_access.get_data(target,config.field_name, sample, level_idx)
 
     @pytest.fixture
     def prediction_data(
         self, sample, level_idx, prediction, config:test_utils.ValidationConfig
     ) -> test_utils.GroupData:
-        return config.data_access.get_data(prediction,config.field, sample, level_idx)
+        return config.data_access.get_data(prediction,config.field_name, sample, level_idx)
     
     
     def test_datetime(
@@ -69,13 +69,13 @@ class TestValidateOutput:
         month = str(target_data.datetime.month).zfill(2)
 
         era5_path = test_utils.ERA5_FILE_TEMPLATE.format(
-            config.field, level, config.field, year, month, level
+            config.field_name, level, config.field_name, year, month, level
         )
         if not os.path.isfile(era5_path):
             warnings.warn(UserWarning((f"Timestamp {target_data.datetime} not found in ERA5. Skipping")))
         else:
             era5 = xr.open_dataset(era5_path, engine = "cfgrib")[
-                test_utils.FIELD_GRIB_IDX[config.field]
+                test_utils.FIELD_GRIB_IDX[config.field_name]
             ].sel(
                 time = target_data.datetime,
                 latitude = target_data.lats,
@@ -119,8 +119,8 @@ class TestValidateOutput:
         
         assert test_utils.compute_RMSE(
             target_data.data, prediction_data.data
-        ).mean() < test_utils.FIELD_MAX_RMSE[config.field]
-    
+        ).mean() < test_utils.FIELD_MAX_RMSE[config.field_name]
+
 def test_has_expected_timestamps(config: test_utils.ValidationConfig):
     actual = config.get_timestamps_from_data()
     expected = config.timesteps

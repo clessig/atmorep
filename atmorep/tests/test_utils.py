@@ -185,10 +185,7 @@ class ValidationConfig(Config):
         data_store = self.get_zarr(OutputType.prediction)
         n_samples = len(data_store[self.field])
         datetimes = np.empty(
-            (
-                n_samples,
-                self.fields[0].token_size.time*self.forecast_num_tokens
-            ),
+            (n_samples, self.max_lead_time),
             dtype="datetime64[h]"
         )
         for sample_key, value in data_store[self.field].groups():

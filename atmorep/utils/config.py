@@ -24,21 +24,17 @@ class TimeLatLon:
         )
     
     @classmethod
-    def _as_time_lat_lon(cls, other: typing.Any) -> typing.Self:
+    def _as_time_lat_lon(cls, other: typing.Any):
         match other:
             case TimeLatLon():
                 return other
             case int() | float():
-                return TimeLatLon(other, other, other)
-            case (int()|float(), int()|float(), int()|float()):
+                return TimeLatLon(int(other), int(other), int(other))
+            case (int(), int(), int()):
                 return TimeLatLon(*other)
             case _:            
                 msg = f"{other} of type {type(other)} cannot be interpreted as TimeLatLon."
                 raise ValueError(msg)
-            
-@dataclasses.dataclass
-class PatchConfig:
-    pass
 
 @dataclasses.dataclass
 class FieldConfig:
@@ -50,7 +46,6 @@ class FieldConfig:
     
     @classmethod
     def from_list(cls, field: list[typing.Any]) -> typing.Self: # 3.11 feature
-        print(field)
         return cls(
             field[0],
             field[-1],
@@ -62,11 +57,14 @@ class FieldConfig:
     @property
     def patch_length(self) -> TimeLatLon:
         return self.patch_size * self.token_size
-
+    
+    def get_max_lead_time(self, n_forecast_tokens: int) -> int:
+        return self.token_size.time * n_forecast_tokens
+    
 @dataclasses.dataclass
 class Config:
     id: str
-    fields: list[FieldConfig]
+    fields: dict[str, FieldConfig]
     dates: list[dt.datetime]
     forecast_num_tokens: int
     masking_strategy: str
@@ -87,29 +85,32 @@ class Config:
         )
             
     def as_json(self, config_path: Path):
-        pass
-    
-    @property
-    def field_names(self) -> list[str]:
-        return [field.name for field in self.fields]
-    
+        pass # TODO
+
     @property
     def is_global(self) -> bool:
         return self.masking_strategy in ["global_forecast"]
     
     @property
+    def max_lead_time(self) -> int:
+        return max(
+            field.get_max_lead_time(self.forecast_num_tokens)
+            for name, field in self.fields.items()
+        )
+    
+    @property
     def timesteps(self):
         timesteps = []
+        
         for date in self.dates:
-            for lead_time in range(
-                self.fields[0].token_size.time*self.forecast_num_tokens
-            ):
+            for lead_time in range(self.max_lead_time):
                 timesteps.append(date - dt.timedelta(hours=lead_time))
         
         return np.array(timesteps, dtype="datetime64[h]")
                 
     
     @staticmethod
-    def _get_fields(fields: list[list[typing.Any]]):
-        return [FieldConfig.from_list(field) for field in fields]
+    def _get_fields(fields: list[list[typing.Any]]) -> dict[str, FieldConfig]:
+        field_list = [FieldConfig.from_list(field) for field in fields]
+        return {field.name: field for field in field_list}
     
