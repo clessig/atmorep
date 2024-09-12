@@ -149,8 +149,8 @@ class ValidationConfig(Config):
         return 0
         
     @property
-    def field(self) -> str:
-        return self.field_names[0]
+    def field_name(self) -> str:
+        return list(self.fields.keys())[0]
     
     @property
     def data_access(self) -> DataAccess:
@@ -173,22 +173,22 @@ class ValidationConfig(Config):
         self, output_type: OutputType = OutputType.target
     ) -> NDArray[np.int64]:
         data_store = self.get_zarr(output_type)
-        return self.data_access.get_levels(data_store, self.field)
+        return self.data_access.get_levels(data_store, self.field_name)
       
     def get_samples(self, n_max: int) -> list[int]:
         data_store = self.get_zarr(OutputType.target)
-        nsamples = min(len(data_store[self.field]), n_max)
-        return rnd.sample(range(len(data_store[self.field])), nsamples)
+        nsamples = min(len(data_store[self.field_name]), n_max)
+        return rnd.sample(range(len(data_store[self.field_name])), nsamples)
     
     
     def get_timestamps_from_data(self):
         data_store = self.get_zarr(OutputType.prediction)
-        n_samples = len(data_store[self.field])
+        n_samples = len(data_store[self.field_name])
         datetimes = np.empty(
             (n_samples, self.max_lead_time),
             dtype="datetime64[h]"
         )
-        for sample_key, value in data_store[self.field].groups():
+        for sample_key, value in data_store[self.field_name].groups():
             i = int(sample_key.split("=")[1])
             datetimes[i] = value.datetime
         

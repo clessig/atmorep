@@ -125,4 +125,13 @@ def test_has_expected_timestamps(config: test_utils.ValidationConfig):
     actual = config.get_timestamps_from_data()
     expected = config.timesteps
     is_present = np.isin(expected, actual)
+
     assert is_present.all(), f"missing expected timestamps: {expected[~is_present]}, given: {actual}"
+
+def test_levels_match(config: test_utils.ValidationConfig):
+    expected = np.array(config.field.levels)
+    actual = np.array(config.get_levels(test_utils.OutputType.prediction))
+    is_present = np.isin(expected, actual)
+    
+    assert is_present.all(), f"missing expected levels: {expected[~is_present]}, given: {actual}"
+    
