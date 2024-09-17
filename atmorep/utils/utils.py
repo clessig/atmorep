@@ -108,7 +108,8 @@ class Config :
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        print(config.path_results)
+        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
@@ -286,6 +287,7 @@ def days_until_month_in_year( year, month) :
 def tokenize( data, token_size = [-1,-1,-1]) :
 
   data_tokenized = data
+  # print(f'before: {data.shape} token shapee {token_size}')
   if token_size[0] > -1 :
 
     data_shape = data.shape
