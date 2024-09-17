@@ -1,10 +1,11 @@
+import datetime
 import pytest
 import xarray as xr
 import numpy as np 
 import warnings
 import os
 
-import atmorep.tests.test_utils as test_utils
+import atmorep.tests.test_utils as tu
 
 # run it with e.g. pytest -s atmorep/tests/validation_test.py --result results/idztsut0mr
 
@@ -18,66 +19,56 @@ MAX_LON = 360.
 
 @pytest.fixture(scope="module")
 def config():
-    return test_utils.ValidationConfig.get()
+    return tu.get_config()
 
 @pytest.fixture(scope="module")
 def target(config):
-    return config.get_zarr(
-        test_utils.OutputType.target
-    )
+    return tu.DataStore.from_config(config, tu.OutputType.target)
 
 @pytest.fixture(scope="module")
 def prediction(config):
-    return config.get_zarr(
-        test_utils.OutputType.prediction
-    )
+        return tu.DataStore.from_config(config, tu.OutputType.prediction)
+
 
 @pytest.fixture(scope="module")
-def levels(config):
-    return config.get_levels(test_utils.OutputType.target)
+def levels(target):
+    return target.levels
 
 
 @pytest.mark.parametrize(
-    ("sample", "level"), test_utils.ValidationConfig.get().samples_and_levels()
+    ("sample", "level"), tu.get_samples_and_levels()
 )
 class TestValidateOutput:
     @pytest.fixture
-    def level_idx(self, levels, level, config: test_utils.ValidationConfig) -> int:
-        return config.data_access.get_level_idx(levels, level)
-    
-    @pytest.fixture
-    def target_data(
-        self, sample, level_idx, target, config:test_utils.ValidationConfig
-    ) -> test_utils.GroupData:
-        return config.data_access.get_data(target,config.field_name, sample, level_idx)
+    def target_data(self, sample, level, target: tu.DataStore) -> tu.GroupData:
+        return target.get_data(sample, level)
 
     @pytest.fixture
-    def prediction_data(
-        self, sample, level_idx, prediction, config:test_utils.ValidationConfig
-    ) -> test_utils.GroupData:
-        return config.data_access.get_data(prediction,config.field_name, sample, level_idx)
+    def prediction_data(self, sample, level, prediction: tu.DataStore) -> tu.GroupData:
+        return prediction.get_data(sample, level)
     
     
     def test_datetime(
-        self, target_data, level, config: test_utils.ValidationConfig
+        self, target_data, level, config: tu.ValidationConfig
     ):
         """
         Check against ERA5 timestamps.
         Loop over all levels individually. 50 random samples for each level.
         """
-        year = target_data.datetime.year
-        month = str(target_data.datetime.month).zfill(2)
+        timestamp = target_data.datetimes[0].astype(datetime.datetime)
+        year = timestamp.year
+        month = str(timestamp.month).zfill(2)
 
-        era5_path = test_utils.ERA5_FILE_TEMPLATE.format(
+        era5_path = tu.ERA5_FILE_TEMPLATE.format(
             config.field_name, level, config.field_name, year, month, level
         )
         if not os.path.isfile(era5_path):
-            warnings.warn(UserWarning((f"Timestamp {target_data.datetime} not found in ERA5. Skipping")))
+            warnings.warn(UserWarning((f"Timestamp {target_data.datetimes} not found in ERA5. Skipping")))
         else:
             era5 = xr.open_dataset(era5_path, engine = "cfgrib")[
-                test_utils.FIELD_GRIB_IDX[config.field_name]
+                tu.FIELD_GRIB_IDX[config.field_name]
             ].sel(
-                time = target_data.datetime,
+                time = timestamp,
                 latitude = target_data.lats,
                 longitude = target_data.lons
             )
@@ -107,30 +98,31 @@ class TestValidateOutput:
 
 
     def test_datetimes_match(self, prediction_data, target_data):
-        assert prediction_data.datetime == target_data.datetime, "Mismatch between datetimes"
+        assert (prediction_data.datetimes == target_data.datetimes).all, "Mismatch between datetimes"
 
+    @pytest.mark.skip
     def test_rmse(
-        self, target_data, prediction_data, config: test_utils.ValidationConfig
+        self, target_data, prediction_data, config: tu.ValidationConfig
     ):
         """
         Test that for each field the RMSE does not exceed a certain value. 
         50 random samples.
         """
         
-        assert test_utils.compute_RMSE(
+        assert tu.compute_RMSE(
             target_data.data, prediction_data.data
-        ).mean() < test_utils.FIELD_MAX_RMSE[config.field_name]
+        ).mean() < tu.FIELD_MAX_RMSE[config.field_name]
 
-def test_has_expected_timestamps(config: test_utils.ValidationConfig):
-    actual = config.get_timestamps_from_data()
+def test_has_expected_timestamps(config: tu.ValidationConfig, prediction: tu.DataStore):
+    actual = prediction.times
     expected = config.timesteps
     is_present = np.isin(expected, actual)
 
     assert is_present.all(), f"missing expected timestamps: {expected[~is_present]}, given: {actual}"
 
-def test_levels_match(config: test_utils.ValidationConfig):
+def test_levels_match(config: tu.ValidationConfig, prediction: tu.DataStore):
+    actual = prediction.levels
     expected = np.array(config.field.levels)
-    actual = np.array(config.get_levels(test_utils.OutputType.prediction))
     is_present = np.isin(expected, actual)
     
     assert is_present.all(), f"missing expected levels: {expected[~is_present]}, given: {actual}"

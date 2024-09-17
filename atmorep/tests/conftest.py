@@ -1,5 +1,5 @@
 import pathlib
-import atmorep.tests.test_utils as test_utils
+import atmorep.tests.test_utils as tu
 
 def pytest_addoption(parser):
     parser.addoption("--field", action="store", help="field to run the test on")
@@ -13,5 +13,5 @@ def pytest_configure(config):
     """Make parsed options available outside pytest fixtures"""
     
     config_path = pathlib.Path(config.getoption("result"))
-    instance = test_utils.ValidationConfig.from_result(config_path)
-    test_utils.ValidationConfig.set(instance)
+    instance = tu.ValidationConfig.from_result(config_path)
+    tu.set_config(instance)

@@ -9,10 +9,8 @@ import zarr
 import random as rnd
 import itertools as it
 import strenum
-from collections.abc import Iterable
 from pathlib import Path
-import json
-from atmorep.utils.config import Config
+from atmorep.utils.config import Config, FieldConfig
 
 
 FIELD_MAX_RMSE = {
@@ -47,72 +45,13 @@ ERA5_PATH_PREFIX_JSC = r"/p/data1/slmet/met_data/ecmwf/era5_reduced_level/ml_lev
 ERA5_FILE_TEMPLATE = ERA5_PATH_PREFIX_JSC + r"{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
 
 OUTPUT_PATH_TEMPLATE = {
-    OutputType.prediction: r"./results/id{}/results_id{}_epoch{}_pred.zarr",
-    OutputType.target: r"./results/id{}/results_id{}_epoch{}_target.zarr"
+    OutputType.prediction: r"./results/id{}/results_id{}_epoch{:05d}_pred.zarr",
+    OutputType.target: r"./results/id{}/results_id{}_epoch{:05d}_target.zarr"
 }
 
 ##################################################################
 
-GroupData = namedtuple("GroupData", ["data", "datetime", "lats", "lons"])
-
-class DataAccess(abc.ABC):
-    def __init__(self):
-        pass
-
-    @abc.abstractmethod
-    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
-        pass
-
-    @abc.abstractmethod
-    def get_data(
-        self, data_store: zarr.Group, field: str, sample: int, level
-    ) -> GroupData:
-        pass
-
-    @abc.abstractmethod
-    def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
-        pass
-
-class BERT(DataAccess):
-
-    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
-        iterable = (int(f.split("=")[1]) for f in data_store[f"{field}/sample=00000"])
-        return np.fromiter(iterable, int)
-
-    def get_data(
-        self, data_store: zarr.Group, field: str, sample: int, level: int
-    ) -> GroupData:
-        data_sample: NDArray[np.int64] = data_store[
-            f"{field}/sample={sample:05d}/ml={level:05d}"
-        ] # type: ignore
-        data = data_sample.data[0,0] # type: ignore
-        datetime = pd.Timestamp(data_sample.datetime[0,0]) # type: ignore
-        lats = data_sample.lat[0] # type: ignore
-        lons = data_sample.lon[0] # type: ignore
-        return GroupData(data, datetime, lats, lons)
-
-    def get_level_idx(self, levels: NDArray[np.int64], level: int) -> int:
-        return level
-
-class Forecast(DataAccess):
-    def get_levels(self, data_store: zarr.Group, field: str) -> NDArray[np.int64]:
-        levels: NDArray[np.int64] = data_store[f"{field}/sample=00000"].ml[:]  # type: ignore (custom metadata)
-        return levels
-
-    def get_data(
-        self,data_store: zarr.Group, field: str, sample: int, level: int
-    ) -> GroupData:
-        # ignore custom metadata attributes of zarr groups
-        data_sample = data_store[f"{field}/sample={sample:05d}"]
-        data = data_sample.data[level, 0] # type: ignore
-        datetime = pd.Timestamp(data_sample.datetime[0]) # type: ignore
-        lats = data_sample.lat # type: ignore
-        lons = data_sample.lon # type: ignore
-        return GroupData(data, datetime, lats, lons)
-
-    def get_level_idx(self, levels: np.ndarray, level: int) -> int:
-        return np.where(levels == level)[0].tolist()[0] # multiple indexes per lvl ?
-
+GroupData = namedtuple("GroupData", ["data", "datetimes", "lats", "lons"])
 
 class ValidationConfig(Config):
     _instance = None
@@ -153,62 +92,151 @@ class ValidationConfig(Config):
         return list(self.fields.keys())[0]
     
     @property
-    def data_access(self) -> DataAccess:
-        match self.strategy:
+    def field(self) -> FieldConfig:
+        return self.fields[self.field_name]
+    
+    def get_outpath(self, output: OutputType):
+        return OUTPUT_PATH_TEMPLATE[output].format(
+            self.model_id,
+            self.model_id,
+            str(self.epoch).zfill(5)
+        )
+    
+class DataAccess(abc.ABC):
+    def __init__(self, config: ValidationConfig):
+        self.config = config
+    
+    @classmethod
+    def from_config(cls, config: ValidationConfig):
+        match config.strategy:
             case "BERT":
-                return BERT()
+                return BERT(config)
             case "temporal_interpolation":
-                return BERT()
+                return BERT(config)
             case _:
-                return Forecast()
-        
-    def get_zarr(self, output_type: OutputType) -> zarr.Group:
-        store_path_template = OUTPUT_PATH_TEMPLATE[output_type]
-        store = zarr.ZipStore(
-            store_path_template.format(self.model_id, self.model_id, str(self.epoch).zfill(5))
-        )
-        return zarr.group(store)
+                return Forecast(config)
 
-    def get_levels(
-        self, output_type: OutputType = OutputType.target
-    ) -> NDArray[np.int64]:
-        data_store = self.get_zarr(output_type)
-        return self.data_access.get_levels(data_store, self.field_name)
-      
-    def get_samples(self, n_max: int) -> list[int]:
-        data_store = self.get_zarr(OutputType.target)
-        nsamples = min(len(data_store[self.field_name]), n_max)
-        return rnd.sample(range(len(data_store[self.field_name])), nsamples)
+    def get_times(self, sample: zarr.Group) -> NDArray[np.datetime64]:
+        levels = self.get_levels(sample)
+        return np.array(self.get_data(sample, levels[0]).datetimes)
+
+    @abc.abstractmethod
+    def get_levels(self, sample: zarr.Group) -> NDArray[np.int64]:
+        pass
+
+    @abc.abstractmethod
+    def get_data(self, sample: zarr.Group, level: int) -> GroupData:
+        pass
     
-    
-    def get_timestamps_from_data(self):
-        data_store = self.get_zarr(OutputType.prediction)
-        n_samples = len(data_store[self.field_name])
-        datetimes = np.empty(
-            (n_samples, self.max_lead_time),
-            dtype="datetime64[h]"
+class DataStore:
+    def __init__(self, data_access: DataAccess, data_path: Path, field: str,):
+        self.data_access = data_access
+        
+        store = zarr.ZipStore(data_path)
+        try:
+            self.zarr_samples: zarr.Group = zarr.group(store)[field] # type: ignore
+        except:
+            groups = list(zarr.group(store).group_keys())
+            msg = f"Zarr Store is missing expected group for field {field} in groups: {groups}."
+            raise ValueError(msg)
+        
+        
+    @classmethod
+    def from_config(cls, config, type: OutputType) -> typing.Self:
+        template = OUTPUT_PATH_TEMPLATE[type]
+        data_path = Path(
+            template.format(config.model_id, config.model_id, config.epoch)
         )
-        for sample_key, value in data_store[self.field_name].groups():
-            i = int(sample_key.split("=")[1])
-            datetimes[i] = value.datetime
+        data_access = DataAccess.from_config(config)
+        return cls(data_access, data_path, config.field_name)
+    
+    @property
+    def levels(self) -> NDArray[np.int64]:
+        example_sample = self.get_sample(0)
+        return self.data_access.get_levels(example_sample)
+
+    
+    @property
+    def max_lead_time(self) -> int:
+        example_sample = self.get_sample(0)
+        return len(self.data_access.get_times(example_sample))
+    
+    @property
+    def times(self) -> NDArray[np.datetime64]:
+        datetimes_iter = (
+            self.data_access.get_times(sample) for _, sample
+            in self.zarr_samples.groups()
+        )
+        datetimes = np.fromiter(
+            datetimes_iter,
+            dtype=np.dtype(("datetime64[h]", self.max_lead_time)), # allows correct shape
+            count=len(self.zarr_samples) # preallocates memory
+        )
         
         return np.unique(datetimes)
+
+    def get_data(self, idx: int, level: int) -> GroupData:
+        sample = self.get_sample(idx)
+        return self.data_access.get_data(sample, level)
+    
+    def get_sample(self, idx: int) -> zarr.Group:
+        try:
+            sample: zarr.Group = self.zarr_samples[f"sample={idx:05d}"] # type: ignore
+            return sample
+        except:
+            msg = f"No sample with index {idx:05d} in zarr store."
+            raise ValueError(msg)
+        
+    def get_samples(self, n_max: int) -> list[int]:
+        n_samples_avail = len(self.zarr_samples)
+        n_samples_drawn = min(n_samples_avail, n_max)
+        return rnd.sample(range(n_samples_avail), n_samples_drawn)
     
     def samples_and_levels(
         self, resample_lvls=False, n_samples_max=50
-    ) -> Iterable[tuple[int, int]]:
-        levels = self.get_levels()
+    ) -> list[tuple[int, int]]:
         if resample_lvls:
-            iteration_tuples = (
+            iteration_items = [
                 (sample, lvl)
                 for sample in self.get_samples(n_samples_max)
-                for lvl in levels
-            )
+                for lvl in self.levels
+            ]
         else:
             samples = self.get_samples(n_samples_max)
-            iteration_items = list(it.product(samples, levels))
+            iteration_items = list(it.product(samples, self.levels))
         
         return iteration_items
+
+class BERT(DataAccess):
+    def get_levels(self, sample: zarr.Group) -> NDArray[np.int64]:
+        iterable = (int(f.split("=")[1]) for f in sample)
+        return np.fromiter(iterable, int)
+    
+    def get_data(self, sample: zarr.Group, level: int) -> GroupData:
+        # level => lvl by key
+        data_sample = sample[f"ml={level:05d}"]
+        data = data_sample.data[0,0]
+        datetime = pd.Timestamp(data_sample.datetime[0,0]) # TODO check
+        lats = data_sample.lat[0]
+        lons = data_sample.lon[0]
+        return GroupData(data, datetime, lats, lons)
+
+class Forecast(DataAccess):
+    def get_levels(self, sample: zarr.Group) -> NDArray[np.int64]:
+        levels: NDArray[np.int64] = sample.ml[:]  # type: ignore (custom metadata)
+        return levels
+
+    def get_data(
+        self, sample: zarr.Group, level: int
+    ) -> GroupData:
+        levels = self.get_levels(sample)
+        level_idx = np.where(levels == level)[0][0]
+
+        data = sample.data[level_idx, 0]
+        datetimes = np.array(sample.datetime, dtype="datetime64[h]")
+        lats = sample.lat
+        lons = sample.lon
+        return GroupData(data, datetimes, lats, lons)
 
 
 # calculate RMSE
@@ -216,3 +244,14 @@ def compute_RMSE(
     pred: NDArray[np.float64], target: NDArray[np.float64]
 ) -> NDArray[np.float64]:
     return np.sqrt(np.mean((pred-target)**2))
+
+def get_config():
+    return ValidationConfig.get()
+
+def set_config(config: ValidationConfig):
+    return ValidationConfig.set(config)
+
+def get_samples_and_levels():
+    return DataStore.from_config(
+        get_config(), OutputType.prediction
+    ).samples_and_levels()
