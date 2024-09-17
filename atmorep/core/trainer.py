@@ -450,8 +450,9 @@ class Trainer_Base() :
     
     for pred, idx in zip( preds, self.fields_prediction_idx) :
       target = self.targets[idx]
+      mask = target == config.filler_value
 
-      mse_loss = self.MSELoss( pred[0], target = target) 
+      mse_loss = self.MSELoss( pred[0][mask], target = target[mask]) 
       mse_loss_total += mse_loss.cpu().detach()
 
       # MSE loss
@@ -462,7 +463,7 @@ class Trainer_Base() :
       if 'mse_ensemble' in self.cf.losses :
         loss_en = torch.tensor( 0., device=target.device)
         for en in torch.transpose( pred[2], 1, 0) :
-          loss_en += self.MSELoss( en, target = target) 
+          loss_en += self.MSELoss( en[mask], target = target[mask]) 
         losses['mse_ensemble'].append( loss_en / pred[2].shape[1])
 
       if 'weighted_mse' in self.cf.losses :
