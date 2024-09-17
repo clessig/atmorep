@@ -6,6 +6,7 @@ import warnings
 import os
 
 import atmorep.tests.test_utils as tu
+import atmorep.tests.constants as constants
 
 # run it with e.g. pytest -s atmorep/tests/validation_test.py --result results/idztsut0mr
 
@@ -23,11 +24,15 @@ def config():
 
 @pytest.fixture(scope="module")
 def target(config):
-    return tu.DataStore.from_config(config, tu.OutputType.target)
+    return tu.DataStore.from_config(
+        config, constants.OutputType.target
+    )
 
 @pytest.fixture(scope="module")
 def prediction(config):
-        return tu.DataStore.from_config(config, tu.OutputType.prediction)
+        return tu.DataStore.from_config(
+            config, constants.OutputType.prediction
+        )
 
 
 @pytest.fixture(scope="module")
@@ -59,14 +64,14 @@ class TestValidateOutput:
         year = timestamp.year
         month = str(timestamp.month).zfill(2)
 
-        era5_path = tu.ERA5_FILE_TEMPLATE.format(
+        era5_path = constants.ERA5_FILE_TEMPLATE.format(
             config.field_name, level, config.field_name, year, month, level
         )
         if not os.path.isfile(era5_path):
             warnings.warn(UserWarning((f"Timestamp {target_data.datetimes} not found in ERA5. Skipping")))
         else:
             era5 = xr.open_dataset(era5_path, engine = "cfgrib")[
-                tu.FIELD_GRIB_IDX[config.field_name]
+                constants.FIELD_GRIB_IDX[config.field_name]
             ].sel(
                 time = timestamp,
                 latitude = target_data.lats,
@@ -111,7 +116,7 @@ class TestValidateOutput:
         
         assert tu.compute_RMSE(
             target_data.data, prediction_data.data
-        ).mean() < tu.FIELD_MAX_RMSE[config.field_name]
+        ).mean() < constants.FIELD_MAX_RMSE[config.field_name]
 
 def test_has_expected_timestamps(config: tu.ValidationConfig, prediction: tu.DataStore):
     actual = prediction.times

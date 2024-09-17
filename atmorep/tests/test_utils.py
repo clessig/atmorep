@@ -8,48 +8,10 @@ import pandas as pd
 import zarr
 import random as rnd
 import itertools as it
-import strenum
 from pathlib import Path
 from atmorep.utils.config import Config, FieldConfig
+import atmorep.tests.constants as constants
 
-
-FIELD_MAX_RMSE = {
-    "temperature": 3,
-    "velocity_u": 0.2,  # ????
-    "velocity_v": 0.2,  # ????
-    "velocity_z": 0.2,  # ????
-    "vorticity": 0.2,  # ????
-    "divergence": 0.2,  # ????
-    "specific_humidity": 0.2,  # ????
-    "total_precip": 1,  # ?????
-}
-
-FIELD_GRIB_IDX = {
-    "velocity_u": "u",
-    "temperature": "t",
-    "total_precip": "tp",
-    "velocity_v": "v",
-    "velocity_z": "z",
-    "vorticity": "vo",
-    "divergence": "d",
-    "specific_humidity": "q",
-}
-
-class OutputType(strenum.StrEnum):
-    prediction = "prediction"
-    target = "target"
-
-ERA5_PATH_PREFIX_BSC = r"/gpfs/scratch/ehpc03/data/"
-ERA5_PATH_PREFIX_JSC = r"/p/data1/slmet/met_data/ecmwf/era5_reduced_level/ml_levels/"
-
-ERA5_FILE_TEMPLATE = ERA5_PATH_PREFIX_JSC + r"{}/ml{}/era5_{}_y{}_m{}_ml{}.grib"
-
-OUTPUT_PATH_TEMPLATE = {
-    OutputType.prediction: r"./results/id{}/results_id{}_epoch{:05d}_pred.zarr",
-    OutputType.target: r"./results/id{}/results_id{}_epoch{:05d}_target.zarr"
-}
-
-##################################################################
 
 GroupData = namedtuple("GroupData", ["data", "datetimes", "lats", "lons"])
 
@@ -95,8 +57,8 @@ class ValidationConfig(Config):
     def field(self) -> FieldConfig:
         return self.fields[self.field_name]
     
-    def get_outpath(self, output: OutputType):
-        return OUTPUT_PATH_TEMPLATE[output].format(
+    def get_outpath(self, output: constants.OutputType):
+        return constants.OUTPUT_PATH_TEMPLATE[output].format(
             self.model_id,
             self.model_id,
             str(self.epoch).zfill(5)
@@ -142,8 +104,8 @@ class DataStore:
         
         
     @classmethod
-    def from_config(cls, config, type: OutputType) -> typing.Self:
-        template = OUTPUT_PATH_TEMPLATE[type]
+    def from_config(cls, config, type: constants.OutputType) -> typing.Self:
+        template = constants.OUTPUT_PATH_TEMPLATE[type]
         data_path = Path(
             template.format(config.model_id, config.model_id, config.epoch)
         )
@@ -239,7 +201,6 @@ class Forecast(DataAccess):
         return GroupData(data, datetimes, lats, lons)
 
 
-# calculate RMSE
 def compute_RMSE(
     pred: NDArray[np.float64], target: NDArray[np.float64]
 ) -> NDArray[np.float64]:
@@ -253,5 +214,5 @@ def set_config(config: ValidationConfig):
 
 def get_samples_and_levels():
     return DataStore.from_config(
-        get_config(), OutputType.prediction
+        get_config(), constants.OutputType.prediction
     ).samples_and_levels()
