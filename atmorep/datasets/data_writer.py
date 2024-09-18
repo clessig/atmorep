@@ -102,6 +102,17 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
 
   zarr_store = getattr( zarr, zarr_store_type)
 
+  # store_source = zarr_store( fname.format( 'source'))
+  # exp_source = zarr.group(store=store_source)
+  # for fidx, field in enumerate(sources) :
+  #   ds_field = exp_source.require_group( f'{field[0]}')
+  #   batch_size = field[1].shape[0]
+  #   for bidx in range( field[1].shape[0]) :
+  #     sample = batch_idx * batch_size + bidx
+  #     write_item(ds_field, sample, field[1][bidx], levels[fidx], sources_coords[fidx][bidx] )
+  # store_source.close()
+
+
   store_source = zarr_store( fname.format( 'source'))
   exp_source = zarr.group(store=store_source)
   for fidx, field in enumerate(sources) :
@@ -109,7 +120,9 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
     batch_size = field[1].shape[0]
     for bidx in range( field[1].shape[0]) :
       sample = batch_idx * batch_size + bidx
-      write_item(ds_field, sample, field[1][bidx], levels[fidx], sources_coords[fidx][bidx] )
+      ds_source_b = ds_field.create_group( f'sample={sample:05d}')
+      for vidx in range(len(levels[fidx])) :
+        write_item(ds_source_b, levels[fidx][vidx], field[1][bidx][vidx], levels[fidx][vidx], sources_coords[fidx][bidx], name = 'ml' )
   store_source.close()
 
   store_target = zarr_store( fname.format( 'target'))
