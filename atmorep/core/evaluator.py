@@ -130,6 +130,9 @@ class Evaluator( Trainer_BERT) :
     cf.BERT_strategy = 'BERT'
     cf.log_test_num_ranks = 4
     cf.num_samples_validate = 10 #28 #1472 
+    years = [2021]
+    years_test = [2021]
+    cf.years_val = [2021]
     Evaluator.parse_args( cf, args)
     utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
     Evaluator.run( cf, model_id, model_epoch, devices)

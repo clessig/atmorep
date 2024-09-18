@@ -24,10 +24,10 @@ if __name__ == '__main__':
   #model_id = 'oxpycr7w'     # divergence
   #model_id = '1565pb1f'     # specific_humidity
   #model_id = '3kdutwqb'     # total precip
-  model_id = 'dys79lgw'     # velocity_u
+  # model_id = 'dys79lgw'     # velocity_u
   #model_id = '22j6gysw'     # velocity_v
   # model_id = '15oisw8d'     # velocity_z
-  #model_id = '3qou60es'     # temperature (also 2147fkco)
+  model_id = '3qou60es'     # temperature (also 2147fkco)
   #model_id = '2147fkco'     # temperature (also 2147fkco)
  
   # multi-field configurations with either velocity or voritcity+divergence
@@ -67,7 +67,8 @@ if __name__ == '__main__':
 #                                       'forecast_num_tokens' : 2,
 #                                       'with_pytest' : True }
 
-  file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
+  # file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
+  file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr' 
   
   now = time.time()
   Evaluator.evaluate( mode, model_id, file_path, options)

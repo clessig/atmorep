@@ -3,9 +3,9 @@ from pathlib import Path
 
 fpath = os.path.dirname(os.path.realpath(__file__))
 
-path_models = Path( fpath, '../../models/')
-path_results = Path( fpath, '../../results')
-path_plots = Path( fpath, '../results/plots/')
+path_models = Path( fpath, '/p/scratch/deepacf/semcheddine1/atmorep_temporal_interpolation/models/')
+path_results = Path( fpath, '/p/scratch/deepacf/semcheddine1/atmorep_temporal_interpolation/results')
+path_plots = Path( fpath, '/p/scratch/deepacf/semcheddine1/atmorep_temporal_interpolation/results/plots/')
 
 grib_index = { 'vorticity' : 'vo', 'divergence' : 'd', 'geopotential' : 'z',
                 'orography' : 'z', 'temperature': 't', 'specific_humidity' : 'q',

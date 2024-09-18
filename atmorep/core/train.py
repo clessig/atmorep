@@ -220,7 +220,8 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
-  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  # cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2010_2021_res025_chunk8.zarr' # Asma: added cuz couldn't find it in the list
   # # # in steps x lat_degrees x lon_degrees
   cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
