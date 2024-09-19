@@ -105,7 +105,7 @@ class TestValidateOutput:
     def test_datetimes_match(self, prediction_data, target_data):
         assert (prediction_data.datetimes == target_data.datetimes).all, "Mismatch between datetimes"
 
-    @pytest.mark.skip
+    # @pytest.mark.skip 
     def test_rmse(
         self, target_data, prediction_data, config: tu.ValidationConfig
     ):
@@ -117,6 +117,9 @@ class TestValidateOutput:
         assert tu.compute_RMSE(
             target_data.data, prediction_data.data
         ).mean() < constants.FIELD_MAX_RMSE[config.field_name]
+    
+    def test_datetimes_len(self, prediction_data, config: tu.ValidationConfig):
+        assert len(prediction_data.datetimes) == config.max_lead_time
 
 def test_has_expected_timestamps(config: tu.ValidationConfig, prediction: tu.DataStore):
     actual = prediction.times
