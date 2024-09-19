@@ -1,126 +1,137 @@
+import datetime
 import pytest
-import zarr
-import cfgrib 
 import xarray as xr
 import numpy as np 
-import random as rnd
 import warnings
 import os
 
-from atmorep.tests.test_utils import *
+import atmorep.tests.test_utils as tu
+import atmorep.tests.constants as constants
 
-# run it with e.g. pytest -s atmorep/tests/validation_test.py --field temperature --model_id ztsut0mr --strategy BERT
+# run it with e.g. pytest -s atmorep/tests/validation_test.py --result results/idztsut0mr
 
-@pytest.fixture
-def field(request):
-    return request.config.getoption("field")
+N_SAMPLES_MAX = 50
+RESAMPLE_LVLS = False
 
-@pytest.fixture
-def model_id(request):
-    return request.config.getoption("model_id")
+MAX_LAT = 90.
+MIN_LAT = -90.
+MIN_LON = 0.
+MAX_LON = 360.
 
-@pytest.fixture
-def epoch(request):
-    request.config.getoption("epoch")
+@pytest.fixture(scope="module")
+def config():
+    return tu.get_config()
 
-@pytest.fixture(autouse = True) 
-def BERT(request):
-    strategy = request.config.getoption("strategy")
-    return (strategy == 'BERT' or strategy == 'temporal_interpolation')
+@pytest.fixture(scope="module")
+def target(config):
+    return tu.DataStore.from_config(
+        config, constants.OutputType.target
+    )
 
-@pytest.fixture(autouse = True) 
-def strategy(request):
-    return request.config.getoption("strategy")
+@pytest.fixture(scope="module")
+def prediction(config):
+        return tu.DataStore.from_config(
+            config, constants.OutputType.prediction
+        )
 
-#TODO: add test for global_forecast vs ERA5
 
-def test_datetime(field, model_id, BERT, epoch = 0):
+@pytest.fixture(scope="module")
+def levels(target):
+    return target.levels
 
-    """
-    Check against ERA5 timestamps.
-    Loop over all levels individually. 50 random samples for each level.
-    """
 
-    store = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
-    atmorep = zarr.group(store)
+@pytest.mark.parametrize(
+    ("sample", "level"), tu.get_samples_and_levels()
+)
+class TestValidateOutput:
+    @pytest.fixture
+    def target_data(self, sample, level, target: tu.DataStore) -> tu.GroupData:
+        return target.get_data(sample, level)
 
-    nsamples = min(len(atmorep[field]), 50)
-    samples = rnd.sample(range(len(atmorep[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in atmorep[f"{field}/sample=00000"]] if BERT else atmorep[f"{field}/sample=00000"].ml[:]
-   
-    get_data = get_BERT if BERT else get_forecast
-   
-    for level in levels:
-        #TODO: make it more elegant
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
-
-        for s in samples:
-            data, datetime, lats, lons = get_data(atmorep, field, s, level_idx)
-            year, month = datetime.year, str(datetime.month).zfill(2)
-
-            era5_path = era5_fname().format(field, level, field, year, month, level)
-            if not os.path.isfile(era5_path):
-                warnings.warn(UserWarning((f"Timestamp {datetime} not found in ERA5. Skipping")))
-                continue
-            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[grib_index(field)].sel(time = datetime, latitude = lats, longitude = lons)
-
-            #assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
-            assert np.isclose(data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
-
-#############################################################################
-
-def test_coordinates(field, model_id, BERT, epoch = 0):
-    """
-    Check that coordinates match between target and prediction. 
-    Check also that latitude and longitudes are in geographical coordinates
-    50 random samples.
-    """
-   
-    store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
-    target = zarr.group(store_t)
-
-    store_p = zarr.ZipStore(atmorep_pred().format(model_id, model_id, str(epoch).zfill(5)))
-    pred = zarr.group(store_p)
-
-    nsamples = min(len(target[field]), 50)
-    samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
-   
-    get_data = get_BERT if BERT else get_forecast
-
-    for level in levels:
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
-        for s in samples:
-            _, datetime_target, lats_target, lons_target = get_data(target,field, s, level_idx)
-            _, datetime_pred, lats_pred, lons_pred = get_data(pred, field, s, level_idx)
-
-            check_lats(lats_pred, lats_target)
-            check_lons(lons_pred, lons_target)
-            check_datetimes(datetime_pred, datetime_target)
-
-#########################################################################
-
-def test_rmse(field, model_id, BERT, epoch = 0):
-    """
-    Test that for each field the RMSE does not exceed a certain value. 
-    50 random samples.
-    """
-    store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
-    target = zarr.group(store_t)
-
-    store_p = zarr.ZipStore(atmorep_pred().format(model_id, model_id, str(epoch).zfill(5)))
-    pred = zarr.group(store_p)
+    @pytest.fixture
+    def prediction_data(self, sample, level, prediction: tu.DataStore) -> tu.GroupData:
+        return prediction.get_data(sample, level)
     
-    nsamples = min(len(target[field]), 50)
-    samples = rnd.sample(range(len(target[field])), nsamples)
-    levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
     
-    get_data = get_BERT if BERT else get_forecast
-    
-    for level in levels:
-        level_idx = level if BERT else np.where(levels == level)[0].tolist()[0]
-        for s in samples:
-            sample_target, _, _, _ = get_data(target,field, s, level_idx)
-            sample_pred, _, _, _ = get_data(pred,field, s, level_idx)
+    def test_datetime(
+        self, target_data, level, config: tu.ValidationConfig
+    ):
+        """
+        Check against ERA5 timestamps.
+        Loop over all levels individually. 50 random samples for each level.
+        """
+        timestamp = target_data.datetimes[0].astype(datetime.datetime)
+        year = timestamp.year
+        month = str(timestamp.month).zfill(2)
 
-            assert compute_RMSE(sample_target, sample_pred).mean() < get_max_RMSE(field)
+        era5_path = constants.ERA5_FILE_TEMPLATE.format(
+            config.field_name, level, config.field_name, year, month, level
+        )
+        if not os.path.isfile(era5_path):
+            warnings.warn(UserWarning((f"Timestamp {target_data.datetimes} not found in ERA5. Skipping")))
+        else:
+            era5 = xr.open_dataset(era5_path, engine = "cfgrib")[
+                constants.FIELD_GRIB_IDX[config.field_name]
+            ].sel(
+                time = timestamp,
+                latitude = target_data.lats,
+                longitude = target_data.lons
+            )
+
+            # assert (data[0] == era5.values[0]).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+            assert np.isclose(target_data.data[0], era5.values[0],rtol=1e-04, atol=1e-07).all(), "Mismatch between ERA5 and AtmoRep Timestamps"
+
+
+    def test_lats_match(self, target_data, prediction_data):
+        assert np.all(prediction_data.lats[:] == target_data.lats[:]), "Mismatch between latitudes"
+
+
+    def test_lats_in_range(self, prediction_data):
+        bigger_min = MIN_LAT <= prediction_data.lats[:]
+        smaller_max = prediction_data.lats[:] <= MAX_LAT
+        assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LAT} - {MAX_LAT}"
+
+
+    def test_lons_match(self, prediction_data, target_data):
+        assert np.all(prediction_data.lons[:] == target_data.lons[:]), "Mismatch between latitudes"
+
+
+    def test_lons_in_range(self, prediction_data):
+        bigger_min = MIN_LON <= prediction_data.lons[:]
+        smaller_max = prediction_data.lons[:] <= MAX_LON
+        assert (bigger_min & smaller_max).all(), f"latitudes outside of between {MIN_LON} - {MAX_LON}"
+
+
+    def test_datetimes_match(self, prediction_data, target_data):
+        assert (prediction_data.datetimes == target_data.datetimes).all, "Mismatch between datetimes"
+
+    # @pytest.mark.skip 
+    def test_rmse(
+        self, target_data, prediction_data, config: tu.ValidationConfig
+    ):
+        """
+        Test that for each field the RMSE does not exceed a certain value. 
+        50 random samples.
+        """
+        
+        assert tu.compute_RMSE(
+            target_data.data, prediction_data.data
+        ).mean() < constants.FIELD_MAX_RMSE[config.field_name]
+    
+    def test_datetimes_len(self, prediction_data, config: tu.ValidationConfig):
+        assert len(prediction_data.datetimes) == config.max_lead_time
+
+def test_has_expected_timestamps(config: tu.ValidationConfig, prediction: tu.DataStore):
+    actual = prediction.times
+    expected = config.timesteps
+    is_present = np.isin(expected, actual)
+
+    assert is_present.all(), f"missing expected timestamps: {expected[~is_present]}, given: {actual}"
+
+def test_levels_match(config: tu.ValidationConfig, prediction: tu.DataStore):
+    actual = prediction.levels
+    expected = np.array(config.field.levels)
+    is_present = np.isin(expected, actual)
+    
+    assert is_present.all(), f"missing expected levels: {expected[~is_present]}, given: {actual}"
+    
