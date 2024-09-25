@@ -36,13 +36,17 @@ def normalize( data, norm, dates, year_base = 1979) :
   
 ######################################################
 def normalize_local( data, mean, var) :
+  mask = data == config.filler_value
   data = (data - mean) / var
+  data[mask] = config.filler_value
   return data
 
 ######################################################
 def normalize_global( data, mean, var) :
+  mask = data == config.filler_value
   for i in range( data.shape[0]) :
     data[i] = (data[i] - mean[i]) / var[i]
+  data[mask] = config.filler_value
   return data
 
 
