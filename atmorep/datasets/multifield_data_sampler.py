@@ -58,6 +58,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.lats = np.array( self.ds['lats'])
     self.lons = np.array( self.ds['lons'])
     
+    if self.lons[0] < 0:
+      print("!!! \n Lons shiffted by 180 \n !!!")
+      self.lons += 180.
+    
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
     self.ds_len = st[0] 
