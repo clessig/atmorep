@@ -41,7 +41,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
 from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
-from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
+from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention, write_data_compression
 from atmorep.datasets.normalizer import denormalize
 
 ####################################################################################################
@@ -50,6 +50,7 @@ class Trainer_Base() :
   def __init__( self, cf, devices ) :
 
     self.cf = cf
+
     self.devices = devices
     self.device_in = devices[0]
     self.device_out = devices[-1]
@@ -620,6 +621,8 @@ class Trainer_BERT( Trainer_Base) :
 
     if 'forecast' in self.cf.BERT_strategy :
       self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
+    elif 'data_compression' in self.cf.BERT_strategy : 
+      self.log_validate_data_compression( epoch, bidx, log_sources, log_preds)
     elif 'BERT' in self.cf.BERT_strategy or 'temporal_interpolation' == self.cf.BERT_strategy :
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     else :
@@ -667,7 +670,6 @@ class Trainer_BERT( Trainer_Base) :
           target[bidx,vidx] = denormalize( target[bidx,vidx], normalizer, dates_t, year_base)
 
         coords_b += [[dates, 90.-lats, lons, dates_t]]
-
       # append
       sources_out.append( [field_info[0], source])
       targets_out.append( [field_info[0], target])
@@ -702,7 +704,7 @@ class Trainer_BERT( Trainer_Base) :
       ensembles_out.append( [fn[0], ensemble])
 
     levels = np.array(cf.fields[0][2])
-    
+
     write_forecast( cf.wandb_id, epoch, batch_idx,
                                  levels, sources_out,
                                  targets_out, preds_out,
@@ -859,3 +861,123 @@ class Trainer_BERT( Trainer_Base) :
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
     write_attention(cf.wandb_id, epoch,
                     bidx, levels, attn_out,  coords_b )
+  ######################################################
+  ######################## Asma ###########################
+  def log_validate_data_compression( self, epoch, batch_idx, log_sources, log_preds) :
+    '''Logging for BERT_strategy=data compression.'''
+
+    cf = self.cf
+    # save source: remains identical so just save ones
+    (sources, targets, _) = log_sources
+    sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ] 
+    batch_size = len(self.sources_info)  
+    # reconstruct geo-coords (identical for all fields)
+    forecast_num_tokens = 1
+    if hasattr( cf, 'forecast_num_tokens') :
+      forecast_num_tokens = cf.forecast_num_tokens
+  
+    coords = []
+    for fidx, field_info in enumerate(cf.fields) :
+      # reshape from tokens to contiguous physical field
+      num_levels = len(cf.to_mask) # len(field_info[2]) # changed by Asma
+      source = detokenize( sources[fidx].cpu().detach().numpy())
+      # recover tokenized shape
+      target = detokenize( targets[fidx].cpu().detach().numpy().reshape( [ num_levels, -1, 
+                           forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
+      coords_b = []
+  
+      for bidx in range(batch_size):
+        dates   = self.sources_info[bidx][0]
+        lats    = self.sources_info[bidx][1]
+        lons    = self.sources_info[bidx][2]
+        dates_t = self.get_dates_t(bidx) # Asma added this
+        # self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        print(f"dates_t: {dates_t}")
+
+        lats_idx = self.sources_idxs[bidx][1]
+        lons_idx = self.sources_idxs[bidx][2]
+
+        for vidx, vlevel in enumerate(field_info[2]) : # changed by Asma
+          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx) 
+          source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)
+          if vlevel in cf.to_mask:
+            idx_level_in_masked = cf.to_mask.index(vlevel)
+            target[bidx,idx_level_in_masked] = denormalize( target[bidx,idx_level_in_masked], normalizer, dates_t, year_base)
+
+        coords_b += [[dates, 90.-lats, lons, dates_t]]
+        print(f"At date: {dates_t[0]}")
+      # append
+      sources_out.append( [field_info[0], source])
+      targets_out.append( [field_info[0], target])
+      coords.append(coords_b)
+    # process predicted fields
+    for fidx, fn in enumerate(cf.fields_prediction) :
+      field_info = cf.fields[ self.fields_prediction_idx[fidx] ]
+      num_levels = len(cf.to_mask) # len(field_info[2]) # changed by Asma
+      # predictions
+      pred = log_preds[fidx][0].cpu().detach().numpy()
+      pred = detokenize( pred.reshape( [ num_levels, -1, 
+                                    forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
+      # ensemble
+      ensemble = log_preds[fidx][2].cpu().detach().numpy().swapaxes(0,1)
+      ensemble = detokenize( ensemble.reshape( [ cf.net_tail_num_nets, num_levels, -1, 
+                                            forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(1, 2)).swapaxes(0,1)
+      
+      # denormalize
+      for bidx in range(batch_size) : 
+        lats  = self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
+        dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        for vidx, vlevel in enumerate(field_info[2]) : # changed by Asma # should be optimized 
+          if vlevel in cf.to_mask:
+            idx_level_in_masked = cf.to_mask.index(vlevel)
+            normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
+            pred[bidx,idx_level_in_masked] = denormalize( pred[bidx,idx_level_in_masked], normalizer, dates_t, year_base)
+            ensemble[bidx,:,idx_level_in_masked] = denormalize(ensemble[bidx,:,idx_level_in_masked], normalizer, dates_t, year_base)
+      # append
+      preds_out.append( [fn[0], pred])
+      ensembles_out.append( [fn[0], ensemble])
+      
+    levels = np.array(cf.fields[0][2])
+    masked_levels = cf.to_mask
+    ########################## to be deleted ##################################
+    targets_out_flat = np.array(targets_out[0][1]).flatten() # Asma: to be deleted
+    preds_out_flat = np.array(preds_out[0][1]).flatten() # Asma: to be deleted
+    self.denorm_MSE += mse_skl(targets_out_flat, preds_out_flat) # Asma: to be 
+    self.denorm_MSE_cpt+=1
+    ###########################################################################
+    
+    write_data_compression( cf.wandb_id, epoch, batch_idx,
+                                 levels, masked_levels, sources_out,
+                                 targets_out, preds_out,
+                                 ensembles_out, coords)
+                                 
+  def get_dates_t(self, bidx):
+    cf = self.cf
+    forecast_num_tokens = cf.forecast_num_tokens
+    token_size = cf.fields[0][4]
+    dates_sources = self.sources_info[bidx][0]
+    dates_targets = [ ]
+    match cf.experiment_type:
+      case 'unmask_first':
+        dates_targets =  dates_sources[ -forecast_num_tokens*token_size[0] : ] 
+      case 'unmask_last':
+        dates_targets =  dates_sources[ :forecast_num_tokens*token_size[0] ] 
+      case 'unmask_middle':
+        nt_middle = int(forecast_num_tokens/2)
+        dates_targets_first_half = dates_sources[ :nt_middle*token_size[0] ] 
+        dates_targets_second_half = dates_sources[ (nt_middle + 1)*token_size[0]: ] 
+        dates_targets = np.concatenate((dates_targets_first_half, dates_targets_second_half))
+      case 'unmask_first_last':
+        temp_dates = dates_sources[ -(forecast_num_tokens+1)*token_size[0] : ] 
+        dates_targets =  temp_dates[ :forecast_num_tokens*token_size[0] ] 
+      case 'unmask_first_last_middle':
+        nt_middle = int(forecast_num_tokens/2)
+        dates_targets_first_half = dates_sources[ token_size[0]:(nt_middle+1)*token_size[0] ] 
+        dates_targets_second_half = dates_sources[ (nt_middle + 2)*token_size[0]:(forecast_num_tokens+2)*token_size[0]  ] 
+        dates_targets = np.concatenate((dates_targets_first_half, dates_targets_second_half))
+      case '':
+        dates_targets =  dates_sources
+    return dates_targets
+    
+  ######################## end of Asma adding stuff ###########################
