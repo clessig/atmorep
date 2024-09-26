@@ -32,6 +32,19 @@ import pandas as pd
 
 import atmorep.config.config as config
 
+####################################### Asma ########################################################
+# Function to generate dates 36 hours apart
+def generate_dates(start_date, end_date, hour_step=36):
+  
+    dates = []
+    current_date = datetime.datetime(start_date['year'], start_date['month'], start_date['day'], start_date['hour'])
+    end_date = datetime.datetime(end_date['year'], end_date['month'], end_date['day'], end_date['hour'])  # 1 months
+    while current_date <= end_date:
+        dates.append([current_date.year, current_date.month, current_date.day, current_date.hour])
+        current_date += datetime.timedelta(hours=hour_step)
+    
+    return dates
+
 ####################################################################################################
 class NetMode( Enum) :
   indeterminate = 0
