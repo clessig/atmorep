@@ -38,6 +38,8 @@ def prepare_batch_BERT_multifield( cf, rngs, fields, BERT_strategy, fields_data,
     bert_f = prepare_batch_BERT_forecast_field
   elif BERT_strategy == 'temporal_interpolation' :
     bert_f = prepare_batch_BERT_temporal_field
+  elif BERT_strategy == 'data_compression' :
+    bert_f = prepare_batch_BERT_data_compression_field # prepare_batch_BERT_forecast_field
   else :
     assert False
 
@@ -226,3 +228,70 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
   source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
  
   return (source, token_info, target, tokens_masked_idx_list)
+
+########################################### Asma date = 25.09.2024 ########################################################
+def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, rng) :
+  nt = cf.forecast_num_tokens # new, Asma
+  num_tokens = source.shape[-6:-3] # new, Asma
+  num_tokens_space = num_tokens[1] * num_tokens[2]  # new, Asma
+  idxs = torch.empty(0, dtype=torch.int64) # new, Asma
+  
+  # vlevel = np.unique(token_info[0,:,6]).astype(int).item() # old way of retrieving vlevel
+  vlevel = int(token_info[0,0,0,6]) # new, develop appropriate, Asma
+  target = torch.empty(0, dtype=torch.float32) # new, Asma
+  tokens_masked_idx = [torch.empty(0, dtype=torch.int64)] # Asma changed develop # new, Asma
+  # print(f"vlevel = {vlevel}", flush=True)
+  if vlevel in cf.to_mask: 
+    match cf.experiment_type:
+      case 'unmask_first':
+        idxs = (num_tokens[0]-nt) * num_tokens_space + torch.arange(nt * num_tokens_space)
+      case 'unmask_last':
+        idxs = torch.arange(nt * num_tokens_space) 
+      case 'unmask_middle':
+        nt_middle = int(nt/2)
+        idxs = torch.cat((torch.arange(0, nt_middle * num_tokens_space), torch.arange((nt_middle+1) * num_tokens_space, (nt+1) * num_tokens_space)), 0)
+      case 'unmask_first_last':
+        idxs = (num_tokens[0]-(nt+1)) * num_tokens_space + torch.arange(nt * num_tokens_space)
+      case 'unmask_first_last_middle':
+        nt_middle = int(nt/2)
+        idxs_first_half =  num_tokens_space + torch.arange(nt_middle * num_tokens_space) # shift by 1 from the start
+        idxs_second_half = torch.arange((nt_middle+2) * num_tokens_space, (nt+2) * num_tokens_space)        
+        idxs = torch.cat((idxs_first_half, idxs_second_half), 0)
+      case _:
+        # stands for masking the whole level
+        idxs = torch.arange(nt * num_tokens_space)
+      ## Asma: This case is set aside because it is not currently urgent
+      # case 'unmask_checker':
+      #   idxs = [idx 
+      #     for idx_per_section in range((bidx%2)*num_tokens_space,(nt*2) * num_tokens_space +(bidx%2), num_tokens_space*2)
+      #     for idx in range(idx_per_section, (idx_per_section + num_tokens_space))]
+      #   idxs = torch.tensor(idxs)
+      #   print(f"idxs = {idxs}", flush=True)
+      #   print(f"len(idxs) = {len(idxs)}", flush=True)
+
+    # collapse token dimensions 
+    source_shape0 = source.shape
+    source = torch.flatten( torch.flatten( source, 1, 3), 2, 4)
+
+    num_tokens = source.shape[1]
+
+    ########### change proper to develop 
+    tokens_masked_idx = [idxs + num_tokens * i for i in range( source.shape[0] )] 
+    idx = torch.cat(tokens_masked_idx) # new, Asma, should be merged after
+    ########### end of change proper to develop 
+    
+    # flatten along first two dimension to simplify linear indexing (which then requires an
+    # easily computable row offset)
+    source_shape = source.shape
+    source = torch.flatten( source, 0, 1)
+    
+    target = source[idx].clone()
+    # set mask 
+    source[ idx ] = 0.
+
+    # recover batch dimension which was flattend for easier indexing and also token dimensions
+    source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
+    
+  return (source, token_info, target, tokens_masked_idx)
+
+  ########################################### End of Asma changes ########################################################
