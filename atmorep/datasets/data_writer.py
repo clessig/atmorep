@@ -179,3 +179,59 @@ def write_attention(model_id, epoch, batch_idx, levels, attn, coords, zarr_store
         if atts_f_l_head != None :
           ds_f_l_h.create_dataset(f'{hidx}', data=atts_f_l_head.numpy() )
   store_attn.close()
+
+####################################################################################################
+def write_data_compression( model_id, epoch, batch_idx, levels, masked_levels, sources, 
+                    targets, preds, ensembles, coords,  
+                    zarr_store_type = 'ZipStore' ) :
+  ''' 
+    sources : num_fields x [field name , data]
+    targets :
+    preds, ensemble share coords with targets
+  '''
+  sources_coords = [[c[:3] for c in coord_field ] for coord_field in coords]
+  targets_coords = [[[c[-1], c[1], c[2]] for c in coord_field ] for coord_field in coords]
+  fname =  f'{config.path_results}/id{model_id}/results_id{model_id}_epoch{epoch:05d}' + '_{}.zarr'
+
+  zarr_store = getattr( zarr, zarr_store_type)
+
+  store_source = zarr_store( fname.format( 'source'))
+  exp_source = zarr.group(store=store_source)
+ 
+  for fidx, field in enumerate(sources) :
+    ds_field = exp_source.require_group( f'{field[0]}')
+    batch_size = field[1].shape[0]
+    for bidx in range( field[1].shape[0]) :
+      sample = batch_idx * batch_size + bidx
+      write_item(ds_field, sample, field[1][bidx], levels, sources_coords[fidx][bidx])
+  store_source.close()
+
+  store_target = zarr_store( fname.format( 'target'))
+  exp_target = zarr.group(store=store_target)
+  for fidx, field in enumerate(targets) :
+    ds_field = exp_target.require_group( f'{field[0]}')
+    batch_size = field[1].shape[0]
+    for bidx in range( field[1].shape[0]) :
+      sample = batch_idx * batch_size + bidx
+      write_item(ds_field, sample, field[1][bidx], masked_levels, targets_coords[fidx][bidx]) # changed by Asma
+  store_target.close()
+
+  store_pred = zarr_store( fname.format( 'pred'))
+  exp_pred = zarr.group(store=store_pred)
+  for fidx, field in enumerate(preds) :
+    ds_field = exp_pred.require_group( f'{field[0]}')
+    batch_size = field[1].shape[0]
+    for bidx in range( field[1].shape[0]) :
+      sample = batch_idx * batch_size + bidx
+      write_item(ds_field, sample, field[1][bidx], masked_levels, targets_coords[fidx][bidx]) # changed by Asma 
+  store_pred.close()
+
+  store_ens = zarr_store( fname.format( 'ens'))
+  exp_ens = zarr.group(store=store_ens)
+  for fidx, field in enumerate(ensembles) :
+    ds_field = exp_ens.require_group( f'{field[0]}')
+    batch_size = field[1].shape[0]
+    for bidx in range( field[1].shape[0]) :
+      sample = batch_idx * batch_size + bidx
+      write_item(ds_field, sample, field[1][bidx], masked_levels, targets_coords[fidx][bidx]) # changed by Asma
+  store_ens.close()
