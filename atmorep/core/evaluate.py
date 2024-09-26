@@ -24,7 +24,7 @@ if __name__ == '__main__':
   #model_id = 'oxpycr7w'     # divergence
   #model_id = '1565pb1f'     # specific_humidity
   #model_id = '3kdutwqb'     # total precip
-  model_id = 'dys79lgw'     # velocity_u
+  # model_id = 'dys79lgw'     # velocity_u
   #model_id = '22j6gysw'     # velocity_v
   # model_id = '15oisw8d'     # velocity_z
   #model_id = '3qou60es'     # temperature (also 2147fkco)
@@ -45,7 +45,7 @@ if __name__ == '__main__':
   #Add 'attention' : True to options to store the attention maps. NB. supported only for single field runs. 
   
   # BERT masked token model
-  mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True }
+  # mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True }
 
   # BERT forecast mode
   #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'num_samples_validate' : 128, 'with_pytest' : True }
@@ -67,7 +67,23 @@ if __name__ == '__main__':
 #                                       'forecast_num_tokens' : 2,
 #                                       'with_pytest' : True }
 
-  file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
+  ########################################### Asma date = 25.09.2024 ########################################################
+  start_date = { 'year': 2021, 'month':  1,  'day': 2, 'hour': 12} # because data_loader loads previous 36hrs
+  end_date = {'year': 2021,'month':  1, 'day': 31,'hour': 00}
+  # model_id = 'yxhfkh7r'     # new temperature model
+  model_id = '3qou60es'     # old temperature model
+  mode, options = 'data_compression', {
+                                      # 'dates' : [[2021, 2, 10, 12]] ,
+                                      'dates': generate_dates(start_date, end_date),
+                                      'token_overlap' : [0, 0],
+                                      'experiment_type': 'unmask_last', # 'unmask_first_last_middle', # 'unmask_first_last', # 'unmask_first', #
+                                      'to_mask': [105, 123],
+                                      'with_pytest' : True }
+  ###########################################################################################################################
+  
+  # file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr'
+  file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr' # Asma
+
   
   now = time.time()
   Evaluator.evaluate( mode, model_id, file_path, options)
