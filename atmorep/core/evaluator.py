@@ -243,3 +243,52 @@ class Evaluator( Trainer_BERT) :
       cf.print()
       cf.write_json( wandb)
     evaluator.evaluate( 0)
+  ##############################################
+  ########################################### Asma date = 25.09.2024 ########################################################
+  @staticmethod
+  def data_compression( cf, model_id, model_epoch, devices, args = {}) :
+    '''
+    This is just a place holder for getting things running.
+    It is a copy of global forecast evaluation function
+    '''
+    cf.BERT_strategy = 'data_compression'
+    cf.batch_size_test = 24
+    cf.num_loader_workers = 12 #1
+    cf.log_test_num_ranks = 1
+
+    #TODO: temporary solution. Add support for batch_size > 1 
+    cf.batch_size_validation = 1 #64
+    cf.batch_size = 1
+    
+    if not hasattr(cf, 'num_samples_validate'):
+      cf.num_samples_validate = 196 
+    #if not hasattr(cf,'with_mixed_precision'):
+    cf.with_mixed_precision = True
+
+    Evaluator.parse_args( cf, args)
+
+    match cf.experiment_type:
+      case 'unmask_first':
+        cf.forecast_num_tokens = 11
+      case 'unmask_last':
+        cf.forecast_num_tokens = 11
+      case 'unmask_middle':
+        cf.forecast_num_tokens = 11
+      case 'unmask_first_last':
+        cf.forecast_num_tokens = 10
+      case 'unmask_first_last_middle':
+        cf.forecast_num_tokens = 9
+      case 'unmask_checker':
+        cf.forecast_num_tokens = 6
+      case _ :
+        # stands for masking the whole level
+        cf.forecast_num_tokens = 12
+
+    dates = args['dates']
+    evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
+    evaluator.model.set_global( NetMode.test, np.array( dates))
+    if 0 == cf.par_rank :
+      cf.print()
+      cf.write_json( wandb)
+    evaluator.validate( 0, cf.BERT_strategy)
+  ########################################### End of Asma changes ########################################################
