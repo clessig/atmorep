@@ -450,7 +450,7 @@ class Trainer_Base() :
     
     for pred, idx in zip( preds, self.fields_prediction_idx) :
       target = self.targets[idx]
-      mask = target == config.filler_value
+      mask = target != config.filler_value
 
       mse_loss = self.MSELoss( pred[0][mask], target = target[mask]) 
       mse_loss_total += mse_loss.cpu().detach()
