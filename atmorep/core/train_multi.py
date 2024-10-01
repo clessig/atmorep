@@ -21,6 +21,7 @@ import traceback
 import pdb
 import wandb
 
+import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
@@ -54,6 +55,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
     cf.num_samples_validate = 128
   if not hasattr(cf, 'with_mixed_precision'):
     cf.with_mixed_precision = True
+
   if not hasattr(cf, 'years_val'):
     cf.years_val = cf.years_test
   
@@ -85,6 +87,7 @@ def train() :
 
   num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
+  # device = ['cuda']
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
@@ -165,6 +168,7 @@ def train() :
   cf.torch_seed = torch.initial_seed()
   # training params
   cf.batch_size_validation = 1 #64
+
   cf.batch_size = 96
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
@@ -215,6 +219,7 @@ def train() :
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
   cf.BERT_strategy = 'BERT' #'BERT'
   cf.forecast_num_tokens = 2      # only needed / used for BERT_strategy 'forecast
+
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
   cf.BERT_mr_max = 2              # maximum reduction rate for resolution
@@ -263,7 +268,7 @@ def train() :
 if __name__ == '__main__':
   
   try :
-
+    
    train()
 
     #  wandb_id, epoch, epoch_continue = 'uvrdtc0a', 95, 95 #multiformer from scratch
@@ -275,4 +280,3 @@ if __name__ == '__main__':
     extype, value, tb = sys.exc_info()
     traceback.print_exc()
     pdb.post_mortem(tb)
-
