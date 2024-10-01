@@ -57,6 +57,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   if not hasattr(cf, 'years_val'):
     cf.years_val = cf.years_test
   
+  #cf.with_mixed_precision = False
   # any parameter in cf can be overwritten when training is continued, e.g. we can increase the 
   # masking rate 
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
@@ -82,7 +83,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -106,46 +107,46 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  # cf.fields = [ [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-  #               [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 1 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ], 
-  #               [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2 ], 
-  #                             [ 96, 105, 114, 123, 137 ], 
-  #                             [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-  #               [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3 ], 
-  #                             [ 96, 105, 114, 123, 137 ], 
-  #                             [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-  #               [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3 ], 
-  #                             [ 96, 105, 114, 123, 137 ], 
-  #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
-  #               # ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3], 
-  #               #               [0], 
-  #               #               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] 
-  # ]
-
   cf.fields = [ 
-                [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0, ['j8dwr5qj', -2] ], 
+                [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0 ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 0, ['0tlnm5up', -2] ], 
+                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 1 ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ], 
-                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0, ['tts78c9l', -2] ], 
+                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2 ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0, ['9l1errbo', -2] ], 
+                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3 ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 0, ['yvefro1u', -2] ], 
+                 [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3 ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
-                # ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3, ['3kdutwqb', 900]], 
-                #               [0], 
-                #               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] 
               ]
+
+  # cf.fields = [ 
+  #               [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0, ['j8dwr5qj', -2] ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+  #               [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 1, ['0tlnm5up', -2] ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ], 
+  #              # [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2, ['tts78c9l', -2] ], 
+  #               [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2, ['v63l01zu', -2] ], 
+  #                             [ 96, 105, 114, 123, 137 ], 
+  #                             [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+  #               [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3, ['9l1errbo', -2] ], 
+  #                             [ 96, 105, 114, 123, 137 ], 
+  #                             [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+  #            #   [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3, ['yvefro1u', -2] ], 
+  #                [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3, ['yxhfkh7r', -2] ], 
+  #                             [ 96, 105, 114, 123, 137 ], 
+  #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
+  #               # ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3, ['3kdutwqb', 900]], 
+  #               #               [0], 
+  #               #               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] 
+  #             ]
 
   cf.fields_prediction = [
                           ['velocity_u', 0.225], ['velocity_v', 0.225], 
@@ -153,38 +154,9 @@ def train() :
              #             ['total_precip', 0.1] 
               ]
 
-
-#   cf.fields = [   #[ 'temperature', [ 1, 1024, ['velocity_u'], 0, ['3qou60es', -2] ],
-#   #              #    [ 'temperature', [ 1, 1024, ['velocity_u', 'velocity_v', 'specific_humidity'], 3, ['2147fkco', 87] ],
-#   #                             [ 96, 105, 114, 123, 137 ],
-#   #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
-#                 #[ 'velocity_u', [ 1, 2048, ['velocity_u', 'temperature'], 0, ['dys79lgw', 82] ],
-#        	       	 [ 'velocity_u', [ 1, 2048, ['velocity_v'], 0, ['dys79lgw', -2] ],
-#                                  [ 96, 105, 114, 123, 137 ],
-#                                  [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
-#                 [ 'velocity_v', [ 1, 2048, ['velocity_u'], 0, ['22j6gysw', 82] ],
-#                                 [ 96, 105, 114, 123, 137 ],
-#                                 [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
-#   #               [ 'specific_humidity', [ 1, 2048, ['velocity_u', 'velocity_v', 'temperature'], 2, ['1565pb1f', 62] ],
-#   #                             [ 96, 105, 114, 123, 137 ],
-#   #                             [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'local' ],
-#   #               [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3, ['3cb4q6sl', 190] ],
-#   #                             [ 96, 105, 114, 123, 137 ],
-#   #                             [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.2, 0.05], 'global' ],
-# #                  
-#    #              ['total_precip', [1, 1536, ['velocity_u', 'velocity_v', 'velocity_z', 'specific_humidity'], 3, ['3kdutwqb', 900]],
-#    #                            [0],
-#    #                            [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05]] ]
-#    #cf.fields_prediction = [['velocity_u', 0.225], ['velocity_v', 0.225],
-#    #                        ['specific_humidity', 0.15], ['velocity_z', 0.1], ['temperature', 0.2],
-#    #                        ['total_precip', 0.1] ]
-#   ]
-
-#   cf.fields_prediction = [['velocity_u', 0.5], ['velocity_v', 0.5]]
-
   cf.fields_targets = []
 
-  cf.years_train = list( range( 2010, 2021))
+  cf.years_train = list( range( 1979, 2021))
   cf.years_val = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -205,11 +177,11 @@ def train() :
   cf.grad_checkpointing = True
   cf.with_cls = False
   # network config
-  cf.with_mixed_precision = True
+  cf.with_mixed_precision = True 
   cf.with_layernorm = True
   cf.coupling_num_heads_per_field = 1
   cf.dropout_rate = 0.05
-  cf.with_qk_lnorm = False
+  cf.with_qk_lnorm = True
   # encoder
   cf.encoder_num_layers = 6
   cf.encoder_num_heads = 16
@@ -241,7 +213,7 @@ def train() :
 
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
-  cf.BERT_strategy = 'BERT'
+  cf.BERT_strategy = 'BERT' #'BERT'
   cf.forecast_num_tokens = 2      # only needed / used for BERT_strategy 'forecast
   cf.BERT_fields_synced = False   # apply synchronized / identical masking to all fields 
                                   # (fields need to have same BERT params for this to have effect)
@@ -272,7 +244,7 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
-  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y1979_2021_res025_chunk8.zarr/'
   # # # in steps x lat_degrees x lon_degrees
   cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
@@ -290,17 +262,17 @@ def train() :
 ####################################################################################################
 if __name__ == '__main__':
   
-  #try :
+  try :
 
-    train()
+   train()
 
-    #  wandb_id, epoch, epoch_continue = 'kqlxntd8', 0, -1 #'1jh2qvrx', 392, 392
+    #  wandb_id, epoch, epoch_continue = 'uvrdtc0a', 95, 95 #multiformer from scratch
     #  Trainer = Trainer_BERT
     #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
 
-  # except :
+  except :
     
-  #   extype, value, tb = sys.exc_info()
-  #   traceback.print_exc()
-  #   pdb.post_mortem(tb)
+    extype, value, tb = sys.exc_info()
+    traceback.print_exc()
+    pdb.post_mortem(tb)
 
