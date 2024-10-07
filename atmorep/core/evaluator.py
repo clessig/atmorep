@@ -77,7 +77,7 @@ class Evaluator( Trainer_BERT) :
     else :
       num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
     devices = init_torch( num_accs_per_task)
-    #devices = ['cuda:1']
+    #devices = ['cuda']
 
     par_rank, par_size = setup_ddp( with_ddp)
     cf = Config().load_json( model_id)
@@ -155,11 +155,11 @@ class Evaluator( Trainer_BERT) :
     cf.batch_size_test = 24
     cf.num_loader_workers = 12 #1
     cf.log_test_num_ranks = 1
+
+    #TODO: temporary solution. Add support for batch_size > 1 
+    cf.batch_size_validation = 1 #64
+    cf.batch_size = 1
     
-    if not hasattr(cf, 'batch_size'):
-      cf.batch_size = 196 #14
-    if not hasattr(cf, 'batch_size_validation'):
-      cf.batch_size_validation = 1 #64
     if not hasattr(cf, 'num_samples_validate'):
       cf.num_samples_validate = 196 
     #if not hasattr(cf,'with_mixed_precision'):

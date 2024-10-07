@@ -1,10 +1,12 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-4:30:00
-#SBATCH --nodes=1
+#SBATCH --time=0-71:59:59
+#SBATCH --nodes=8
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=80
 #SBATCH --gres=gpu:4
 #SBATCH --chdir=.
+#SBATCH --exclusive
 #SBATCH --qos=acc_ehpc
 #SBATCH --output=logs/atmorep-%x.%j.out
 #SBATCH --error=logs/atmorep-%x.%j.err
@@ -37,11 +39,11 @@ date
 
 export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
-CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_eval_${SLURM_JOBID}
+CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_train_${SLURM_JOBID}
 mkdir ${CONFIG_DIR}
-cp ${SLURM_SUBMIT_DIR}/atmorep/core/evaluate.py ${CONFIG_DIR}
-echo "${CONFIG_DIR}/evaluate.py"
-srun --label --cpu-bind=v ${SLURM_SUBMIT_DIR}/pyenv/bin/python -u ${CONFIG_DIR}/evaluate.py > output/output_${SLURM_JOBID}.txt
+cp ${SLURM_SUBMIT_DIR}/atmorep/core/train_multi.py ${CONFIG_DIR}
+echo "${CONFIG_DIR}/train_multi.py"
+srun --label --cpu-bind=v --accel-bind=v ${SLURM_SUBMIT_DIR}/pyenv/bin/python -u ${CONFIG_DIR}/train_multi.py > output/output_${SLURM_JOBID}.txt
 
 echo "Finished job."
 date

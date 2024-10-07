@@ -1,11 +1,12 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-24:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --cpus-per-task=20
-#SBATCH --gres=gpu:4
+#SBATCH --time=0-71:59:59
+#SBATCH --nodes=8
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=40
+#SBATCH --gres=gpu:1
 #SBATCH --chdir=.
+#SBATCH --exclusive
 #SBATCH --qos=acc_ehpc
 #SBATCH --output=logs/atmorep-%x.%j.out
 #SBATCH --error=logs/atmorep-%x.%j.err
@@ -17,7 +18,7 @@ export UCX_TLS="^cma"
 export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_4:1,mlx5_5:1
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0 #,1,2,3
 
 # so processes know who to talk to
 export MASTER_ADDR="$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)"

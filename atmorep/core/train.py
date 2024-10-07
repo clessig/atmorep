@@ -31,7 +31,7 @@ from atmorep.utils.utils import init_torch
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task =  1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -62,7 +62,10 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-
+  cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
+                               [ 96, 105, 114, 123, 137 ], 
+                               [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05]] ]
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
@@ -82,7 +85,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
   device = init_torch( num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
@@ -106,17 +109,22 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+  # cf.fields = [ [ 'temperature', [ 1, 768, [ ], 0 ], 
   #                              [ 96, 105, 114, 123, 137 ], 
-  #                              [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
+  #                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ] ]
   # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
+ 
   cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                  [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
 
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
+  # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
+  #                               [ 96, 105, 114, 123, 137 ], 
+  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
   # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
@@ -133,7 +141,7 @@ def train() :
 
   cf.fields_targets = []
 
-  cf.years_train = list( range( 2010, 2021))
+  cf.years_train = list( range( 1979, 2021))
   cf.years_val = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -176,7 +184,7 @@ def train() :
   cf.net_tail_num_nets = 16
   cf.net_tail_num_layers = 0
   # loss
-  cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
+  cf.losses = ['mse_ensemble', 'stats'] #['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
   # training
   cf.optimizer_zero = False
   cf.lr_start = 5. * 10e-7
@@ -185,6 +193,7 @@ def train() :
   cf.weight_decay = 0.05 #0.1
   cf.lr_decay_rate = 1.025
   cf.lr_start_epochs = 3
+  cf.model_log_frequency = 256 #save checkpoint every X batches
   # BERT
   # strategies: 'BERT', 'forecast', 'temporal_interpolation'
   cf.BERT_strategy = 'BERT'
@@ -218,7 +227,7 @@ def train() :
   # # # cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y2021_res025_chunk8.zarr'
   # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk8_lat180_lon180.zarr'
   # # # cf.file_path = '/ec/res4/scratch/nacl/atmorep/era5_y2021_res025_chunk16.zarr'
-  cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  cf.file_path = '/gpfs/scratch/ehpc03/era5_y1979_2021_res025_chunk8.zarr/'
   # # # in steps x lat_degrees x lon_degrees
   cf.n_size = [36, 0.25*9*6, 0.25*9*12]
 
@@ -239,8 +248,9 @@ if __name__ == '__main__':
   try :
 
     train()
-
-    #  wandb_id, epoch, epoch_continue = '1jh2qvrx', 392, 392
+ 
+    # wandb_id, epoch, epoch_continue = 'kqlxntd8', 0, -1 #'1jh2qvrx', 392, 392
+    #  wandb_id, epoch, epoch_continue = 'yvefro1u', -2, -2
     #  Trainer = Trainer_BERT
     #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
 
