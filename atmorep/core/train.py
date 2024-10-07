@@ -85,8 +85,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  devices = init_torch()
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
@@ -96,7 +95,7 @@ def train() :
   cf = Config()
   # parallelization
   cf.with_ddp = with_ddp
-  cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
+  cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.par_rank = par_rank
   cf.par_size = par_size
   
@@ -239,7 +238,7 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
-  trainer = Trainer_BERT( cf, device).create()
+  trainer = Trainer_BERT( cf, devices).create()
   trainer.run()
 
 ####################################################################################################

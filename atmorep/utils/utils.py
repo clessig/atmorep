@@ -31,6 +31,7 @@ import torch.utils.data.distributed
 import pandas as pd
 
 import atmorep.config.config as config
+from atmorep.utils.logger import logger
 
 ####################################################################################################
 class NetMode( Enum) :
@@ -136,7 +137,7 @@ def tensor_to_str(tensor):
     return ''.join([chr(x) for x in tensor])
 
 ####################################################################################################
-def init_torch( num_accs_per_task) :
+def init_torch() :
   
   torch.set_printoptions( linewidth=120)
 
@@ -144,14 +145,12 @@ def init_torch( num_accs_per_task) :
   if not use_cuda :
     return torch.device( 'cpu')
 
-  local_id_node = os.environ.get('SLURM_LOCALID', '-1')
-  if local_id_node == '-1' :
+  num_accs_per_task = torch.cuda.device_count()
+  if num_accs_per_task == '1' :
     devices = ['cuda']
   else :
-    devices = ['cuda:{}'.format(int(local_id_node) * num_accs_per_task + i) 
-                                                                  for i in range(num_accs_per_task)]
-  print( 'devices : {}'.format( devices) )
-  torch.cuda.set_device( int(local_id_node) * num_accs_per_task )
+    devices = [f'cuda:{i}' for i in range(num_accs_per_task)]
+  logger.info( 'Using devices : {}'.format( devices) )
 
   torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -176,6 +175,9 @@ def setup_ddp( with_ddp = True) :
     dist.init_process_group( backend='nccl', init_method='tcp://' + master_node + ':1345',
                               timeout=datetime.timedelta(seconds=10*8192),
                               world_size = size, rank = rank) 
+    logger.info( f'Using DDP with MASTER_ADDR={master_node}.' )
+  else :
+    logger.info( 'DDP is not used.' )
 
   return rank, size
 
