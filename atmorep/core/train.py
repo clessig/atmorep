@@ -62,10 +62,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 6, 12], [3, 9, 9], [0.5, 0.9, 0.1, 0.05] ] ]
-  # cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
-  #                              [ 96, 105, 114, 123, 137 ], 
-  #                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05]] ]
-  # cf.file_path = '/gpfs/scratch/ehpc03/era5_y2010_2021_res025_chunk8.zarr/'
+  
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  

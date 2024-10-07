@@ -1,9 +1,9 @@
 #!/bin/bash -x
 #SBATCH --account=ehpc03
-#SBATCH --time=0-4:30:00
+#SBATCH --time=0-3:30:00
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=80
-#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=40
+#SBATCH --gres=gpu:2
 #SBATCH --chdir=.
 #SBATCH --qos=acc_ehpc
 #SBATCH --output=logs/atmorep-%x.%j.out
