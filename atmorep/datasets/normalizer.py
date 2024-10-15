@@ -64,16 +64,20 @@ def denormalize(data, norm, dates, year_base = 1979) :
 ######################################################
 
 def denormalize_local(data, mean, var) :
+  mask = data == config.filler_value
+
   if len(data.shape) > 3: #ensemble
     for i in range( data.shape[0]) :
       data[i] = (data[i] * var) + mean
   else:
       data = (data * var) + mean
+  data[mask] = config.filler_value
   return data
 
 ######################################################
 
 def denormalize_global(data, mean, var) :
+  mask = data == config.filler_value
   if len(data.shape) > 3: #ensemble
     data = data.swapaxes(0,1)
     for i in range( data.shape[0]) :
@@ -82,5 +86,5 @@ def denormalize_global(data, mean, var) :
   else:
     for i in range( data.shape[0]) :
       data[i] = (data[i] * var[i]) + mean[i]
-    
+  data[mask] = config.filler_value
   return data
