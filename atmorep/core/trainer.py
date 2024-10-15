@@ -102,7 +102,7 @@ class Trainer_Base() :
     trainer.model.net.encoder_to_decoder = trainer.encoder_to_decoder
     trainer.model.net.decoder_to_tail = trainer.decoder_to_tail
 
-    str = 'Loaded model id = {}{}.'.format( model_id, f' at epoch = {epoch}' if epoch> -2 else '')
+    str = 'Do chuja wafla Loaded model id = {}{}.'.format( model_id, f' at epoch = {epoch}' if epoch> -2 else '')
     print( str)
     return trainer
 
@@ -363,7 +363,7 @@ class Trainer_Base() :
     test_len = 0
 
     self.mode_test = True
-      
+    
     # run test set evaluation
     with torch.no_grad() : 
       for it in range( self.model.len( NetMode.test)) :
@@ -383,6 +383,7 @@ class Trainer_Base() :
         for pred, idx in zip( preds, self.fields_prediction_idx) :
           
           target = self.targets[idx]
+          
           # hook for custom test loss
           self.test_loss( pred, target)
           # base line loss
@@ -450,9 +451,8 @@ class Trainer_Base() :
     
     for pred, idx in zip( preds, self.fields_prediction_idx) :
       target = self.targets[idx]
-      mask = target != config.filler_value
 
-      mse_loss = self.MSELoss( pred[0][mask], target = target[mask]) 
+      mse_loss = self.MSELoss( pred[0], target = target) 
       mse_loss_total += mse_loss.cpu().detach()
 
       # MSE loss
@@ -463,7 +463,7 @@ class Trainer_Base() :
       if 'mse_ensemble' in self.cf.losses :
         loss_en = torch.tensor( 0., device=target.device)
         for en in torch.transpose( pred[2], 1, 0) :
-          loss_en += self.MSELoss( en[mask], target = target[mask]) 
+          loss_en += self.MSELoss( en, target = target) 
         losses['mse_ensemble'].append( loss_en / pred[2].shape[1])
 
       if 'weighted_mse' in self.cf.losses :
@@ -545,7 +545,7 @@ class Trainer_BERT( Trainer_Base) :
 
     cf = self.cf
     devs = self.devices
-
+    # print(f"prepare batch xin {xin}")
     # unpack loader output
     # xin[0] since BERT does not have targets
     (sources, token_infos, targets, fields_tokens_masked_idx_list, _) = xin[0]
@@ -622,7 +622,7 @@ class Trainer_BERT( Trainer_Base) :
   ###################################################
   def log_validate_forecast( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=forecast.'''
-
+    print("validating forecast")
     cf = self.cf
 
     # save source: remains identical so just save ones
