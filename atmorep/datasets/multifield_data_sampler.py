@@ -58,6 +58,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.lats = np.array( self.ds['lats'])
     self.lons = np.array( self.ds['lons'])
     
+    if self.lons[0] < 0:
+      print("!!! \n Lons shiffted by 180 \n !!!")
+      self.lons += 180.
+    
     sh = self.ds['data'].shape
     st = self.ds['time'].shape
     self.ds_len = st[0] 
@@ -154,13 +158,14 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         lat_ran = np.where(np.logical_and(lats>idx[0]-ns_2[1]-res[0]/2.,lats<idx[0]+ns_2[1]))[0]
         # handle periodicity of lon
         assert not ((idx[1]-ns_2[2]) < 0. and (idx[1]+ns_2[2]) > 360.)
-        il, ir = (idx[1]-ns_2[2]-res[1]/2., idx[1]+ns_2[2])
+        il, ir = (idx[1]-ns_2[2], idx[1]+ns_2[2])
+
         if il < 0. :
           lon_ran = np.concatenate( [np.where( lons > il+360)[0], np.where(lons < ir)[0]], 0)
         elif ir > 360. :
           lon_ran = np.concatenate( [np.where( lons > il)[0], np.where(lons < ir-360)[0]], 0)
         else : 
-          lon_ran = np.where(np.logical_and( lons > il, lons < ir))[0]
+          lon_ran = np.where(np.logical_and( lons > il -res[1]/2., lons < ir))[0]
         
         sources_infos += [ [ self.ds['time'][ idxs_t ].astype(datetime), 
                              self.lats[lat_ran], self.lons[lon_ran], self.res ] ]
