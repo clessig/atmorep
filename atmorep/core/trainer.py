@@ -1,4 +1,6 @@
-####################################################################################################
+
+  
+    ####################################################################################################
 #
 #  Copyright (C) 2022
 #
@@ -44,13 +46,16 @@ from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMo
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention, write_data_compression
 from atmorep.datasets.normalizer import denormalize
 
+## proper to data loading for data compression
+from atmorep.utils.utils import generate_dates #Asma
+from atmorep.utils.utils import NetMode # Asma
+
 ####################################################################################################
 class Trainer_Base() :
 
   def __init__( self, cf, devices ) :
 
     self.cf = cf
-
     self.devices = devices
     self.device_in = devices[0]
     self.device_out = devices[-1]
@@ -157,8 +162,19 @@ class Trainer_Base() :
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
       print( f'Number of trainable parameters: {num_params:,}')
-  
+    
+    '''
+    # related to Asma's fine-tuning
     if cf.test_initial :
+      validation_dates = [
+        [2021, 2, 10, 12]
+        # [2021, 1, 10, 12],
+        # [2021, 4, 10, 12], 
+        # [2021, 7, 10, 12], 
+        # [2021, 10, 10, 12]
+      ]
+      self.model.set_global( NetMode.test, np.array( validation_dates)) # Asma
+    '''
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
       test_loss = np.array( [cur_test_loss])
     else :
@@ -171,13 +187,36 @@ class Trainer_Base() :
       for g in self.optimizer.param_groups:
         g['lr'] = lr
       self.profile()
-
+    '''
+    # related to Asma's fine-tuning
+    ####################################### Asma on sep 27, 2024 ##############################################
+    
+    # This should be turned into a function before pushing the code. For now it is only for testing purposes
+    # If it works, I should ask Ilaria where to put this part, architecture-wise
+    
+    start_date = { 'year': 1979, 'month':  1,  'day': 2, 'hour': 12} # because data_loader loads previous 36hrs
+    end_date = {'year': 2020,'month':  12, 'day': 31,'hour': 23}
+    train_dates = generate_dates(start_date, end_date)
+    #################################### end of Asma on sep 27, 2024 ###########################################
+    '''
     # training loop
     while True :
 
       if epoch >= cf.num_epochs :
         break
-        
+      
+      '''
+      # related to Asma's fine-tuning
+      ####################################### Asma on sep 27, 2024 ##############################################
+      This should be turned into a function before pushing the code. For now it is only for testing purposes
+      If it works, I should ask Ilaria where to put this part, architecture-wise
+      train_dates_rnd1 = np.random.permutation(train_dates)
+      train_dates_rnd2 = np.random.permutation(train_dates_rnd1)
+
+      train_dates_rnd = train_dates_rnd2[:253]
+      self.model.set_global( NetMode.train, np.array( train_dates_rnd)) # Asma
+      #################################### end of Asma on sep 27, 2024 ###########################################
+      '''
       lr = learn_rates[epoch]
       for g in self.optimizer.param_groups:
         g['lr'] = lr
@@ -189,7 +228,17 @@ class Trainer_Base() :
       
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
-
+      '''
+      # related to Asma's fine-tuning
+      validation_dates = [
+        [2021, 2, 10, 12]
+        # [2021, 1, 10, 12],
+        # [2021, 4, 10, 12], 
+        # [2021, 7, 10, 12], 
+        # [2021, 10, 10, 12]
+      ]
+      self.model.set_global( NetMode.test, np.array( validation_dates)) # Asma
+      '''
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
       # self.validate( epoch, 'forecast')
 
@@ -401,8 +450,7 @@ class Trainer_Base() :
           log_preds = [[p.detach().clone().cpu() for p in pred] for pred in preds]
           self.log_validate( epoch, it, log_sources, log_preds)
           if cf.attention:
-            self.log_attention( epoch, it, atts)
-                             
+            self.log_attention( epoch, it, atts)                      
     # average over all nodes
     total_loss /= test_len * len(self.cf.fields_prediction)
     total_losses /= test_len
@@ -704,7 +752,7 @@ class Trainer_BERT( Trainer_Base) :
       ensembles_out.append( [fn[0], ensemble])
 
     levels = np.array(cf.fields[0][2])
-
+    
     write_forecast( cf.wandb_id, epoch, batch_idx,
                                  levels, sources_out,
                                  targets_out, preds_out,
@@ -892,7 +940,6 @@ class Trainer_BERT( Trainer_Base) :
         lons    = self.sources_info[bidx][2]
         dates_t = self.get_dates_t(bidx) # Asma added this
         # self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
-        print(f"dates_t: {dates_t}")
 
         lats_idx = self.sources_idxs[bidx][1]
         lons_idx = self.sources_idxs[bidx][2]
@@ -918,10 +965,10 @@ class Trainer_BERT( Trainer_Base) :
       pred = log_preds[fidx][0].cpu().detach().numpy()
       pred = detokenize( pred.reshape( [ num_levels, -1, 
                                     forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
-      # ensemble
-      ensemble = log_preds[fidx][2].cpu().detach().numpy().swapaxes(0,1)
-      ensemble = detokenize( ensemble.reshape( [ cf.net_tail_num_nets, num_levels, -1, 
-                                            forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(1, 2)).swapaxes(0,1)
+      # # ensemble
+      # ensemble = log_preds[fidx][2].cpu().detach().numpy().swapaxes(0,1)
+      # ensemble = detokenize( ensemble.reshape( [ cf.net_tail_num_nets, num_levels, -1, 
+      #                                       forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(1, 2)).swapaxes(0,1)
       
       # denormalize
       for bidx in range(batch_size) : 
@@ -933,24 +980,17 @@ class Trainer_BERT( Trainer_Base) :
             idx_level_in_masked = cf.to_mask.index(vlevel)
             normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
             pred[bidx,idx_level_in_masked] = denormalize( pred[bidx,idx_level_in_masked], normalizer, dates_t, year_base)
-            ensemble[bidx,:,idx_level_in_masked] = denormalize(ensemble[bidx,:,idx_level_in_masked], normalizer, dates_t, year_base)
+            # ensemble[bidx,:,idx_level_in_masked] = denormalize(ensemble[bidx,:,idx_level_in_masked], normalizer, dates_t, year_base)
       # append
       preds_out.append( [fn[0], pred])
-      ensembles_out.append( [fn[0], ensemble])
+      # ensembles_out.append( [fn[0], ensemble])
       
     levels = np.array(cf.fields[0][2])
     masked_levels = cf.to_mask
-    ########################## to be deleted ##################################
-    targets_out_flat = np.array(targets_out[0][1]).flatten() # Asma: to be deleted
-    preds_out_flat = np.array(preds_out[0][1]).flatten() # Asma: to be deleted
-    self.denorm_MSE += mse_skl(targets_out_flat, preds_out_flat) # Asma: to be 
-    self.denorm_MSE_cpt+=1
-    ###########################################################################
-    
     write_data_compression( cf.wandb_id, epoch, batch_idx,
                                  levels, masked_levels, sources_out,
                                  targets_out, preds_out,
-                                 ensembles_out, coords)
+                                 _, coords)
                                  
   def get_dates_t(self, bidx):
     cf = self.cf
