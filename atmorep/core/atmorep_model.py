@@ -61,7 +61,8 @@ class AtmoRepData( torch.nn.Module) :
 
     cf = self.net.cf
     if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
+      # batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test # Asma commented: new Atmorep implementation
+      batch_size = cf.batch_size if mode == NetMode.train else cf.batch_size_validation  # Asma changed: old Atmorep implementation
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_data( times_pos, batch_size)
@@ -73,7 +74,8 @@ class AtmoRepData( torch.nn.Module) :
 
     cf = self.net.cf
     if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
+      # batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test # Asma commented: new Atmorep implementation
+      batch_size = cf.batch_size if mode == NetMode.train else cf.batch_size_validation  # Asma changed: old Atmorep implementation
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_global( times, batch_size, cf.token_overlap)
 
@@ -85,7 +87,8 @@ class AtmoRepData( torch.nn.Module) :
 
     cf = self.net.cf
     if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
+      # batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test # Asma commented: new Atmorep implementation
+      batch_size = cf.batch_size if mode == NetMode.train else cf.batch_size_validation  # Asma changed: old Atmorep implementation
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_location( pos, years, months, num_t_samples_per_month, batch_size)
