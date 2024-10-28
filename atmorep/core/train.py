@@ -20,13 +20,14 @@ import sys
 import traceback
 import pdb
 import wandb
+import code
 
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
-
+from atmorep.utils.utils import NetMode
 
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
@@ -148,12 +149,12 @@ def train() :
   # random seeds
   cf.torch_seed = torch.initial_seed()
   # training params
+  cf.batch_size_train = 1
   cf.batch_size_validation = 1 #64
-  cf.batch_size = 96
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 0
   
   # additional infos
   cf.size_token_info = 8
@@ -238,7 +239,20 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
+
+  # TODO: batch_size needs to be overwritten and becomes inconsistent--to what extent is this
+  # an issue
+  cf.BERT_strategy = 'global_forecast'
+  cf.token_overlap = [0, 0]
+
+  cf.num_loader_workers = 6
+
   trainer = Trainer_BERT( cf, devices).create()
+
+  batch_size = trainer.model.set_global_range( NetMode.train, [1979, 1, 1, 0], [2018, 12, 31, 23])
+  cf.batch_size_train = batch_size
+  cf.batch_size_validation = batch_size
+
   trainer.run()
 
 ####################################################################################################

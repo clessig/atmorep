@@ -17,7 +17,7 @@
 import torch
 
 from atmorep.transformer.mlp import MLP
-from atmorep.transformer.transformer_attention import MultiSelfAttentionHead, MultiCrossAttentionHead
+from atmorep.transformer.transformer_attention import MultiSelfAttentionHead,MultiCrossAttentionHead
 from atmorep.transformer.axial_attention import MultiFieldAxialAttention
 from atmorep.utils.utils import identity
 from atmorep.transformer.transformer_base import checkpoint_wrapper
@@ -55,13 +55,11 @@ class TransformerDecoder(torch.nn.Module) :
       # self attention sub-block (as in original Vaswani)
       if self_att :
         self.blocks.append( MultiSelfAttentionHead( dim_embed, num_heads, cf.dropout_rate, 
-                                                    cf.decoder_att_type, cf.with_qk_lnorm,
-                                                    cf.grad_checkpointing) )
+                                                    cf.decoder_att_type, cf.with_qk_lnorm) )
       # cross attention between encoder and decoder
       if 'dense' == cf.decoder_att_type :
         self.blocks.append( MultiCrossAttentionHead( dim_embed, num_heads_self, num_heads_other, 
-                                                     cf.dropout_rate, cf.with_qk_lnorm,
-                                                     cf.grad_checkpointing, cf.attention ) )
+                                                  cf.dropout_rate, cf.with_qk_lnorm, cf.attention))
       elif 'axial' in cf.decoder_att_type :
         par = True if 'parallel' in cf.encoder_att_type else False
         self.blocks.append( MultiFieldAxialAttention( [3,2,1], [dim_embed,dim_embed], 

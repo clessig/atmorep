@@ -15,6 +15,7 @@
 ####################################################################################################
 
 import torch
+from torch.utils.checkpoint import checkpoint
 import numpy as np
 
 
@@ -114,7 +115,7 @@ def prepare_token( xin, embed, embed_token_info) :
   num_levels = token_seq.shape[1]
 
   # embedding, flatten along token dimension and spatial dimensions
-  token_seq_embed = embed( torch.flatten( torch.flatten( token_seq, -3, -1), -3, -2) )
+  token_seq_embed = checkpoint( embed, torch.flatten( torch.flatten( token_seq, -3, -1), -3, -2) )
   
   # add auxiliary, global token information
   token_info = embed_token_info( token_info).to( token_seq_embed.device, non_blocking=True )

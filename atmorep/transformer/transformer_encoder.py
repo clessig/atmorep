@@ -78,7 +78,8 @@ class TransformerEncoder(torch.nn.Module) :
       # attention heads
       if 'dense' == cf.encoder_att_type :
         head = MultiInterAttentionHead( nhs, len(field_info[1][2]), nhc, dims_embed, with_ln, dor,
-                                        cf.with_qk_lnorm, cf.grad_checkpointing, 
+                                        True, cf.grad_checkpointing, 
+                                        # cf.with_qk_lnorm, cf.grad_checkpointing, 
                                         with_attention=cf.attention )
       elif 'axial' in cf.encoder_att_type :
         par = True if 'parallel' in cf.encoder_att_type else False

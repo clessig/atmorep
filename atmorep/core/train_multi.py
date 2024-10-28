@@ -27,7 +27,7 @@ from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
-
+from atmorep.utils.utils import NetMode
 
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
@@ -86,7 +86,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 def train() :
 
   devices = init_torch()
-  with_ddp = True
+  with_ddp = False
   par_rank, par_size = setup_ddp( with_ddp)
 
   torch.backends.cuda.matmul.allow_tf32 = True
@@ -107,22 +107,21 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ 
-                [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0 ], 
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, ['velocity_v', 'temperature'], 0 ], 
                                 [ 96, 105, 114, 123, 137 ], 
                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 1 ], 
+                [ 'velocity_v', [ 1, 1024, ['velocity_u', 'temperature'], 0 ], 
                                 [ 96, 105, 114, 123, 137 ], 
-                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ], 
-                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 2 ], 
+                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0 ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 3 ], 
+                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v', 'temperature'], 0 ], 
                               [ 96, 105, 114, 123, 137 ], 
                               [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
-                 [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 3 ], 
+                 [ 'temperature', [ 1, 512, ['velocity_u', 'velocity_v', 'specific_humidity'], 0 ], 
                               [ 96, 105, 114, 123, 137 ], 
-                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ],
+                              [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05], 'local' ],
               ]
 
   # cf.fields = [ 
@@ -154,6 +153,25 @@ def train() :
              #             ['total_precip', 0.1] 
               ]
 
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, ['velocity_v'], 0 ],
+                                [ 96, 105, 114, 123, 137 ], 
+                                [3, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+                [ 'velocity_v', [ 1, 1024, ['velocity_u'], 0 ],
+                                [ 96, 105, 114, 123, 137 ],
+                                [2, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+                [ 'velocity_z', [ 1, 1024, ['velocity_u', 'velocity_v'], 0 ],
+                                [ 96, 105, 114, 123, 137 ],
+                                [3, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+                [ 'specific_humidity', [ 1, 1024, ['velocity_u', 'velocity_v'], 0 ], 
+                              [ 96, 105, 114, 123, 137 ], 
+                              [3, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ],
+                [ 'temperature', [ 1, 1024, ['velocity_u', 'velocity_v', 'specific_humidity'], 0 ], 
+                              [ 96, 105, 114, 123, 137 ], 
+                              [3, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
+  cf.fields_prediction = [ ['velocity_u', 0.2], ['velocity_v', 0.2], ['velocity_z', 0.2],
+                            ['specific_humidity', 0.2], ['temperature', 0.2] ] 
+
   cf.fields_targets = []
 
   cf.years_train = list( range( 1979, 2021))
@@ -164,13 +182,12 @@ def train() :
   # random seeds
   cf.torch_seed = torch.initial_seed()
   # training params
-  cf.batch_size_validation = 1 #64
-
-  cf.batch_size = 96
+  cf.batch_size_train = 196 #96
+  cf.batch_size_validation = 196 # 48 # #64
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 5
+  cf.num_loader_workers = 8
   
   # additional infos
   cf.size_token_info = 8
@@ -258,7 +275,22 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
+  # trainer = Trainer_BERT( cf, devices).create()
+
+
+  # TODO: batch_size needs to be overwritten and becomes inconsistent--to what extent is this
+  # an issue
+  cf.BERT_strategy = 'global_forecast'
+  cf.token_overlap = [0, 0]
+
+  cf.num_loader_workers = 8
+
   trainer = Trainer_BERT( cf, devices).create()
+
+  batch_size = trainer.model.set_global_range( NetMode.train, [1979, 1, 1, 0], [2018, 12, 31, 23])
+  cf.batch_size_train = batch_size
+  cf.batch_size_validation = batch_size
+
   trainer.run()
 
 ####################################################################################################

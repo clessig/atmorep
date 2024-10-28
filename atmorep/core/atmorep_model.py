@@ -18,9 +18,8 @@ import torch
 import numpy as np
 import code
 import os
-# code.interact(local=locals())
 
-# import horovod.torch as hvd
+from torch.utils.checkpoint import checkpoint
 
 import atmorep.utils.utils as utils
 from atmorep.utils.utils import identity
@@ -32,10 +31,16 @@ from atmorep.transformer.transformer_base import checkpoint_wrapper
 
 from atmorep.datasets.multifield_data_sampler import MultifieldDataSampler
 
+from atmorep.transformer.transformer import Transformer
+from atmorep.transformer.transformer_attention import MultiCrossAttentionHeadQKV
 from atmorep.transformer.transformer_encoder import TransformerEncoder
 from atmorep.transformer.transformer_decoder import TransformerDecoder
 from atmorep.transformer.tail_ensemble import TailEnsemble
 
+
+def freeze_weights( block) :
+  for p in block.parameters() :
+    p.requires_grad = False
 
 ####################################################################################################
 class AtmoRepData( torch.nn.Module) :
@@ -61,7 +66,7 @@ class AtmoRepData( torch.nn.Module) :
 
     cf = self.net.cf
     if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
+      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_validation
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_data( times_pos, batch_size)
@@ -69,15 +74,24 @@ class AtmoRepData( torch.nn.Module) :
     self._set_data( dataset, mode, batch_size, num_loader_workers)
 
   ###################################################
-  def set_global( self, mode : NetMode, times, batch_size = -1, num_loader_workers = -1) :
+  def set_global( self, mode : NetMode, times) :
 
-    cf = self.net.cf
-    if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
-    dataset.set_global( times, batch_size, cf.token_overlap)
+    batch_size = dataset.set_global( times, batch_size, self.net.cf.token_overlap)
 
-    self._set_data( dataset, mode, batch_size, num_loader_workers)
+    self._set_data( dataset, mode, batch_size)
+
+    return batch_size
+
+  ###################################################
+  def set_global_range( self, mode : NetMode, datetime_start, datetime_end) :
+
+    dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
+    batch_size = dataset.set_global_range( datetime_start, datetime_end, self.net.cf.token_overlap)
+
+    self._set_data( dataset, mode, batch_size)
+
+    return batch_size
 
   ###################################################
   def set_location( self, mode : NetMode, pos, years, months, num_t_samples_per_month, 
@@ -85,7 +99,7 @@ class AtmoRepData( torch.nn.Module) :
 
     cf = self.net.cf
     if batch_size < 0 :
-      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
+      batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_validation
     
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
     dataset.set_location( pos, years, months, num_t_samples_per_month, batch_size)
@@ -185,7 +199,7 @@ class AtmoRepData( torch.nn.Module) :
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
 
     self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
-                                                cf.batch_size,
+                                                cf.batch_size_train,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
                                                 with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
                                                 with_source_idxs = True, 
@@ -328,18 +342,88 @@ class AtmoRep( torch.nn.Module) :
       device = self.devices[0]
       if len(field_info[1]) > 3 :
         device = self.devices[ field_info[1][3] ]
-      self.decoders[field_idx].to(device)
-      self.tails[field_idx].to(device)
+      self.decoders[field_idx].to('cuda:2')
+      self.tails[field_idx].to('cuda:3')
 
     # embed_token_info on device[0] since it is shared by all fields, potentially sub-optimal
     self.embed_token_info.to(devices[0])  # TODO: only for backward compatibility, remove
     self.embeds_token_info.to(devices[0])
 
+    # forecasting 
+
+    # TODO: move parameters to config
+    # TODO: .to('cuda')
+
+    cf.forecast_num_neighborhoods = 196
+    cf.forecast_dim_embed = 2048
+    cf.local_global_num_heads = 16
+    cf.local_global_dropout_rate = 0.1
+    cf.local_global_with_qk_lnorm = True
+    cf.forecast_num_layers = 6
+    cf.forecast_num_att_heads = 16
+    cf.forecast_dropout_rate = 0.1
+    cf.forecast_with_qk_lnorm = True
+
+    # mapper from local to global state
+    # readout queries
+    queries = torch.rand( (cf.forecast_num_neighborhoods, 8*len(cf.fields), cf.forecast_dim_embed), 
+                          requires_grad=True)
+    queries = queries / queries.numel()
+    dims_embed_accum = torch.tensor([field_info[1][1] for field_info in cf.fields]).sum().item()
+    self.local_to_global_queries = torch.nn.Parameter( queries, requires_grad=True).to('cuda:1')
+    self.local_to_global_mapper = MultiCrossAttentionHeadQKV( dim_embed_q=cf.forecast_dim_embed,
+                                                            dim_embed_kv=dims_embed_accum, 
+                                                            num_heads=cf.local_global_num_heads,
+                                          dropout_rate=cf.local_global_dropout_rate,
+                                          with_qk_lnorm=cf.local_global_with_qk_lnorm).to('cuda:1')
+
+    # latent space forecaster
+    self.forecaster = Transformer( cf.forecast_num_layers, cf.forecast_dim_embed,
+                                   cf.forecast_num_att_heads,
+                                   dropout_rate = cf.forecast_dropout_rate,
+                                   with_qk_lnorm = cf.forecast_with_qk_lnorm).to('cuda:1')
+
+    # mapper from global latent space back to 
+    self.global_to_local_queries, self.global_to_local_mapper = [], []
+    for field_idx, field_info in enumerate(cf.fields) :
+      # TODO: do not hardcode #tokens
+      # queries = torch.rand( (cf.forecast_num_neighborhoods, 5,12,18, field_info[1][1]), requires_grad=True)
+      queries = torch.rand( (1, 5,12,18, field_info[1][1]), requires_grad=True)
+      queries = queries / queries.numel()
+      self.global_to_local_queries += [ torch.nn.Parameter( queries, requires_grad=True).to('cuda:2') ]
+      self.global_to_local_mapper += [ MultiCrossAttentionHeadQKV( dim_embed_q=field_info[1][1],
+                                                                dim_embed_kv=cf.forecast_dim_embed,
+                                                                num_heads=cf.local_global_num_heads,
+                                                           dropout_rate=cf.local_global_dropout_rate,
+                                                           with_qk_lnorm=cf.local_global_with_qk_lnorm).to('cuda:1') ]
+
+    print( '================================')
+    print( f'local_to_global_queries : {self.local_to_global_queries.numel():,}')
+    print( f'local_to_global_mapper : {self.get_num_parameters( self.local_to_global_mapper):,}')
+    print( f'self.forecaster : {self.get_num_parameters( self.forecaster):,}')
+    [print( f'self.global_to_local_queries : {q.numel():,}') for q in self.global_to_local_queries]
+    [print( f'self.global_to_local_mapper : {self.get_num_parameters(m):,}') for m in self.global_to_local_mapper]
+    print( '================================')
+
+    # checkpointing
     self.checkpoint = identity
     if cf.grad_checkpointing :
       self.checkpoint = checkpoint_wrapper
+    self.checkpoint = checkpoint
 
     return self
+
+  ###################################################
+  def freeze( self) :
+    [freeze_weights(b) for b in self.embeds]
+    [freeze_weights(b) for b in self.encoders]
+    [freeze_weights(b) for b in self.decoders]
+    [freeze_weights(b) for b in self.tails]
+
+  ###################################################
+  def get_num_parameters( self, model) :
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    return sum([np.prod(p.size()) for p in model_parameters])
 
   ###################################################
   def load_block( self, field_info, block_name, block ) :
@@ -515,21 +599,38 @@ class AtmoRep( torch.nn.Module) :
       [embeds_layers[idx].append( fields_embed[i]) for idx,i in enumerate(self.field_pred_idxs)]
       [atts[i].append( att[i]) for i,_ in enumerate(cf.fields) ]
         
+    # merge per field state into global state
+    forecasting_in = [f[-1].to('cuda:1') for f in embeds_layers]
+    # forecasting_in = [f[-1] for f in embeds_layers]
+    state_global = self.local_to_global( forecasting_in)
+
+    # forecasting
+    # TODO: pass num_steps from data_loader / config
+    num_steps = 1
+    for i in range( num_steps) :
+      state_global = self.forecast( state_global.to('cuda:1'))
+
+    # map back to per-field state to be compatible with decoder
+    decoders_in = self.global_to_local( forecasting_in, state_global.to('cuda:1'))
+
     # encoder-decoder coupling / token transformations
-    (decoders_in, embeds_layers) = self.encoder_to_decoder( embeds_layers)
+    # (decoders_in, embeds_layers) = self.encoder_to_decoder( embeds_layers)
 
     preds = []
     for idx,i in enumerate(self.field_pred_idxs) :
     
       # decoder
-      token_seq_embed, att = self.decoders[idx]( (decoders_in[idx], embeds_layers[idx]) )
+      token_seq_embed, att = self.decoders[idx]((decoders_in[idx].to('cuda:2'), embeds_layers[idx]))
       
       # tail net
-      tail_in = self.decoder_to_tail( idx, token_seq_embed)
+      tail_in = self.decoder_to_tail( idx, token_seq_embed.to('cuda:3'))
       pred = self.checkpoint( self.tails[idx], tail_in)
       
       preds.append( pred)
       [atts[i].append( a) for a in att]
+
+    mems = [torch.cuda.mem_get_info(f'cuda:{i}') for i in range(4)]
+    [print( f'{i} : {mems[i][0]:,} / {mems[i][1]:,}', flush=True) for i in range(4)]
 
     return preds, atts
 
@@ -555,6 +656,32 @@ class AtmoRep( torch.nn.Module) :
                                                   fields_embed_cur[ifield] )
   
     return fields_embed_cur, atts
+
+  ###################################################
+  def local_to_global( self, fields_embed) :
+
+    fields_embed = torch.cat( [f.flatten(1,-2) for f in fields_embed], -1)
+    state_global, _ = self.checkpoint( self.local_to_global_mapper, self.local_to_global_queries, fields_embed)
+
+    return state_global
+
+  ###################################################
+  def global_to_local( self, queries, state_global) :
+
+    fields_embed = []
+    for i, field_info in enumerate( self.cf.fields) :
+      # f, _ = self.checkpoint( self.global_to_local_mapper[i], self.global_to_local_queries[i].repeat(self.cf.forecast_num_neighborhoods,1,1,1,1), state_global)
+      f, _ = self.checkpoint( self.global_to_local_mapper[i], queries[i].to('cuda:1'), state_global)
+      fields_embed += [ f ]
+
+    return fields_embed
+
+  ###################################################
+  def forecast( self, state_global) :
+
+    state_global = self.checkpoint( self.forecaster, state_global)
+
+    return state_global
 
   ###################################################
   def get_fields_embed( self, xin ) :

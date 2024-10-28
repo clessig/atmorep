@@ -146,10 +146,13 @@ class Trainer_Base() :
                                                               optimizer_class=torch.optim.AdamW,
                                                               lr=cf.lr_start )
     else :
+      self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                           weight_decay=cf.weight_decay)
     
     self.grad_scaler = torch.cuda.amp.GradScaler(enabled=cf.with_mixed_precision)
+
+    self.model.net.freeze()
 
     if 0 == cf.par_rank :
       # print( self.model.net)
@@ -182,14 +185,15 @@ class Trainer_Base() :
         g['lr'] = lr
 
       tstr = datetime.datetime.now().strftime("%H:%M:%S")
-      print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
+      print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size_train, lr) )
 
       self.train( epoch)
       
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
 
-      cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
+      cur_test_loss = 0.
+      # cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
       # self.validate( epoch, 'forecast')
 
       # save model 
@@ -246,7 +250,7 @@ class Trainer_Base() :
 
       # logging
 
-      if int((batch_idx * cf.batch_size) / 8) > ctr :
+      if int((batch_idx * cf.batch_size_train) / 8) > ctr :
         
         # wandb logging
         if cf.with_wandb and (0 == cf.par_rank) :
@@ -264,7 +268,7 @@ class Trainer_Base() :
           wandb.log( loss_dict )
       
           # console output
-          samples_sec = cf.batch_size / (time.time() - time_start)
+          samples_sec = cf.batch_size_train / (time.time() - time_start)
           str = 'epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
           print( str.format( epoch, batch_idx, model.len( NetMode.train),
                             100. * batch_idx/model.len(NetMode.train), 
@@ -449,7 +453,7 @@ class Trainer_Base() :
     losses = dict(zip(cf.losses,[[] for loss in cf.losses ]))
     
     for pred, idx in zip( preds, self.fields_prediction_idx) :
-      target = self.targets[idx]
+      target = self.targets[idx].to('cuda:3')
 
       mse_loss = self.MSELoss( pred[0], target = target) 
       mse_loss_total += mse_loss.cpu().detach()
@@ -599,13 +603,14 @@ class Trainer_BERT( Trainer_Base) :
     # select "fixed" masked tokens for loss computation
     
     # flatten token dimensions: remove space-time separation
-    pred = torch.flatten( pred, 2, 3).to( dev)
+    # pred = torch.flatten( pred, 2, 3).to( dev)
+    pred = torch.flatten( pred, 2, 3).to( 'cuda:3')
     # extract masked token level by level
     pred_masked = []
     for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
       # select masked tokens, flattened along batch dimension for easier indexing and processing
       pred_l = torch.flatten( pred[:,lidx], 0, 1)
-      pred_masked.append( pred_l[ target_idx[lidx] ])
+      pred_masked.append( pred_l[ target_idx[lidx].to( 'cuda:3') ])
     
     # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
     # as ordering of dimensions

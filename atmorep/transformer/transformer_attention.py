@@ -15,6 +15,7 @@
 ####################################################################################################
 
 import torch
+import code
 from enum import Enum
 
 from atmorep.utils.utils import identity
@@ -87,15 +88,16 @@ class MultiSelfAttentionHead(torch.nn.Module):
 
 class MultiCrossAttentionHead(torch.nn.Module):
 
-  def __init__(self, dim_embed, num_heads, num_heads_other, dropout_rate = 0., with_qk_lnorm =False,
-                     grad_checkpointing = False, with_attention=False, with_flash=True):
+  def __init__(self, dim_embed, num_heads, num_heads_other, dropout_rate = 0.,
+                     with_qk_lnorm =False, with_attention=False, with_flash=True):
+
     super(MultiCrossAttentionHead, self).__init__()
 
     self.num_heads = num_heads
     self.num_heads_other = num_heads_other
 
     assert 0 == dim_embed % (num_heads + num_heads_other)
-    self.dim_head_proj = int( dim_embed / (num_heads + num_heads_other) )
+    self.dim_head_proj = dim_embed // (num_heads + num_heads_other)
 
     self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
     if num_heads_other > 0 :
@@ -104,10 +106,10 @@ class MultiCrossAttentionHead(torch.nn.Module):
       self.lnorm_other = torch.nn.Identity()
 
     self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
-    
+
     self.proj_heads_o_q = torch.nn.Linear(dim_embed, num_heads_other*self.dim_head_proj, bias=False)
     self.proj_heads_o_kv= torch.nn.Linear(dim_embed,num_heads_other*2*self.dim_head_proj,bias=False)
-    
+
     self.ln_q = torch.nn.LayerNorm( self.dim_head_proj)
     self.ln_k = torch.nn.LayerNorm( self.dim_head_proj)
 
@@ -121,12 +123,8 @@ class MultiCrossAttentionHead(torch.nn.Module):
       self.att = self.attention
     self.softmax = torch.nn.Softmax(dim=-1)
 
-    self.checkpoint = identity
-    if grad_checkpointing :
-      self.checkpoint = checkpoint_wrapper
-
   def forward( self, x, x_other) :
-    
+
     x_in = x
     x, x_other = self.lnorm( x), self.lnorm_other( x_other)
 
@@ -135,7 +133,7 @@ class MultiCrossAttentionHead(torch.nn.Module):
     s = [ *x.shape[:-1], self.num_heads, -1]
     qs, ks, vs = torch.tensor_split( self.proj_heads( x).reshape(s).transpose( 2, 1), 3, dim=-1)
     qs, ks = self.ln_q( qs), self.ln_k( ks)
-    
+
     s = [ *x.shape[:-1], self.num_heads_other, -1]
     qs_o = self.proj_heads_o_q( x).reshape(s).transpose( 2, 1)
     x_o = x_other.flatten( 1, -2)
@@ -150,8 +148,62 @@ class MultiCrossAttentionHead(torch.nn.Module):
       outs_self = self.att( qs, ks, vs).transpose( 2, 1).flatten( -2, -1).reshape(s)
       outs_other = self.att( qs_o, ks_o, vs_o).transpose( 2, 1).flatten( -2, -1).reshape(s)
       outs = torch.cat( [outs_self, outs_other], -1)
+
+    outs = self.dropout( self.proj_out( outs))
+    atts = []
+    return x_in + outs, atts
+
+####################################################################################################
+class MultiCrossAttentionHeadQKV(torch.nn.Module):
+
+  def __init__(self, dim_embed_q, dim_embed_kv, num_heads, dropout_rate=0.,
+                     with_qk_lnorm =False, with_attention=False, with_flash=True):
     
-    outs = self.dropout( self.checkpoint( self.proj_out, outs) )
+    super(MultiCrossAttentionHeadQKV, self).__init__()
+
+    self.num_heads = num_heads
+
+    assert 0 == dim_embed_q % num_heads and 0 == dim_embed_kv % num_heads
+    self.dim_head_proj = dim_embed_q // num_heads
+    # self.dim_head_proj_kv = dim_embed_kv // num_heads
+
+    self.lnorm_q = torch.nn.LayerNorm( dim_embed_q, elementwise_affine=False)
+    self.lnorm_kv = torch.nn.LayerNorm( dim_embed_kv, elementwise_affine=False)
+
+    self.proj_heads_q = torch.nn.Linear( dim_embed_q, num_heads*self.dim_head_proj, bias=False)
+    self.proj_heads_kv = torch.nn.Linear( dim_embed_kv, num_heads*2*self.dim_head_proj, bias=False)
+
+    self.ln_q = torch.nn.LayerNorm( self.dim_head_proj)
+    self.ln_k = torch.nn.LayerNorm( self.dim_head_proj)
+
+    # proj_out is done is axial attention head so do not repeat it
+    self.proj_out = torch.nn.Linear( dim_embed_q, dim_embed_q, bias=False)
+    self.dropout = torch.nn.Dropout( p=dropout_rate)
+
+    if with_flash :
+      self.att = torch.nn.functional.scaled_dot_product_attention
+    else :
+      self.att = self.attention
+    self.softmax = torch.nn.Softmax(dim=-1)
+
+  def forward( self, x_q, x_kv) :
+
+    x_in = x_q
+    x_q, x_kv = self.lnorm_q( x_q).flatten( 1, -2), self.lnorm_kv( x_kv).flatten( 1, -2)
+
+    # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
+    s = [ *x_q.shape[:-1], self.num_heads, -1]
+    qs = self.proj_heads_q( x_q).reshape(s).transpose( 2, 1)
+    s = [ *x_kv.shape[:-1], self.num_heads, -1]
+    ks, vs = torch.tensor_split( self.proj_heads_kv( x_kv).reshape(s).transpose( 2, 1), 2, dim=-1)
+    qs, ks = self.ln_q( qs), self.ln_k( ks)
+
+    # correct ordering of tensors with seq dimension second but last is critical
+    with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
+      s = list(x_in.shape); s[-1] = -1
+      outs = self.att( qs, ks, vs).transpose( 2, 1).flatten( -2, -1).reshape(s)
+
+    outs = self.dropout( self.proj_out( outs))
     atts = []
     return x_in + outs, atts
 
@@ -259,10 +311,9 @@ class MultiInterAttentionHead(torch.nn.Module):
       if len(fields_lnormed) > 1 :
         s[-1] = -1
         outs_other = [self.att( q, k, v).transpose( -3, -2).flatten( -2, -1).reshape(s)
-                                                    for (q,(k,v)) in zip(qs_other,ofields_projs)] 
+                                                    for (q,(k,v)) in zip(qs_other,ofields_projs)]
         outs = torch.cat( [outs, *outs_other], -1)
 
-    # code.interact( local=locals())
     outs = self.dropout( self.proj_out( outs))
 
     return x_in + outs, atts

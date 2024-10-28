@@ -14,8 +14,8 @@
 #
 ####################################################################################################
 
-import dask.config as dc
-import dask.array as da
+# import dask.config as dc
+# import dask.array as da
 import torch
 import numpy as np
 import zarr
@@ -23,6 +23,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
+import code
 
 from atmorep.datasets.normalizer import normalize
 from atmorep.utils.utils import tokenize, get_weights
@@ -52,8 +53,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     assert os.path.exists(file_path), f"File path {file_path} does not exist"
     self.ds = zarr.open( file_path)
    
-    self.dask_array_data = da.from_zarr(self.ds['data'])
-    self.dask_array_sfc  = da.from_zarr(self.ds['data_sfc'])
+    self.data = self.ds['data']
+    self.data_sfc  = self.ds['data_sfc']
+    # self.dask_array_data = da.from_zarr(self.ds['data'])
+    # self.dask_array_sfc  = da.from_zarr(self.ds['data_sfc'])
 
     self.ds_global = self.ds.attrs['is_global']
 
@@ -106,7 +109,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     self.num_samples = min( self.num_samples, self.idxs_years.shape[0])
 
-  ###################################################
+  ##################################################
   def shuffle( self) :
 
     worker_info = torch.utils.data.get_worker_info()
@@ -127,6 +130,21 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     self.idxs_perm = np.stack( [lats, lons], axis=1)
 
+  # ###################################################
+  # def shuffle( self) :
+
+  #   assert len(self.idxs_perm_t) == len(self.idxs_perm)
+
+  #   worker_info = torch.utils.data.get_worker_info()
+  #   rng_seed = None
+  #   if worker_info is not None :
+  #     rng_seed = int(time.time()) // (worker_info.id+1) + worker_info.id
+
+  #   rng = np.random.default_rng( rng_seed)
+  #   perm = rng.permutation( len(self.idxs_perm_t))[ : self.num_samples // self.batch_size ]
+  #   self.idxs_perm_t = self.idxs_perm_t[ perm ]
+  #   self.idxs_perm = self.idxs_perm[ perm ]
+
   ###################################################
   def __iter__(self):
 
@@ -140,6 +158,8 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
     iter_start, iter_end = self.worker_workset()
 
+    print( f'iter :: {iter_start} :: {iter_end} :: {self.batch_size}')
+
     for bidx in range( iter_start, iter_end) :
 
       sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]
@@ -147,12 +167,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   
       i_bidx = self.idxs_perm_t[bidx]
       idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
-      # data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
-      # data_tt = self.ds['data'].oindex[idxs_t]
-      with dc.set(**{'array.slicing.split_large_chunks': True}):
-        data_tt_sfc = self.dask_array_sfc[idxs_t].compute()
-        data_tt     = self.dask_array_data[idxs_t].compute()
-
+      data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
+      data_tt = self.ds['data'].oindex[idxs_t]
+      # with dc.set(**{'array.slicing.split_large_chunks': True}):
+      #   data_tt_sfc = self.dask_array_sfc[idxs_t].compute()
+      #   data_tt     = self.dask_array_data[idxs_t].compute()
 
       for sidx in range(self.batch_size) :
         
@@ -275,6 +294,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         - lon \in [0,360]
         - (year,month) pairs should be a limited number since all data for these is loaded
     '''
+
+    self.batch_size = batch_size if batch_size is not None else self.batch_size
+
     # generate all the data
     self.idxs_perm = np.zeros( (len(times_pos), 2))
     self.idxs_perm_t = []
@@ -287,8 +309,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
 
       tstamp = pd.to_datetime( f'{item[0]}-{item[1]}-{item[2]}-{item[3]}', format='%Y-%m-%d-%H')
       
-      self.idxs_perm_t += [ np.where( self.times == tstamp)[0]+1 ] #The +1 assures that tsamp is included in the range
-
+      # +1 ensures that tsamp is included in the range
+      self.idxs_perm_t += [ np.where( self.times == tstamp)[0]+1 ] 
+      
       # work with mathematical lat coordinates from here on
       self.idxs_perm[idx] = np.array( [90. - item[4], item[5]])
    
@@ -297,6 +320,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0]) :
     ''' generate patch/token positions for global grid '''
+
     token_overlap = np.array( token_overlap).astype(np.int64)
 
     # assumed that sanity checking that field data is consistent has been done 
@@ -339,11 +363,83 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           lon += side_len[1].item() - overlap[1].item()
 
     # adjust batch size if necessary so that the evaluations split up across batches of equal size
-    batch_size = len(times_pos) #num_tiles_lon
-    
-    print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
-
+    self.batch_size = len(times_pos) // len(times)
     self.set_data( times_pos, batch_size)
+
+    return batch_size
+
+  ###################################################
+  def set_global_range( self, datetime_start, datetime_end, token_overlap = [0, 0]) :
+    ''' generate patch/token positions for global grid '''
+    
+    token_overlap = np.array( token_overlap).astype(np.int64)
+
+    # assumed that sanity checking that field data is consistent has been done 
+    ifield = 0
+    field = self.fields[ifield]
+
+    res = self.res
+    side_len = np.array( [field[3][1] * field[4][1]*res[0], field[3][2] * field[4][2]*res[1]] )
+    overlap = np.array([token_overlap[0]*field[4][1]*res[0],token_overlap[1]*field[4][2]*res[1]])
+    side_len_2 = side_len / 2.
+    assert all( overlap <= side_len_2), 'token_overlap too large for #tokens, reduce if possible'
+
+    # generate tiles
+    tiles = []
+
+    lat = side_len_2[0].item()
+    num_tiles_lat = 0
+    while (lat + side_len_2[0].item()) < 180. :
+      num_tiles_lat += 1
+      lon = side_len_2[1].item() - overlap[1].item()/2.
+      num_tiles_lon = 0
+      while (lon - side_len_2[1]) < 360. :
+        tiles += [[ -lat + 90., np.mod(lon,360.) ]]
+        lon += side_len[1].item() - overlap[1].item()
+        num_tiles_lon += 1
+      lat += side_len[0].item() - overlap[0].item()
+
+    # add one additional row if no perfect tiling (sphere is toric in longitude so no special
+    # handling necessary but not in latitude)
+    # the added row is such that it goes exaclty down to the South pole and the offset North-wards
+    # is computed based on this
+    lat -= side_len[0] - overlap[0]
+    if lat - side_len_2[0] < 180. :
+      num_tiles_lat += 1
+      lat = 180. - side_len_2[0].item() + res[0]
+      lon = side_len_2[1].item() - overlap[1].item()/2.
+      while (lon - side_len_2[1]) < 360. :
+        tiles += [[-lat + 90., np.mod(lon,360.) ]]
+        lon += side_len[1].item() - overlap[1].item()
+
+    # adjust batch size if necessary so that the evaluations split up across batches of equal size
+    self.batch_size = len(tiles)
+
+    dt = datetime_start
+    dt_start = pd.to_datetime( f'{dt[0]}-{dt[1]}-{dt[2]}-{dt[3]}', format='%Y-%m-%d-%H')
+    dt = datetime_end
+    dt_end = pd.to_datetime( f'{dt[0]}-{dt[1]}-{dt[2]}-{dt[3]}', format='%Y-%m-%d-%H')
+
+    # TODO: do we need offset by 1 ???
+    idx_start = np.where( self.times == dt_start)[0].item()
+    idx_end = np.where( self.times == dt_end)[0].item()
+
+    self.idxs_perm = np.zeros( (self.batch_size * (idx_end - idx_start), 2))
+    self.idxs_perm_t = np.zeros( self.batch_size * (idx_end - idx_start), dtype=np.int32 )
+    ctr = 0
+    for i, idx in enumerate(range( idx_start, idx_end)) :
+      for tile in tiles :
+        assert tile[0] >= -90. and tile[0] <= 90.
+        # +1 ensures that tsamp is included in the range
+        self.idxs_perm_t[ctr] = idx 
+        # work with mathematical lat coordinates from here on
+        self.idxs_perm[ctr] = np.array( [90. - tile[0], tile[1]])
+        ctr += 1
+
+    self.num_samples = self.batch_size * (idx_end - idx_start)
+    self.idxs_perm_t = np.array(self.idxs_perm_t).squeeze()
+
+    return self.batch_size
 
   ###################################################
   def __len__(self):
