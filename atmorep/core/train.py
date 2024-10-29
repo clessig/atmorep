@@ -144,7 +144,7 @@ def train() :
   cf.num_epochs = 400 #128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 6
   
   # additional infos
   cf.size_token_info = 8

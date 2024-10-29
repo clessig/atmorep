@@ -146,6 +146,7 @@ class Trainer_Base() :
                                                               optimizer_class=torch.optim.AdamW,
                                                               lr=cf.lr_start )
     else :
+      self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                           weight_decay=cf.weight_decay)
     
