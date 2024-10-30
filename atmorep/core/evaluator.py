@@ -216,11 +216,36 @@ class Evaluator( Trainer_BERT) :
 
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
-    cf.log_test_num_ranks = 4
-    cf.num_samples_validate = 128
-    Evaluator.parse_args( cf, args)
-    utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
-    Evaluator.run( cf, model_id, model_epoch, devices)
+
+    if hasattr(cf, 'type') and cf.type == 'global':
+      cf.batch_size_test = 24
+      cf.num_loader_workers = 12 #1
+      cf.log_test_num_ranks = 1
+      cf.forecast_num_tokens = len(cf.idx_time_mask)
+
+      #TODO: temporary solution. Add support for batch_size > 1 
+      cf.batch_size_validation = 1 #64
+      cf.batch_size = 1
+      
+      if not hasattr(cf, 'num_samples_validate'):
+        cf.num_samples_validate = 196 
+      cf.with_mixed_precision = True
+      Evaluator.parse_args( cf, args)
+
+      dates = args['dates']
+      evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
+      evaluator.model.set_global( NetMode.test, np.array( dates))
+      if 0 == cf.par_rank :
+        cf.print()
+        cf.write_json( wandb)
+      evaluator.validate( 0, cf.BERT_strategy)
+    else:
+      print(f"BERT temporal interpolation is happening")
+      cf.log_test_num_ranks = 4
+      cf.num_samples_validate = 128
+      Evaluator.parse_args( cf, args)
+      utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
+      Evaluator.run( cf, model_id, model_epoch, devices)
 
   ##############################################
   @staticmethod
