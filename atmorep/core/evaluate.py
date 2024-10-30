@@ -44,15 +44,20 @@ if __name__ == '__main__':
 
   #Add 'attention' : True to options to store the attention maps. NB. supported only for single field runs. 
   
-  # BERT masked token model
-  mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True }
+  # # BERT masked token model
+  # mode, options = 'BERT', {'years_test' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True }
 
   # BERT forecast mode
   #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'num_samples_validate' : 128, 'with_pytest' : True }
 
   #temporal interpolation 
   #idx_time_mask: list of relative time positions of the masked tokens within the cube wrt num_tokens[0]  
-  #mode, options = 'temporal_interpolation', {'idx_time_mask': [5,6,7], 'num_samples_validate' : 128, 'with_pytest' : True}
+  mode, options = 'temporal_interpolation', {
+                                              'idx_time_mask': [5,6,7], 
+                                              'num_samples_validate' : 128, 
+                                              # 'dates' : [[2021, 1, 10, 18]],
+                                              'type' : 'BERT', # BERT
+                                              'with_pytest' : True}
 
   # BERT forecast with patching to obtain global forecast
 #   mode, options = 'global_forecast', { 
