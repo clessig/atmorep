@@ -620,8 +620,13 @@ class Trainer_BERT( Trainer_Base) :
 
     if 'forecast' in self.cf.BERT_strategy :
       self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
-    elif 'BERT' in self.cf.BERT_strategy or 'temporal_interpolation' == self.cf.BERT_strategy :
+    elif 'BERT' in self.cf.BERT_strategy:
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
+    elif 'temporal_interpolation' == self.cf.BERT_strategy :
+      if hasattr(self.cf, 'type') and self.cf.type == 'global':
+        self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
+      else: 
+        self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     else :
       assert False
   
@@ -640,6 +645,10 @@ class Trainer_BERT( Trainer_Base) :
     forecast_num_tokens = 1
     if hasattr( cf, 'forecast_num_tokens') :
       forecast_num_tokens = cf.forecast_num_tokens
+    
+    # introduced by Asma, still not sure if to keep it
+    if hasattr( cf, 'idx_time_mask') :
+      forecast_num_tokens = len(cf.idx_time_mask)
   
     coords = []
     for fidx, field_info in enumerate(cf.fields) :
@@ -651,12 +660,17 @@ class Trainer_BERT( Trainer_Base) :
                            forecast_num_tokens, *field_info[3][1:], *field_info[4] ]).swapaxes(0,1))
      
       coords_b = []
-  
+      
       for bidx in range(batch_size):
         dates   = self.sources_info[bidx][0]
         lats    = self.sources_info[bidx][1]
         lons    = self.sources_info[bidx][2]
-        dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        if not hasattr( cf, 'idx_time_mask') :
+          dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        else:
+          idxs = torch.concat([i*field_info[4][0] + torch.arange(field_info[4][0]) for i in cf.idx_time_mask])
+          dates_t = self.sources_info[bidx][0][idxs]
+
         
         lats_idx = self.sources_idxs[bidx][1]
         lons_idx = self.sources_idxs[bidx][2]
@@ -690,7 +704,12 @@ class Trainer_BERT( Trainer_Base) :
       for bidx in range(batch_size) : 
         lats  = self.sources_info[bidx][1]
         lons  = self.sources_info[bidx][2]
-        dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        if not hasattr( cf, 'idx_time_mask') :
+          dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
+        else:
+          idxs = torch.concat([i*field_info[4][0] + torch.arange(field_info[4][0]) for i in cf.idx_time_mask])
+          dates_t = self.sources_info[bidx][0][idxs]
+
        
         for vidx, vl in enumerate(field_info[2]) :
           normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
