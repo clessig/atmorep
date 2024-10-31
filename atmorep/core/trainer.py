@@ -186,7 +186,7 @@ class Trainer_Base() :
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
 
       self.train( epoch)
-      
+
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
 

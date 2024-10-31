@@ -109,7 +109,7 @@ class Config :
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
