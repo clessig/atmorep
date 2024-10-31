@@ -1,0 +1,24 @@
+START 2024-10-31 10:58:39
+SLURM_JOB_ID=13248174
+SLURM_JOB_NUM_NODES=1
+SLURM_NODELIST=jrc0448
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) Stages/2024
+[W1031 10:58:58.285370154 socket.cpp:461] [c10d] The server socket cannot be initialized on [::]:1345 (errno: 97 - Address family not supported by protocol).
+[W1031 10:58:58.300718975 socket.cpp:697] [c10d] The client socket cannot be initialized to connect to [jrc0448i.jureca]:1345 (errno: 97 - Address family not supported by protocol).
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/usr/local/lib/python3.10/dist-packages/torch/nn/init.py:452: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py:556: UserWarning: This DataLoader will create 6 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+srun: Job step aborted: Waiting up to 6 seconds for job step to finish.
+SIGBUS: bus error
+PC=0x45b6d5 m=0 sigcode=2 addr=0x1c7ff38
+
+goroutine 0 gp=0x1fd2900 m=0 mp=0x1fd3b20 [idle]:
+srun: error: jrc0448: task 0: Terminated

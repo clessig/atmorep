@@ -1,0 +1,118 @@
+START 2024-10-31 11:06:03
+SLURM_JOB_ID=13248181
+SLURM_JOB_NUM_NODES=1
+SLURM_NODELIST=jrc0448
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) Stages/2024
+devices : ['cuda:0']
+[W1031 11:06:17.975352652 socket.cpp:461] [c10d] The server socket cannot be initialized on [::]:1345 (errno: 97 - Address family not supported by protocol).
+[W1031 11:06:17.990546119 socket.cpp:697] [c10d] The client socket cannot be initialized to connect to [jrc0448i.jureca]:1345 (errno: 97 - Address family not supported by protocol).
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Wandb run: atmorep-3tnzyd1a-13248181
+with_ddp : True
+num_accs_per_task : 1
+par_rank : 0
+par_size : 1
+fields : [['velocity_u', [1, 1024, [], 0], [96, 105, 114, 123, 137], [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05]]]
+fields_prediction : [['velocity_u', 1.0]]
+fields_targets : []
+years_train : [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]
+years_val : [2021]
+month : None
+geo_range_sampling : [[-90.0, 90.0], [0.0, 360.0]]
+time_sampling : 1
+torch_seed : 11150610311007084224
+batch_size_validation : 1
+batch_size : 96
+num_epochs : 128
+num_samples_per_epoch : 49152
+num_samples_validate : 1536
+num_loader_workers : 6
+size_token_info : 8
+size_token_info_net : 16
+grad_checkpointing : True
+with_cls : False
+with_mixed_precision : True
+with_layernorm : True
+coupling_num_heads_per_field : 1
+dropout_rate : 0.05
+with_qk_lnorm : False
+encoder_num_layers : 6
+encoder_num_heads : 16
+encoder_num_mlp_layers : 2
+encoder_att_type : dense
+decoder_num_layers : 6
+decoder_num_heads : 16
+decoder_num_mlp_layers : 2
+decoder_self_att : False
+decoder_cross_att_ratio : 0.5
+decoder_cross_att_rate : 1.0
+decoder_att_type : dense
+net_tail_num_nets : 16
+net_tail_num_layers : 0
+losses : ['mse_ensemble', 'stats']
+optimizer_zero : False
+lr_start : 4.9999999999999996e-06
+lr_max : 0.00015000000000000001
+lr_min : 4e-05
+weight_decay : 0.05
+lr_decay_rate : 1.025
+lr_start_epochs : 3
+BERT_strategy : BERT
+forecast_num_tokens : 2
+BERT_fields_synced : False
+BERT_mr_max : 2
+log_test_num_ranks : 0
+save_grads : False
+profile : False
+test_initial : False
+attention : False
+rng_seed : None
+with_wandb : True
+slurm_job_id : 13248181
+wandb_id : 3tnzyd1a
+file_path : /p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025.zarr
+n_size : [36, 13.5, 27.0]
+/usr/local/lib/python3.10/dist-packages/torch/nn/init.py:452: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+['cuda:0'] 0
+self.ds['data'] : (376944, 7, 5, 721, 1440) :: (376944,)
+self.lats : (721,)
+self.lons : (1440,)
+/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py:556: UserWarning: This DataLoader will create 6 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+self.ds['data'] : (376944, 7, 5, 721, 1440) :: (376944,)
+self.lats : (721,)
+self.lons : (1440,)
+Number of trainable parameters: 117,656,336
+0 : 11:06:22 :: batch_size = 96, lr = 4.9999999999999996e-06
+epoch: 0 [1/512 (0%)]	Loss: 1.24875 : 1.05671 :: 0.56543 (0.52 s/sec)
+epoch: 0 [2/512 (0%)]	Loss: 1.26935 : 1.07946 :: 0.56201 (24.33 s/sec)
+epoch: 0 [3/512 (1%)]	Loss: 1.23605 : 1.01973 :: 0.55908 (32.11 s/sec)
+epoch: 0 [4/512 (1%)]	Loss: 1.35253 : 1.22901 :: 0.55664 (30.20 s/sec)
+epoch: 0 [5/512 (1%)]	Loss: 1.29268 : 1.13134 :: 0.55322 (30.66 s/sec)
+epoch: 0 [6/512 (1%)]	Loss: 1.17513 : 0.93725 :: 0.55078 (0.76 s/sec)
+epoch: 0 [7/512 (1%)]	Loss: 1.27509 : 1.10039 :: 0.54883 (32.04 s/sec)
+epoch: 0 [8/512 (2%)]	Loss: 1.26233 : 1.08005 :: 0.54590 (33.26 s/sec)
+epoch: 0 [9/512 (2%)]	Loss: 1.23825 : 1.04821 :: 0.54395 (28.11 s/sec)
+epoch: 0 [10/512 (2%)]	Loss: 1.19976 : 0.98067 :: 0.54150 (27.29 s/sec)
+epoch: 0 [11/512 (2%)]	Loss: 1.20754 : 1.01804 :: 0.53906 (31.75 s/sec)
+epoch: 0 [12/512 (2%)]	Loss: 1.20407 : 1.00857 :: 0.53809 (0.98 s/sec)
+epoch: 0 [13/512 (3%)]	Loss: 1.24755 : 1.07528 :: 0.53613 (31.73 s/sec)
+epoch: 0 [14/512 (3%)]	Loss: 1.29148 : 1.13840 :: 0.53564 (31.97 s/sec)
+epoch: 0 [15/512 (3%)]	Loss: 1.27357 : 1.12630 :: 0.53320 (31.93 s/sec)
+epoch: 0 [16/512 (3%)]	Loss: 1.08547 : 0.80836 :: 0.53027 (31.83 s/sec)
+epoch: 0 [17/512 (3%)]	Loss: 1.16628 : 0.92402 :: 0.53125 (31.95 s/sec)
+srun: Job step aborted: Waiting up to 6 seconds for job step to finish.
+error: *** job 13248181 CANCELLED DUE TO TIME LIMIT ***
+error: *** step 13248181.0 CANCELLED DUE TO TIME LIMIT ***
+SIGBUS: bus error
+PC=0x45b6d5 m=2 sigcode=2 addr=0x1c7ff38
+
+goroutine 0 gp=0xc000006e00 m=2 mp=0xc0000a4708 [idle]:
+srun: error: jrc0448: task 0: Terminated

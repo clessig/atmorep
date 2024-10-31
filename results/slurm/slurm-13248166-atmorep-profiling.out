@@ -1,0 +1,12 @@
+START 2024-10-31 10:50:13
+SLURM_JOB_ID=13248166
+SLURM_JOB_NUM_NODES=2
+SLURM_NODELIST=jrc[0319-0320]
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) Stages/2024
+FATAL:   While checking container encryption: could not open image /p/home/jusers/kasravi1/jureca/shared/projects/atmorep/p/scratch/atmlaml/apptainer/images/atmorep_pytorch-24-09-py3-amd64.sif: failed to retrieve path for /p/home/jusers/kasravi1/jureca/shared/projects/atmorep/p/scratch/atmlaml/apptainer/images/atmorep_pytorch-24-09-py3-amd64.sif: lstat /p/home/jusers/kasravi1/shared/projects/atmorep/p: no such file or directory
+srun: error: jrc0320: task 1: Terminated
+srun: error: jrc0319: task 0: Exited with exit code 255
+srun: Force Terminated StepId=13248166.0
