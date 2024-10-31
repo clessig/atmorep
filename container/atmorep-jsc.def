@@ -1,0 +1,36 @@
+Bootstrap: localimage
+From: /p/project1/atmlaml/kasravi1/mlperf/appatiner-image/pytorch-24-09-py3-amd64.sif
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+
+
+%files
+    . /workspace
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=Etc/UTC  # Set timezone to avoid prompts
+
+    # Install tzdata first, to ensure it's available
+    apt-get update && apt-get install -y --no-install-recommends tzdata
+
+    # Pre-configure tzdata to avoid interactive prompt for time zone
+    ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
+    dpkg-reconfigure -f noninteractive tzdata
+
+    # Install other dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        wget \
+        cmake \
+        make \
+        build-essential
+
+    # Install OpenFold source code package in editable mode
+    cd /workspace 
+    pip install torchrun_jsc
+    pip install -e .
+
+
+%runscript
+    echo "Container is ready for use"
