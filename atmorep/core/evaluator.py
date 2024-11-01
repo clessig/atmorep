@@ -67,21 +67,15 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, file_path, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
 
-    # SLURM_TASKS_PER_NODE is controlled by #SBATCH --ntasks-per-node=1; should be 1 for multiformer
-    with_ddp = True
-    if '-1' == os.environ.get('MASTER_ADDR', '-1') :
-      with_ddp = False
-      num_accs_per_task = 1 
-    else :
-      num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-    devices = init_torch( num_accs_per_task)
-    #devices = ['cuda']
-
+    devices = init_torch()
+    with_ddp = True 
     par_rank, par_size = setup_ddp( with_ddp)
+    
     cf = Config().load_json( model_id)
-    cf.file_path = file_path
+  
+    cf.num_accs_per_task = len(devices)
     cf.with_wandb = True
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
@@ -120,7 +114,7 @@ class Evaluator( Trainer_BERT) :
     if cf.with_pytest:
       fields = [field[0] for field in cf.fields_prediction]
       for field in fields:
-        pytest.main(["-x", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id, "--strategy", cf.BERT_strategy])
+        pytest.main(["-x", "-s", "./atmorep/tests/validation_test.py", "--field", field, "--model_id", cf.wandb_id, "--strategy", cf.BERT_strategy])
 
   ##############################################
   @staticmethod
