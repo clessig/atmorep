@@ -7,20 +7,17 @@ assignees: ''
 
 ---
 
-**Describe the bug**
+**Describe the bug:**
 A clear and concise description of what the bug is.
 
-**To Reproduce**
+**To Reproduce:**
 Steps to reproduce the behavior:
 1. Activate '...'
 2. Change '....'
 3. Run '....'
 4. See error
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
-
-**Screenshots**
+**Screenshots/code:**
 If applicable, add screenshots to help explain your problem.
 
 **Hardware and environment:**
@@ -29,5 +26,5 @@ If applicable, add screenshots to help explain your problem.
  - Special branch: [e.g. develop, main]
  - Python Version: [e.g. 3.11]
 
-**Additional context**
+**Additional context:**
 Add any other context about the problem here.
