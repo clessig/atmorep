@@ -14,6 +14,8 @@
 #
 ####################################################################################################
 
+import dask.config as dc
+import dask.array as da
 import torch
 import numpy as np
 import zarr
@@ -21,10 +23,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
-import code
 
-# from atmorep.datasets.normalizer_global import NormalizerGlobal
-# from atmorep.datasets.normalizer_local import NormalizerLocal
 from atmorep.datasets.normalizer import normalize
 from atmorep.utils.utils import tokenize, get_weights
 
@@ -52,6 +51,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     
     assert os.path.exists(file_path), f"File path {file_path} does not exist"
     self.ds = zarr.open( file_path)
+   
+    self.dask_array_data = da.from_zarr(self.ds['data'])
+    self.dask_array_sfc  = da.from_zarr(self.ds['data_sfc'])
 
     self.ds_global = self.ds.attrs['is_global']
 
@@ -145,8 +147,13 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
   
       i_bidx = self.idxs_perm_t[bidx]
       idxs_t = list(np.arange( i_bidx - n_size[0]*ts, i_bidx, ts, dtype=np.int64))
-      data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
-      data_tt = self.ds['data'].oindex[idxs_t]
+      # data_tt_sfc = self.ds['data_sfc'].oindex[idxs_t]
+      # data_tt = self.ds['data'].oindex[idxs_t]
+      with dc.set(**{'array.slicing.split_large_chunks': True}):
+        data_tt_sfc = self.dask_array_sfc[idxs_t].compute()
+        data_tt     = self.dask_array_data[idxs_t].compute()
+
+
       for sidx in range(self.batch_size) :
         
         idx = self.idxs_perm[bidx*self.batch_size+sidx]
@@ -189,8 +196,19 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
             cdata = data_t[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
             
             normalizer = self.normalizers[ifield][ilevel]
+
             if corr_type != 'global': 
-              normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+              #normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+              if lat_ran[0] < lat_ran[-1] and lon_ran[0] < lon_ran[-1]:
+                lat_max, lat_min = max(lat_ran), min(lat_ran)
+                lon_max, lon_min = max(lon_ran), min(lon_ran)
+                normalizer = normalizer[:,:,lat_min:lat_max+1,lon_min:lon_max+1]
+                #normalizer_vu = normalizer[:,:,lat_min:lat_max+1,lon_min:lon_max+1]
+                #cdata = normalize(cdata, normalizer_vu, sources_infos[-1][0], year_base = self.year_base) 
+              else:
+                normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
+                #cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
+            #else:
             cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
             
             source_data = tokenize( torch.from_numpy( cdata), tok_size )    

@@ -51,6 +51,7 @@ class TailEnsemble( torch.nn.Module) :
     return next(self.parameters()).device
 
   ###################################################
+  @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
   def forward( self, rep ) :
 
     rep.to( self.device())

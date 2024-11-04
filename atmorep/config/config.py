@@ -3,13 +3,13 @@ from pathlib import Path
 
 fpath = os.path.dirname(os.path.realpath(__file__))
 
-path_models = Path( fpath, '../../models/')
+path_models  = Path( fpath, '../../models/')
 path_results = Path( fpath, '../../results')
-path_plots = Path( fpath, '../results/plots/')
+path_plots   = Path( fpath, '../results/plots/') 
 
-grib_index = { 'vorticity' : 'vo', 'divergence' : 'd', 'geopotential' : 'z',
-                'orography' : 'z', 'temperature': 't', 'specific_humidity' : 'q',
-                'mean_top_net_long_wave_radiation_flux' : 'mtnlwrf',
-                'velocity_u' : 'u', 'velocity_v': 'v', 'velocity_z' : 'w',
-                'total_precip' : 'tp', 'radar_precip' : 'yw_hourly',
-                't2m' : 't_2m', 'u_10m' : 'u_10m', 'v_10m' : 'v_10m',  }
+#link the following path to be the default data folder using the follwing command:
+#ln -s <path> data 
+#ATOS: path = /ec/res4/scratch/nacl/atmorep/
+#JSC : path = /p/scratch/atmo-rep/data/era5_1deg/months/
+#BSC : path = /gpfs/scratch/ehpc03/
+path_data    = ('./data/era5_y1979_2021_res025_chunk8.zarr/')
