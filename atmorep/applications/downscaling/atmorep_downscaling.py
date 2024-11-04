@@ -14,6 +14,7 @@ from atmorep.utils.utils import get_model_filename
 from atmorep.transformer.transformer_base import prepare_token
 from atmorep.transformer.transformer_base import checkpoint_wrapper
 
+from atmorep.applications.datasets.downscaling_data_loader import MultifieldDownscalingSampler
 from atmorep.datasets.multifield_data_sampler import MultifieldDataSampler
 
 from atmorep.transformer.transformer_encoder import TransformerEncoder
@@ -87,21 +88,46 @@ class AtmoRepDownscalingData( torch.nn.Module) :
         loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
 
-        self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
-                                                cf.batch_size,
-                                                pre_batch, cf.n_size, cf.num_samples_per_epoch,
-                                                with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
-                                                with_source_idxs = True, 
-                                                compute_weights = (cf.losses.count('weighted_mse') > 0) )
+        #self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
+        #                                        cf.batch_size,
+        #                                        pre_batch, cf.n_size, cf.num_samples_per_epoch,
+        #                                        with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
+        #                                        with_source_idxs = True, 
+        #                                        compute_weights = (cf.losses.count('weighted_mse') > 0) )
+        
+        self.dataset_train = MultifieldDownscalingSampler(
+                    cf.input_file_path,
+                    cf.target_file_path,
+                    cf.fields,
+                    cf.target_fields,
+                    cf.years_train,
+                    cf.batch_size,
+                    cf.n_size,
+                    cf.num_samples_per_epoch,
+                    with_shuffle=True
+        )
+        
         self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
-        self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
-                                               cf.batch_size_validation,
-                                               pre_batch, cf.n_size, cf.num_samples_validate,
-                                               with_shuffle = (cf.BERT_strategy != 'global_forecast'),
-                                               with_source_idxs = True, 
-                                               compute_weights = (cf.losses.count('weighted_mse') > 0) )                                               
+
+        self.dataset_test = MultifieldDownscalingSampler(
+                    cf.input_file_path,
+                    cf.target_file_path,
+                    cf.fields,
+                    cf.target_fields,
+                    cf.years_val,
+                    cf.batch_size_validation,
+                    cf.n_size,
+                    cf.num_samples_validate,
+                    with_shuffle=True
+        )
+        #self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
+        #                                       cf.batch_size_validation,
+        #                                       pre_batch, cf.n_size, cf.num_samples_validate,
+        #                                       with_shuffle = (cf.BERT_strategy != 'global_forecast'),
+        #                                       with_source_idxs = True, 
+        #                                       compute_weights = (cf.losses.count('weighted_mse') > 0) )                                               
         self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
                                                           sampler = None)
 
@@ -120,10 +146,34 @@ class AtmoRepDownscaling( AtmoRep) :
         self.perceivers = torch.nn.ModuleList()
         self.downscaling_tails = torch.nn.ModuleList()
 
-        for field_idx,field_info in enumerate(cf.fields_downscaling):
+        self.fields_downscaling_idx = []
+        self.fields_downscaling_coupling_idx = []
 
-            self.perceivers.append(Perceiver(cf, field_info).create().to(devices[0]))
-            self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_output_emb, np.prod(field_info[4])).create().to(devices[0]))
+        for ifield, field in enumerate(cf.fields_downscaling):
+            coupling_indices = []
+            for idx, field_info in enumerate(cf.fields_prediction):
+                if field_info[0] == field[0] :
+                    self.fields_downscaling_idx.append(idx)
+                if field_info[0] in field[1][2]:
+                    coupling_indices.append(idx)
+            self.fields_downscaling_coupling_idx.append(coupling_indices)
+        
+        
+        logger.info("downscaling",cf.fields_downscaling,len(cf.fields_downscaling))
+
+        for field_idx,field_info in enumerate(cf.fields_downscaling):
+            device = devices[
+                    self.cf.fields[self.field_pred_idxs[self.fields_downscaling_idx[field_idx]]][1][3]]
+            coupled_dim_embeds = []
+            for coupled_fields_indices in self.fields_downscaling_coupling_idx[field_idx]:
+                coupled_dim_embed = self.cf.fields[self.field_pred_idxs[coupled_fields_indices]][1][1]
+                coupled_dim_embeds.append(coupled_dim_embed)
+            
+            logger.info("field_idx",field_idx)
+            self.perceivers.append(Perceiver(cf, field_info, coupled_dim_embeds).create().to(device))
+            self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_output_emb, np.prod(field_info[4])).create().to(device))
+        
+
 
         return self
 
@@ -201,11 +251,16 @@ class AtmoRepDownscaling( AtmoRep) :
         preds, atts = super().forward(xin)
 
         for idx_perceiver_net,perceiver_net in enumerate(self.perceivers):
-            preds[idx_perceiver_net] = perceiver_net(preds[idx_perceiver_net])
+
+            device = preds[self.fields_downscaling_idx[idx_perceiver_net]].device
+
+            coupled_preds = [ preds[idx].to(device) for idx in self.fields_downscaling_coupling_idx[idx_perceiver_net]]
+        
+            preds[self.fields_downscaling_idx[idx_perceiver_net]] = perceiver_net(preds[self.fields_downscaling_idx[idx_perceiver_net]], coupled_preds)
 
         downscale_ensemble = []
         for idx_tail,tails in enumerate(self.downscaling_tails):
-            downscale_ensemble.append(self.downscaling_tails[idx_tail](preds[idx_tail]))        
+            downscale_ensemble.append(tails(preds[self.fields_downscaling_idx[idx_tail]]))        
 
         return downscale_ensemble, atts
   

@@ -28,18 +28,39 @@ from atmorep.utils.logger import logger
 
 class PerceiverCrossAttentionHead(torch.nn.Module):
 
-  def __init__(self, dim_embed, dropout_rate = 0., with_qk_lnorm =False,
+  def __init__(self, dim_embed, coupled_emb_dims, dropout_rate = 0., with_qk_lnorm =False,
                      grad_checkpointing = False, with_attention=False, with_flash=False):
     super(PerceiverCrossAttentionHead, self).__init__()
 
     self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
 
+    self.coupled_lnorms = torch.nn.ModuleList()
+
+    logger.info("coupled_emb_dims",coupled_emb_dims)
+    if coupled_emb_dims is not None:
+        for coupled_emb_dim in coupled_emb_dims:
+            self.coupled_lnorms.append( torch.nn.LayerNorm( coupled_emb_dim, elementwise_affine=False))  
+
     self.proj_latent = torch.nn.Linear( dim_embed, dim_embed, bias = True)
 
     self.proj_kv= torch.nn.Linear(dim_embed,dim_embed*2,bias=True)
+
+    self.proj_kv_coupled = torch.nn.ModuleList()
+
+    if coupled_emb_dims is not None:
+        for coupled_emb_dim in coupled_emb_dims:
+            self.proj_kv_coupled.append( torch.nn.Linear( coupled_emb_dim, dim_embed*2, bias=True))
+    
     
     self.ln_q = torch.nn.LayerNorm( dim_embed)
     self.ln_k = torch.nn.LayerNorm( dim_embed)
+
+    self.ln_k_coupled = torch.nn.ModuleList()
+
+    
+    if coupled_emb_dims is not None:
+        for _ in coupled_emb_dims:
+            self.ln_k_coupled.append(torch.nn.LayerNorm( dim_embed))
 
     # proj_out is done is axial attention head so do not repeat it
     self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = True)
@@ -55,23 +76,37 @@ class PerceiverCrossAttentionHead(torch.nn.Module):
     if grad_checkpointing :
       self.checkpoint = checkpoint_wrapper
 
-  def forward( self, latent_queries, x) :
+  def forward( self, latent_queries, x, x_couples) :
     
     b = x.shape[0]
-    x_in = x
     x = self.lnorm( x)
-    qs = self.proj_latent(latent_queries).repeat([b,1,1])
-    
     # project onto heads and q,k,v and ensure these are 4D tensors as required for flash attention
     x = x.flatten( 1, -2)
-    shape_check = self.proj_kv( x)
     ks, vs = torch.tensor_split( self.proj_kv( x), 2, dim=-1)
-    qs, ks = self.ln_q( qs), self.ln_k( ks)
+    coupled_ks, coupled_vs = [], []
+    for x_couple_idx,x_couple in enumerate(x_couples):
+        x_couples[x_couple_idx] = self.coupled_lnorms[x_couple_idx](x_couple).flatten( 1,-2)
+        coupled_k, coupled_v = torch.tensor_split(
+                self.proj_kv_coupled[x_couple_idx](x_couples[x_couple_idx]), 2, dim=-1)
+        coupled_ks.append(coupled_k)
+        coupled_vs.append(coupled_v)
+
     
+    qs = self.proj_latent(latent_queries).repeat([b,1,1])
+
+    qs, ks = self.ln_q( qs), self.ln_k( ks)
+
+    for ln_idx,ln_k_couple in enumerate(self.ln_k_coupled):
+        coupled_ks[ln_idx] = ln_k_couple(coupled_ks[ln_idx])
+    
+    if len(coupled_ks) > 0:
+        ks = torch.cat([ks, *coupled_ks],dim=1) 
+        vs = torch.cat([vs, *coupled_vs],dim=1)
+
     # correct ordering of tensors with seq dimension second but last is critical
     #with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
     with torch.nn.attention.sdpa_kernel([torch.nn.attention.SDPBackend.FLASH_ATTENTION, torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION]) :
-      s = list(x_in.shape)
+      s = list(x.shape)
       s[-1] = -1
       outs = self.att( qs, ks, vs) 
     
@@ -105,11 +140,15 @@ class PerceiverOutputProjection(torch.nn.Module):
         return x
 
 class Perceiver(torch.nn.Module) :
-    def __init__( self, cf, field_info) :
+    def __init__( self, cf, field_info, coupled_embed_dims) :
         super(Perceiver, self).__init__()
         self.cf = cf
         self.num_layers = cf.perceiver_num_layers
         self.dim_embed = field_info[1][1]
+         
+        self.coupled_embed_dims = ( coupled_embed_dims
+                                    if len(coupled_embed_dims) > 0
+                                    else None)
 
         self.num_heads = cf.perceiver_num_heads
         self.num_mlp_layers = cf.perceiver_num_mlp_layers
@@ -119,6 +158,7 @@ class Perceiver(torch.nn.Module) :
     def create( self):
 
         dim_embed = self.dim_embed
+        coupled_emb_dims = self.coupled_embed_dims
         cf = self.cf
         field_info = self.field_info
 
@@ -128,7 +168,7 @@ class Perceiver(torch.nn.Module) :
             with torch.no_grad():
                 self.latent_arrays.normal_(0.0,cf.init_scale)
 
-        self.cross_attn = PerceiverCrossAttentionHead(dim_embed, cf.dropout_rate, with_qk_lnorm = cf.with_qk_lnorm, grad_checkpointing = cf.grad_checkpointing)
+        self.cross_attn = PerceiverCrossAttentionHead(dim_embed, coupled_emb_dims, cf.dropout_rate, with_qk_lnorm = cf.with_qk_lnorm, grad_checkpointing = cf.grad_checkpointing)
 
 
         self.blocks = torch.nn.ModuleList()
@@ -146,20 +186,20 @@ class Perceiver(torch.nn.Module) :
             with torch.no_grad():
                 self.output_latents.normal_(0.0,cf.init_scale)
 
-        self.output_cross_attn = PerceiverCrossAttentionHead(cf.perceiver_output_emb, cf.dropout_rate, with_qk_lnorm=cf.with_qk_lnorm, grad_checkpointing=cf.grad_checkpointing)
+        self.output_cross_attn = PerceiverCrossAttentionHead(cf.perceiver_output_emb, [], cf.dropout_rate, with_qk_lnorm=cf.with_qk_lnorm, grad_checkpointing=cf.grad_checkpointing)
 
         return self
 
-    def forward( self, x):
+    def forward( self, x, x_couples):
         
-        x, atts =  self.cross_attn(self.latent_arrays, x)
+        x, atts =  self.cross_attn(self.latent_arrays, x, x_couples)
 
         for idx,block in enumerate(self.blocks):
             x = block(x)
 
         x = self.output_proj(x)
 
-        x ,atts = self.output_cross_attn(self.output_latents, x)
+        x ,atts = self.output_cross_attn(self.output_latents, x, [])
 
         return x
 

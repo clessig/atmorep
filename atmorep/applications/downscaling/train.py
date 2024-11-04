@@ -31,7 +31,7 @@ from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
-
+from atmorep.utils.logger import logger
 
 
 def train():
@@ -44,7 +44,8 @@ def train():
   # torch.cuda.set_sync_debug_mode(1)
   torch.backends.cuda.matmul.allow_tf32 = True
 
-  model_id = "3kdutwqb"  
+  #model_id = "3kdutwqb"  
+  model_id = "1jh2qvrx"
   cf = Config().load_json( model_id)
   # parallelization
   cf.with_ddp = with_ddp
@@ -52,15 +53,25 @@ def train():
   cf.par_rank = par_rank
   cf.par_size = par_size
 
-
-  #cf.model_id = "3kdutwqb"
-
+  for field in cf.fields:
+    field[1].pop(4)
+    #field[1].append([model_id,45])
   
-  cf.fields_downscaling = [ ['total_precip',[1,1536,[],0],
-                           [0],
-                           [12,6,12],[3,9*3,9*3]]]
+  #cf.model_id = "3kdutwqb" 
 
-  cf.years_train = list( range( 2010, 2021))
+  cf.input_fields = cf.fields
+  
+  cf.fields_downscaling = [ ['total_precip', 
+                            [1,1536,["velocity_u","velocity_v","specific_humidity"]],
+                            [0],
+                            [12,6,12],
+                            [3,9*3,9*3], 
+                            1.0 ] ]
+  cf.target_fields = cf.fields_downscaling
+  cf.input_file_path = "/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr"
+  cf.target_file_path = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res008_chunk8.zarr"
+  #cf.years_train = list( range( 2010, 2021))
+  cf.years_train = [2003,2020]
   cf.years_val = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -88,10 +99,11 @@ def train():
   
   #training params
   cf.batch_size_validation = 1 #64
-  cf.batch_size = 96
+
+  cf.batch_size = 8
   cf.num_epochs = 128
-  cf.num_samples_per_epoch = 96*4
-  cf.num_samples_validate = 16
+  cf.num_samples_per_epoch = 8
+  cf.num_samples_validate = 8
   cf.num_loader_workers = 6
 
   #additional infos
@@ -144,7 +156,7 @@ def train():
   setup_wandb(cf.with_wandb, cf, par_rank,'train', mode="offline")
   
   cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
-  cf.n_size = [36, 0.25*9*6, 0.25*9*12]
+  cf.n_size = [36, 9*6, 9*12]
 
   trainer = Trainer_Downscaling( cf, device).create()
   trainer.run()

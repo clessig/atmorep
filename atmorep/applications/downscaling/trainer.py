@@ -41,8 +41,8 @@ class Trainer_Downscaling( Trainer_Base):
         self.fields_downscaling = cf.fields_downscaling
         self.loss_weights = torch.zeros( len(cf.fields_downscaling) )
         for ifield, field in enumerate(cf.fields_downscaling) :
-            self.loss_weights[ifield] = self.cf.fields_downscaling[ifield][1][1]
-        
+            self.loss_weights[ifield] = self.cf.fields_downscaling[ifield][5]
+                    
         self.MSELoss = torch.nn.MSELoss()
         self.rng_seed = cf.rng_seed
         if not self.rng_seed :
@@ -210,7 +210,6 @@ class Trainer_Downscaling( Trainer_Base):
         self.optimizer.zero_grad()
 
         loss_total = [[] for i in range(len(cf.losses))]
-        #logger.info("loss_total_len",len(loss_total))
         std_dev_total = [[] for i in range(len(self.fields_downscaling))]               
         mse_loss_total = []
         grad_loss_total = []
@@ -223,7 +222,7 @@ class Trainer_Downscaling( Trainer_Base):
 
             #batch_data = self.model.next()
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
-                batch_data, targets = self.prepare_batch_downscaling()
+                batch_data,targets = self.prepare_batch_downscaling()    #batch_data)
                 preds, _ = self.model_ddp( batch_data)
                 loss, mse_loss, losses = self.loss( preds, targets)
             self.grad_scaler.scale(loss).backward()
@@ -380,7 +379,7 @@ class Trainer_Downscaling( Trainer_Base):
 
         for pred, target in zip( preds, targets) :
 
-            target = torch.flatten(torch.flatten(target,-3,-1),-3,-2)    
+            target = torch.flatten(torch.flatten(target,-3,-1),-3,-2)
             mse_loss = self.MSELoss( pred[0], target = target)
             mse_loss_total += mse_loss.cpu().detach()
 
@@ -431,9 +430,36 @@ class Trainer_Downscaling( Trainer_Base):
 
 
     ####################################################
-    def prepare_batch_downscaling( self):
-        batch_data = [(torch.randn((16,1,1,6,12,3,9,9)).to(self.devices[0]),
-                        torch.randn((16,1,72,8)).to(self.devices[0]))]
-        target = [torch.randn((16,12,6,3,27,27)).to(self.devices[0])]
+    def prepare_batch_downscaling( self):                  #( self, xin):
+        cf = self.cf
+        devs = self.devices
+
+        #(sources, token_infos) = xin[0]
+        #(self.sources_idxs, self.sources_info) = xin[1]
+
+
+        # network input
+        #batch_data = [ ( sources[i].to( devs[ cf.input_fields[i][1][3] ], non_blocking=True), 
+        #                self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
+        #                  for i in range(len(sources))  ]
+        batch_data = [
+                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[0][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+
+                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[1][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        
+                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[2][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                
+                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[3][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                
+                (torch.randn((16,5,12,2,4,3,27,27)).to( devs[ cf.input_fields[4][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*2*4,8)).to( self.devices[0], non_blocking=True))),
+                
+                (torch.randn((16,1,12,6,12,3,9,9)).to( devs[ cf.input_fields[5][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,1,12*6*12,8)).to( self.devices[0], non_blocking=True)))]
+        target = [torch.randn((16,12,6,3,27,27)).to(cf.input_fields[5][1][3])]
 
         return batch_data, target
