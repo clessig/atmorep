@@ -167,3 +167,6 @@ cython_debug/
 
 
 models/
+results/
+wandb/
+logs/
