@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH -p develbooster
 #SBATCH -A deepacf
-#SBATCH --time=00:10:00
+#SBATCH --time=00:15:00
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
+#BATCH  --cpus-per-task=160
 ##SBATCH --mem=0
 #SBATCH --job-name atmorep-profiling
 #SBATCH --output=./results/slurm/slurm-%j-%x.out
@@ -54,7 +55,7 @@ if [ "$SYSTEMNAME" = juwelsbooster ] \
 fi
 MASTER_PORT=25678
 
-srun --export=ALL env -u CUDA_VISIBLE_DEVICES \
+srun --cpu-bind=none --export=ALL env -u CUDA_VISIBLE_DEVICES \
     apptainer exec \
     --nv \
     --bind .:/workspace/atmorep\
