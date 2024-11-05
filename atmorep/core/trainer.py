@@ -15,6 +15,7 @@
 ####################################################################################################
 
 import torch
+from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 import torchinfo
 import numpy as np
 import time
@@ -241,6 +242,8 @@ class Trainer_Base() :
 
       self.optimizer.zero_grad()
 
+      
+
       [loss_total[idx].append( losses[key]) for idx, key in enumerate(losses)]
       mse_loss_total.append( mse_loss.detach().cpu() )
       grad_loss_total.append( loss.detach().cpu() )
@@ -310,6 +313,7 @@ class Trainer_Base() :
     # clean memory
     self.optimizer.zero_grad()
     del batch_data, loss, loss_total, mse_loss_total, grad_loss_total, std_dev_total
+    
       
   ###################################################
   def profile( self):
@@ -325,32 +329,48 @@ class Trainer_Base() :
     # https://pytorch.org/blog/trace-analysis-for-masses/
 
     # do for all par_ranks to avoid that they run out of sync
-    print( '---------------------------------')
-    print( 'Profiling:')
-    pname = './logs/profile_par_rank' + str(cf.par_rank) + '_' + cf.wandb_id + '/profile'
-    with torch.profiler.profile( activities=[torch.profiler.ProfilerActivity.CPU,
-                                            torch.profiler.ProfilerActivity.CUDA],
-                      schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-                      on_trace_ready=torch.profiler.tensorboard_trace_handler(pname),
-                      profile_memory=True, record_shapes=True, with_stack=True) as prof:
-      for batch_idx in range( 2 * (1+1+3) ) :
+    if cf.par_rank == 0:
+      print( '---------------------------------')
+      print( 'Profiling:')
 
-        batch_data = self.model.next()
+      pname = './logs/profile_par_rank' + str(cf.par_rank) + '_' + cf.wandb_id + '/profile'
+      
+      try:
+          with torch.profiler.profile(
+              activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+              schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
+              on_trace_ready=tensorboard_trace_handler(pname),
+              profile_memory=True,
+              record_shapes=True,
+              with_stack=False  # Disabling with_stack for stability
+          ) as prof:
+              
+              # Running the profiling steps
+              for batch_idx in range(2 * (1 + 1 + 3)):
+                  batch_data = self.model.next()
 
-        with torch.autocast(device_type='cuda',dtype=torch.float16, enabled=cf.with_mixed_precision):
-          batch_data = self.prepare_batch( batch_data)
-          preds, _ = self.model_ddp( batch_data)
-          loss, mse_loss, losses = self.loss( preds, batch_idx)
+                  # Mixed-precision autocast if enabled
+                  with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
+                      batch_data = self.prepare_batch(batch_data)
+                      preds, _ = self.model_ddp(batch_data)
+                      loss, mse_loss, losses = self.loss(preds, batch_idx)
 
-        self.grad_scaler.scale(loss).backward()
-        self.grad_scaler.step(self.optimizer)
-        self.grad_scaler.update()
-        self.optimizer.zero_grad()
+                  # Gradient scaling and optimization steps
+                  self.grad_scaler.scale(loss).backward()
+                  self.grad_scaler.step(self.optimizer)
+                  self.grad_scaler.update()
+                  self.optimizer.zero_grad()
 
-        prof.step()
+                  # Step profiler at the end of each iteration
+                  prof.step()
+          
+          prof.export_chrome_trace("/p/home/jusers/kasravi1/juwels/shared/projects/atmorep/logs/trace.json")
+        
+      except RuntimeError as e:
+          print(f"Profiling encountered an error: {e}")
 
-    print( 'Profiling finished.')
-    print( '---------------------------------')
+      print( 'Profiling finished.')
+      print( '---------------------------------')
 
   ###################################################
   def validate( self, epoch, BERT_test_strategy = 'BERT'):
