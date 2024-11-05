@@ -15,6 +15,7 @@
 ####################################################################################################
 
 import torch
+from torch.profiler import profile
 import os
 import sys
 import traceback
@@ -198,7 +199,7 @@ def train() :
   # debug / output
   cf.log_test_num_ranks = 0
   cf.save_grads = False
-  cf.profile = False
+  cf.profile = True
   cf.test_initial = False
   cf.attention = False
 
@@ -235,6 +236,7 @@ def train() :
     cf.print()
 
   trainer = Trainer_BERT( cf, device).create()
+
   trainer.run()
 
 ####################################################################################################
