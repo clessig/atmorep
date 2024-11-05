@@ -29,6 +29,7 @@ From: /p/project1/atmlaml/kasravi1/mlperf/appatiner-image/pytorch-24-09-py3-amd6
     # Install OpenFold source code package in editable mode
     cd /workspace 
     pip install torchrun_jsc
+    pip install -U tensorboard-plugin-profile
     pip install -e .
 
 
