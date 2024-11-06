@@ -102,7 +102,9 @@ class PerceiverCrossAttentionHead(torch.nn.Module):
     if len(coupled_ks) > 0:
         ks = torch.cat([ks, *coupled_ks],dim=1) 
         vs = torch.cat([vs, *coupled_vs],dim=1)
-
+    
+    logger.info("ks_shape",ks.shape)
+    logger.info("vs_shape",vs.shape)
     # correct ordering of tensors with seq dimension second but last is critical
     #with torch.nn.attention.sdpa_kernel( torch.nn.attention.SDPBackend.FLASH_ATTENTION) :
     with torch.nn.attention.sdpa_kernel([torch.nn.attention.SDPBackend.FLASH_ATTENTION, torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION]) :
@@ -193,14 +195,20 @@ class Perceiver(torch.nn.Module) :
     def forward( self, x, x_couples):
         
         x, atts =  self.cross_attn(self.latent_arrays, x, x_couples)
+        
+        logger.info("first_x", x.shape)
 
         for idx,block in enumerate(self.blocks):
             x = block(x)
-
+        
         x = self.output_proj(x)
+
+        logger.info("second_x", x.shape)
 
         x ,atts = self.output_cross_attn(self.output_latents, x, [])
 
+        logger.info("third_x", x.shape)
+        
         return x
 
 

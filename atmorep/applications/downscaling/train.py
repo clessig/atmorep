@@ -36,37 +36,38 @@ from atmorep.utils.logger import logger
 
 def train():
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  device = init_torch()
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
   # torch.cuda.set_sync_debug_mode(1)
   torch.backends.cuda.matmul.allow_tf32 = True
 
-  #model_id = "3kdutwqb"  
-  model_id = "1jh2qvrx"
+  model_id = "wc5e2i3t"
+  
   cf = Config().load_json( model_id)
   # parallelization
   cf.with_ddp = with_ddp
-  cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
+  #cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
   cf.par_rank = par_rank
   cf.par_size = par_size
 
   for field in cf.fields:
-    field[1].pop(4)
-    #field[1].append([model_id,45])
+      if len(field[1]) > 4 :
+        field[1].pop(4)
+      #field[1].append([model_id,-2])
   
   #cf.model_id = "3kdutwqb" 
 
   cf.input_fields = cf.fields
   
   cf.fields_downscaling = [ ['total_precip', 
-                            [1,1536,["velocity_u","velocity_v","specific_humidity"]],
+                            [1,1024,["velocity_u","velocity_v","specific_humidity"]],
                             [0],
                             [12,6,12],
                             [3,9*3,9*3], 
                             1.0 ] ]
+ 
   cf.target_fields = cf.fields_downscaling
   cf.input_file_path = "/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr"
   cf.target_file_path = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res008_chunk8.zarr"
@@ -158,7 +159,7 @@ def train():
   cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
   cf.n_size = [36, 9*6, 9*12]
 
-  trainer = Trainer_Downscaling( cf, device).create()
+  trainer = Trainer_Downscaling( cf, device).create(model_id)
   trainer.run()
 
 

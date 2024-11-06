@@ -75,25 +75,15 @@ class AtmoRepDownscalingData( torch.nn.Module) :
         return pred
 
     ###################################################
-    def create( self, pre_batch, devices, create_net = True, pre_batch_targets = None,
+    def create( self, devices, model_id=None, create_net = True,
             load_pretrained=True) :
 
         if create_net :
-            self.net = self.net.create( devices, load_pretrained)
-
-        self.pre_batch = pre_batch
-        self.pre_batch_targets = pre_batch_targets
+            self.net = self.net.create( devices, model_id, load_pretrained)
 
         cf = self.net.cf
         loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
-
-        #self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
-        #                                        cf.batch_size,
-        #                                        pre_batch, cf.n_size, cf.num_samples_per_epoch,
-        #                                        with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
-        #                                        with_source_idxs = True, 
-        #                                        compute_weights = (cf.losses.count('weighted_mse') > 0) )
         
         self.dataset_train = MultifieldDownscalingSampler(
                     cf.input_file_path,
@@ -122,27 +112,32 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.num_samples_validate,
                     with_shuffle=True
         )
-        #self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
-        #                                       cf.batch_size_validation,
-        #                                       pre_batch, cf.n_size, cf.num_samples_validate,
-        #                                       with_shuffle = (cf.BERT_strategy != 'global_forecast'),
-        #                                       with_source_idxs = True, 
-        #                                       compute_weights = (cf.losses.count('weighted_mse') > 0) )                                               
+        
         self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
                                                           sampler = None)
 
         return self
 
-class AtmoRepDownscaling( AtmoRep) :
+class AtmoRepDownscaling( torch.nn.Module) :
 
     def __init__(self, cf) :
-        
-        super( AtmoRepDownscaling, self).__init__(cf)
 
-    def create( self, devices, load_pretrained=True) :
+        super( AtmoRepDownscaling, self).__init__()
+        #self.core_atmorep_model = Atmorep(cf) 
+        #super( AtmoRepDownscaling, self).__init__(cf)
+        self.cf = cf
+
+    def create( self, devices, model_id=None, load_pretrained=True) :
         
         cf = self.cf
-        self = super(AtmoRepDownscaling, self).create(devices, load_pretrained=load_pretrained)
+        if model_id is None:
+            #self = super(AtmoRepDownscaling, self).create(devices, load_pretrained=load_pretrained)
+            self.core_atmorep_model = AtmoRep( cf).create(devices, load_pretrained=load_pretrained)
+        else:
+            #self = super(AtmoRepDownscaling, self).load(model_id, devices, cf=self.cf)
+            self.core_atmorep_model = AtmoRep.load(model_id, devices, cf=self.cf)
+
+        
         self.perceivers = torch.nn.ModuleList()
         self.downscaling_tails = torch.nn.ModuleList()
 
@@ -157,9 +152,8 @@ class AtmoRepDownscaling( AtmoRep) :
                 if field_info[0] in field[1][2]:
                     coupling_indices.append(idx)
             self.fields_downscaling_coupling_idx.append(coupling_indices)
-        
-        
-        logger.info("downscaling",cf.fields_downscaling,len(cf.fields_downscaling))
+
+        self.field_pred_idxs = self.core_atmorep_model.field_pred_idxs
 
         for field_idx,field_info in enumerate(cf.fields_downscaling):
             device = devices[
@@ -169,11 +163,11 @@ class AtmoRepDownscaling( AtmoRep) :
                 coupled_dim_embed = self.cf.fields[self.field_pred_idxs[coupled_fields_indices]][1][1]
                 coupled_dim_embeds.append(coupled_dim_embed)
             
-            logger.info("field_idx",field_idx)
             self.perceivers.append(Perceiver(cf, field_info, coupled_dim_embeds).create().to(device))
             self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_output_emb, np.prod(field_info[4])).create().to(device))
         
-
+        print("here")
+        print(self)
 
         return self
 
@@ -181,14 +175,15 @@ class AtmoRepDownscaling( AtmoRep) :
     ###################################################
     def load_block( self, field_info, block_name, block ) :
 
-        super().load_block(field_info, block_name, block)
+        self.core_atmorep_model.load_block(field_info, block_name, block)
 
         
     ###################################################
     def translate_weights(self, mloaded, mkeys, ukeys) :
 
-        mloaded = super().translate_weights(mloaded, mkeys, ukeys)
+        mloaded = self.core_atmorep_model.translate_weights(mloaded, mkeys, ukeys)
         return mloaded
+
 
     ###################################################
     @staticmethod
@@ -227,14 +222,14 @@ class AtmoRepDownscaling( AtmoRep) :
         # torch.save( self.embed_token_info.state_dict(),
         #             utils.get_model_filename( name, self.cf.wandb_id, epoch) )
         name = self.__class__.__name__ + '_embeds_token_info'
-        torch.save( self.embeds_token_info.state_dict(),
+        torch.save( self.core_atmorep_model.embeds_token_info.state_dict(),
                     utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
-        for ifield, enc in enumerate(self.encoders) :
+        for ifield, enc in enumerate(self.core_atmorep_model.encoders) :
             name = self.__class__.__name__ + '_encoder_' + self.cf.fields[ifield][0]
             torch.save( enc.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
-        for ifield, dec in enumerate(self.decoders) :
+        for ifield, dec in enumerate(self.core_atmorep_model.decoders) :
             name = self.__class__.__name__ + '_decoder_' + self.cf.fields_prediction[ifield][0]
             torch.save( dec.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
@@ -245,10 +240,15 @@ class AtmoRepDownscaling( AtmoRep) :
         for ifield, downscaling_tail in enumerate(self.downscaling_tails) :
             name = self.__class__.__name__ + '_downscaling_tails_' + self.cf.fields_downscaling[ifield][0]
             torch.save( downscaling_tail.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
+    
+
     ###################################################
     def forward( self, xin) :
         '''Evaluate network'''
-        preds, atts = super().forward(xin)
+        preds, atts = self.core_atmorep_model(xin)
+
+        for pred_idx, pred in enumerate(preds):
+            logger.info(f"pred_{pred_idx}",pred.shape)
 
         for idx_perceiver_net,perceiver_net in enumerate(self.perceivers):
 

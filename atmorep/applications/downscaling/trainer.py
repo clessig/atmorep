@@ -62,21 +62,20 @@ class Trainer_Downscaling( Trainer_Base):
             self.rngs = [np.random.default_rng(self.rng_seed+i) for i in range(ll)]
         self.pre_batch = functools.partial( prepare_batch_BERT_multifield, self.cf, self.rngs, 
                                                           self.cf.fields, self.cf.BERT_strategy )
-    def create( self, load_embeds=True):
+    def create( self, model_id=None, load_embeds=True):
         net = AtmoRepDownscaling( self.cf)
         self.model = AtmoRepDownscalingData( net)
 
-        self.model.create(self.pre_batch, self.devices)
+        self.model.create(self.devices, model_id=model_id)
 
-        for idx, _ in enumerate(self.model.net.tails) :
-            self.model.net.tails[idx] = torch.nn.Identity()
+        for idx, _ in enumerate(self.model.net.core_atmorep_model.tails) :
+            self.model.net.core_atmorep_model.tails[idx] = torch.nn.Identity()
 
-
-        self.model.net.encoder_to_decoder = self.encoder_to_decoder
+        self.model.net.core_atmorep_model.encoder_to_decoder = self.encoder_to_decoder
         #self.model.decoder_to_preceiver = self.decoder_to_preceiver
-        self.model.net.decoder_to_tail = self.decoder_to_tail
+        self.model.net.core_atmorep_model.decoder_to_tail = self.decoder_to_tail
         return self
-
+    
     @classmethod
     def load( Typename, cf, model_id, epoch, devices):
         trainer = Typename( cf, devices).create( load_embeds=False)
@@ -443,17 +442,17 @@ class Trainer_Downscaling( Trainer_Base):
         #                self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
         #                  for i in range(len(sources))  ]
         batch_data = [
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[0][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                (torch.randn((16,5,12,3,6,3,18,18)).to( devs[ cf.input_fields[0][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*3*6,8)).to( self.devices[0], non_blocking=True))),
 
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[1][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                (torch.randn((16,5,12,3,6,3,18,18)).to( devs[ cf.input_fields[1][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*3*6,8)).to( self.devices[0], non_blocking=True))),
         
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[2][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                (torch.randn((16,5,12,3,6,3,18,18)).to( devs[ cf.input_fields[2][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*3*6,8)).to( self.devices[0], non_blocking=True))),
                 
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[3][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+                (torch.randn((16,5,12,3,6,3,18,18)).to( devs[ cf.input_fields[3][1][3] ],non_blocking=True),
+                self.tok_infos_trans(torch.randn((16,5,12*3*6,8)).to( self.devices[0], non_blocking=True))),
                 
                 (torch.randn((16,5,12,2,4,3,27,27)).to( devs[ cf.input_fields[4][1][3] ],non_blocking=True),
                 self.tok_infos_trans(torch.randn((16,5,12*2*4,8)).to( self.devices[0], non_blocking=True))),
