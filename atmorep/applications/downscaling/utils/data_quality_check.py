@@ -28,14 +28,14 @@ def find_time_indices_range_in_era5(era5_group,timerange,strf_format):
     return (int(intial_index),int(last_index+1))
 
 def lat_lon_indices_range_in_era5(era5_group,lat_range,lon_range):
-    lats = era5_group['lats'][:]
+    lats = era5_group['lats'][:] - 90.0
     lons = era5_group['lons'][:] -180.0
 
-    lat_min_index = np.where(lats>lat_range[0])[0][0]
-    lat_max_index = np.where(lats<lat_range[1])[0][-1]
+    lat_min_index = np.where(lats>=lat_range[0])[0][0]
+    lat_max_index = np.where(lats<=lat_range[1])[0][-1]
 
-    lon_min_index = np.where(lons>lon_range[0])[0][0]
-    lon_max_index = np.where(lons<lon_range[1])[0][-1]
+    lon_min_index = np.where(lons>=lon_range[0])[0][0]
+    lon_max_index = np.where(lons<=lon_range[1])[0][-1]
 
     return ((int(lat_min_index),int(lat_max_index)),
              (int(lon_min_index),int(lon_max_index)))
@@ -66,23 +66,26 @@ def save_precipitaion_nc_imerg(imerg_group,lat_range,lon_range,time_range,era5_g
     imerg_lats = imerg_group['lats'][:]
     imerg_lons = imerg_group['lons'][:]
 
-    lat_min_index = int(np.where(imerg_lats<era5_group['lats'][lat_range])[0][-1])
-    lat_max_index = int(np.where(imerg_lats>era5_group['lats'][lat_range+54])[0][0])
+    #lat_min_index = int(np.where(imerg_lats<=(era5_group['lats'])[lat_range])[0][-1])
+    #lat_max_index = int(np.where(imerg_lats>=(era5_group['lats'])[lat_range+54])[0][0])
 
-    lon_min_index = int(np.where(imerg_lons+180<era5_group['lons'][lon_range])[0][-1])
-    lon_max_index = int(np.where(imerg_lons+180>era5_group['lons'][lon_range+108])[0][0])
+    #lon_min_index = int(np.where(imerg_lons<=era5_group['lons'][lon_range])[0][-1])
+    #lon_max_index = int(np.where(imerg_lons>=era5_group['lons'][lon_range+108])[0][0])
 
     time_range = int(time_range)    
 
-    print(type(time_range))
-    print(type(lat_min_index),type(lat_max_index))
-    print(type(lon_min_index),type(lon_max_index))
+    #print(type(time_range))
+    #print(type(lat_min_index),type(lat_max_index))
+    #print(type(lon_min_index),type(lon_max_index))
     
     imerg_array = imerg_group['data_sfc'][
                 time_range:time_range+3,
                 0,
-                lat_min_index:lat_max_index,
-                lon_min_index:lon_max_index]
+                lat_range*3:(lat_range+54)*3,
+                lon_range*3:(lon_range+108)*3]
+
+               # lat_min_index:lat_max_index,
+               # lon_min_index:lon_max_index]
 
     imerg_subset_dataset = xr.Dataset(
              {'total_precip': (
@@ -90,13 +93,34 @@ def save_precipitaion_nc_imerg(imerg_group,lat_range,lon_range,time_range,era5_g
             
              coords = {
                 "time" : imerg_group['time'][time_range:time_range+3],
-                "lats" : imerg_lats[lat_min_index:lat_max_index],
-                "lons" : imerg_lons[lon_min_index:lon_max_index]+180
+                "lats" : imerg_lats[lat_range*3:(lat_range+54)*3],
+                "lons" : imerg_lons[lon_range*3:(lon_range+108)*3]
              })
 
     file_name = f"../nc_files/imerg_{time_range}_{lat_range}_{lon_range}.nc"
     print(file_name)
     imerg_subset_dataset.to_netcdf(file_name)
+
+def save_era5_whole(era5_group,time_range):
+    
+    era5_whole = era5_group['data_sfc'][
+        time_range:time_range+3,
+        0,
+        :,
+        :]*1e3
+
+    era_5_subset_dataset = xr.Dataset(
+                    {'total_precip' : (
+                        ("time","lats","lons"),era5_whole)},
+                    coords={
+                        "time": era5_group['time'][time_range: time_range+3],
+                        "lats" : era5_group['lats'][:],
+                        "lons" : era5_group['lons'][:]
+                    },)
+
+    file_name = f"../nc_files/era_5_{time_range-era5_timeframe_range[0]}_whole.nc"
+    print(file_name)
+    era_5_subset_dataset.to_netcdf(file_name)
 
 def lat_lon_time_range(global_zarr_filepath, local_zarr_filepath):
 
@@ -171,19 +195,19 @@ if __name__ == "__main__":
     print(lat_indices_range)
     print(lon_indices_range)
    
-    print(era5_gorup['data_sfc'][
-        era5_timeframe_range[0]:era5_timeframe_range[0]+36,
-        0,
-        lat_indices_range[0]:lat_indices_range[0] + 54,
-        lon_indices_range[0]:lon_indices_range[0] + 108
-        ].shape)
-       
-    print(imerg_group['data_sfc'][
-         :36,
-         0,
-         :54*3,
-         :108*3
-    ].shape)
+    #print(era5_gorup['data_sfc'][
+    #    era5_timeframe_range[0]:era5_timeframe_range[0]+36,
+    #    0,
+    #    lat_indices_range[0]:lat_indices_range[0] + 54,
+    #    lon_indices_range[0]:lon_indices_range[0] + 108
+    #    ].shape)
+    #   
+    #print(imerg_group['data_sfc'][
+    #     :36,
+    #     0,
+    #     :54*3,
+    #     :108*3
+    #].shape)
 
     time_list = np.random.choice(np.arange(0,len(imerg_timeseries-3)), size=(20,), replace=False)
     era5_time_list = np.arange(era5_timeframe_range[0],era5_timeframe_range[1])[time_list] 
@@ -191,10 +215,18 @@ if __name__ == "__main__":
     print(time_list)
     print(era5_time_list-era5_timeframe_range[0])
     print(era5_time_list)
+    print(era5_gorup['time'][era5_time_list])
 
-    lats = np.random.choice( np.arange(lat_indices_range[0],lat_indices_range[1]-54), size= (20,), replace=False)
-    lons = np.random.choice( np.arange(lon_indices_range[0],lon_indices_range[1]-108), size= (20,), replace=False)
+    era5_lats = np.arange(lat_indices_range[0],lat_indices_range[1]-54)
+    era5_lons = np.arange(lon_indices_range[0],lon_indices_range[1]-108)
+
+    lats = np.random.choice( np.arange(0, lat_indices_range[1]-54-lat_indices_range[0]), size=(20,), replace=False)
+    lons = np.random.choice( np.arange(0, lon_indices_range[1]-108-lon_indices_range[0]), size=(20,),replace=False)
+
+    era5_lats_list = era5_lats[lats]
+    era5_lons_list = era5_lons[lons]
 
     for i in range(20):
-        save_precipitaion_nc_era5(era5_gorup,lats[i],lons[i],era5_time_list[i])
-        save_precipitaion_nc_imerg(imerg_group,lats[i],lons[i],time_list[i],era5_gorup)   
+        save_precipitaion_nc_era5(era5_gorup,era5_lats_list[i],era5_lons_list[i],era5_time_list[i])
+        save_precipitaion_nc_imerg(imerg_group,lats[i],lons[i],time_list[i],era5_gorup)
+        save_era5_whole(era5_gorup,era5_time_list[i])
