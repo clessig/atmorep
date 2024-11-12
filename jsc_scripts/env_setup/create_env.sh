@@ -2,30 +2,12 @@
 #
 # __authors__ = Michael Langguth
 # __date__  = '2022-01-21'
-# __update__= '2024-11-06'
+# __update__= '2024-11-12'
 #
 # **************** Description ****************
 # This script can be used for setting up the virtual environment needed for AtmoRep.
 # **************** Description ****************
 #
-### auxiliary-function S ###
-check_argin() {
-# Handle input arguments and check if one is equal to -lcontainer (not needed currently)
-# Can also be used to check for non-positional arguments (such as -exp_id=*, see commented lines)
-# !!! NOT USED YET!!!
-    for argin in "$@"; do
-        # if [[ $argin == *"-exp_id="* ]]; then
-        #  exp_id=${argin#"-exp_id="}
-        if [[ $argin == *"-lcontainer"* ]]; then
-	        bool_container=1
-        fi  
-    done
-    if [[ -z "${bool_container}" ]]; then
-        bool_container=0
-    fi
-}
-### auxiliary-function E ###
-
 ### MAIN S ###
 #set -eu              # enforce abortion if a command is not re
 
@@ -37,7 +19,6 @@ if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
   echo "${SCR_SETUP}ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
   exit 1
 fi
-
 
 # from now on, just return if something unexpected occurs instead of exiting
 # as the latter would close the terminal including logging out
@@ -52,7 +33,14 @@ ENV_NAME=$1
 SETUP_DIR=$(pwd)
 SETUP_DIR_NAME="$(basename "${SETUP_DIR}")"
 BASE_DIR="$(dirname "${SETUP_DIR}")"
-VENV_DIR="${BASE_DIR}/virtual_envs/${ENV_NAME}"
+# set-up directory for virtual environment
+if [[ -z "$2" ]]; then
+    VENV_BASE_DIR="${BASE_DIR}/virtual_envs/"
+else
+    VENV_BASE_DIR="$2/virtual_envs/"
+fi
+echo "${SCR_SETUP}Virtual environemnt will be set up under ${VENV_BASE_DIR}..."
+VENV_DIR="${VENV_BASE_DIR}/${ENV_NAME}"
 ATMOREP_DIR="$(dirname "${BASE_DIR}")"
 
 ## perform sanity checks
@@ -87,7 +75,7 @@ fi
 
 ## set up virtual environment
 
-activate_virt_env=${VENV_DIR}/bin/activate
+ACT_VIRT_ENV=${VENV_DIR}/bin/activate
 
 if [[ "$ENV_EXIST" == 0 ]]; then
   # Install virtualenv-package and set-up virtual environment with required additional Python packages.
@@ -98,7 +86,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   python3 -m venv --system-site-packages "${VENV_DIR}"
 
   echo "${SCR_SETUP}Entering virtual environment ${VENV_DIR} to install required Python modules..."
-  source "${activate_virt_env}"
+  source "${ACT_VIRT_ENV}"
  
   # handle systematic issues with Stages/2022 
   MACHINE=$(hostname -f | cut -d. -f2)
