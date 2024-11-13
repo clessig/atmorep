@@ -146,6 +146,7 @@ class Trainer_Base() :
                                                               optimizer_class=torch.optim.AdamW,
                                                               lr=cf.lr_start )
     else :
+      self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                           weight_decay=cf.weight_decay)
     
@@ -231,7 +232,6 @@ class Trainer_Base() :
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cf.with_mixed_precision):
         batch_data = self.prepare_batch( batch_data)
         preds, _ = self.model_ddp( batch_data)
-        #breakpoint()
         loss, mse_loss, losses = self.loss( preds, batch_idx, tmksd_list, weight_list)
       
       self.grad_scaler.scale(loss).backward()
@@ -274,7 +274,8 @@ class Trainer_Base() :
                             torch.mean( preds[0][1]), samples_sec ), flush=True)
     
           # save model (use -2 as epoch to indicate latest, stored without epoch specification)
-          self.save( -2)
+          if batch_idx % cf.model_log_frequency == 0 :
+            self.save( -2)
 
         # reset
         loss_total = [[] for i in range(len(cf.losses)) ]
@@ -501,8 +502,17 @@ class Trainer_Base() :
       if 'kernel_crps' in self.cf.losses :
         kcrps_loss = torch.mean( kernel_crps( target,torch.transpose( pred[2], 1, 0)))
         losses['kernel_crps'].append( kcrps_loss)
-
-        
+    
+    #TODO: uncomment it and add it when running in debug mode
+    # field_losses = ""
+    # for ifield, field in enumerate(cf.fields):
+    #   ifield_loss = 0
+    #   for key in losses :  
+    #     ifield_loss += losses[key][ifield].to(self.device_out)
+    #   ifield_loss /= len(losses.keys())
+    #   field_losses +=  f"{field[0]}: {ifield_loss}; "
+    # print(field_losses, flush = True)
+          
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
     for key in losses :

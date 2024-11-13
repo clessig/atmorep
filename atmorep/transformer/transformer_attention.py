@@ -104,7 +104,7 @@ class MultiCrossAttentionHead(torch.nn.Module):
       self.lnorm_other = torch.nn.Identity()
 
     self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
-
+    
     self.proj_heads_o_q = torch.nn.Linear(dim_embed, num_heads_other*self.dim_head_proj, bias=False)
     self.proj_heads_o_kv= torch.nn.Linear(dim_embed,num_heads_other*2*self.dim_head_proj,bias=False)
     
@@ -180,7 +180,6 @@ class MultiInterAttentionHead(torch.nn.Module):
       self.lnorms.append( ln( dims_embed[ifield], elementwise_affine=False))
 
     # self-attention
-
     nnc = num_fields_other * num_heads_coupling_per_field
     self.proj_out = torch.nn.Linear( self.dim_head_proj * (num_heads_self + nnc), 
                                      dims_embed[0], bias = False)
@@ -190,20 +189,21 @@ class MultiInterAttentionHead(torch.nn.Module):
     self.proj_heads = torch.nn.Linear( dims_embed[0], nhs*3*self.dim_head_proj, bias = False)
     
     # cross-attention
-
-    nhc_dim = num_heads_coupling_per_field * self.dim_head_proj
-    self.proj_heads_other = torch.nn.ModuleList()
-    # queries from primary source/target field
-    self.proj_heads_other.append( torch.nn.Linear( dims_embed[0], nhc_dim*num_fields_other,
+    nfo = num_fields_other
+    if nfo > 0:
+      nhc_dim = num_heads_coupling_per_field * self.dim_head_proj
+      self.proj_heads_other = torch.nn.ModuleList()
+      # queries from primary source/target field
+      self.proj_heads_other.append( torch.nn.Linear( dims_embed[0], nhc_dim*nfo,
                                                    bias=False))
-    # keys, values for other fields
-    for i in range(num_fields_other) :
-      self.proj_heads_other.append( torch.nn.Linear( dims_embed[i+1], 2*nhc_dim, bias=False))
-
+      # keys, values for other fields
+      for i in range(nfo) :
+        self.proj_heads_other.append( torch.nn.Linear( dims_embed[i+1], 2*nhc_dim, bias=False))
+    
     ln = torch.nn.LayerNorm if with_qk_lnorm else torch.nn.Identity
     self.ln_qk = (ln( self.dim_head_proj, elementwise_affine=False), 
                   ln( self.dim_head_proj, elementwise_affine=False))
-    nfo = num_fields_other
+    
     self.ln_k_other = [ln(self.dim_head_proj,elementwise_affine=False) for _ in range(nfo)]
     
     if with_flash :
@@ -233,7 +233,7 @@ class MultiInterAttentionHead(torch.nn.Module):
     field_proj = self.proj_heads( fields_lnormed[0].flatten(1,-2))
     s = [ *field_proj.shape[:-1], self.num_heads_self, -1 ]
     qs, ks, vs = torch.tensor_split( field_proj.reshape(s).transpose(-3,-2), 3, dim=-1)
-    #breakpoint()  
+
     qs, ks = self.ln_qk[0]( qs), self.ln_qk[1]( ks)
     if len(fields_lnormed) > 1 :
 

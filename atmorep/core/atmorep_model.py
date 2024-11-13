@@ -17,10 +17,11 @@
 import torch
 import numpy as np
 import code
+import os
 # code.interact(local=locals())
 
 # import horovod.torch as hvd
-
+import atmorep.config.config as config
 import atmorep.utils.utils as utils
 from atmorep.utils.utils import identity
 from atmorep.utils.utils import NetMode
@@ -183,7 +184,7 @@ class AtmoRepData( torch.nn.Module) :
     loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
 
-    self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
+    self.dataset_train = MultifieldDataSampler( config.path_data, cf.fields, cf.years_train,
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
                                                 with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
@@ -192,7 +193,7 @@ class AtmoRepData( torch.nn.Module) :
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
-    self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
+    self.dataset_test = MultifieldDataSampler( config.path_data, cf.fields, cf.years_val,
                                                cf.batch_size_validation,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
                                                with_shuffle = (cf.BERT_strategy != 'global_forecast'),
@@ -238,8 +239,18 @@ class AtmoRep( torch.nn.Module) :
       if len(field_info[1]) > 4 and load_pretrained :
         # TODO: inconsistent with embeds_token_info -> version that can handle both
         #       we could imply use the file name: embed_token_info vs embeds_token_info
-        name = 'AtmoRep' + '_embed_token_info'
+        name = 'AtmoRep' + '_embeds_token_info'
+        if not os.path.exists(get_model_filename( name, field_info[1][4][0], field_info[1][4][1])):
+          name = 'AtmoRep' + '_embed_token_info'
+
         mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
+      
+        if "weight" not in mloaded.keys(): #TODO: get rid of this
+          mloaded["weight"] = mloaded["0.weight"]
+          mloaded["bias"] = mloaded["0.bias"]
+          del mloaded["0.weight"]
+          del mloaded["0.bias"]
+
         self.embeds_token_info[-1].load_state_dict( mloaded)
         print( 'Loaded embed_token_info from id = {}.'.format( field_info[1][4][0] ) )
       else :
@@ -260,7 +271,7 @@ class AtmoRep( torch.nn.Module) :
       if len(field_info[1]) > 4 and load_pretrained :
         self.load_block( field_info, 'encoder', self.encoders[-1])
       self.embeds.append( self.encoders[-1].embed)
-
+     
       # indices of coupled fields for efficient access in forward
       self.fields_coupling_idx.append( [field_idx])
       for field_coupled in field_info[1][2] : 
@@ -353,9 +364,17 @@ class AtmoRep( torch.nn.Module) :
                 param[ : , b_loaded[k].shape[1] : ] = 0.01 * torch.rand( param.shape[0],
                                                                          param.shape[1] - b_loaded[k].shape[1])
                 keys_del += [ k ]
+
+      #for backward compatibility. solved in new runs
+      if 'proj_heads_other' in name: 
+        for k in b_loaded.keys() :
+          if name == k :
+            if b_loaded[name].shape[0] == 0:
+              keys_del += [ name ]
+      
     for k in keys_del :
       del b_loaded[k]
-
+    
     # use strict=False so that differing blocks, e.g. through coupling, are ignored
     mkeys, _ = block.load_state_dict( b_loaded, False)
 
@@ -394,11 +413,7 @@ class AtmoRep( torch.nn.Module) :
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_ks.weight']
           del mloaded[f'encoders.0.heads.{layer}.heads_other.{head}.proj_vs.weight']
 
-      else:
-        dim_mw = self.encoders[0].heads[0].proj_heads_other[0].weight.shape
-        mw = torch.tensor(np.zeros(dim_mw))
-      
-      mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
+        mloaded[f'encoders.0.heads.{layer}.proj_heads_other.0.weight'] = mw  
      
     #decoder
     for iblock in range(0, 19, 2) : 

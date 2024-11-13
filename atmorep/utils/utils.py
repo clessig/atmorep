@@ -31,6 +31,7 @@ import torch.utils.data.distributed
 import pandas as pd
 
 import atmorep.config.config as config
+from atmorep.utils.logger import logger
 
 ####################################################################################################
 class NetMode( Enum) :
@@ -108,7 +109,7 @@ class Config :
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
@@ -136,7 +137,7 @@ def tensor_to_str(tensor):
     return ''.join([chr(x) for x in tensor])
 
 ####################################################################################################
-def init_torch( num_accs_per_task) :
+def init_torch() :
   
   torch.set_printoptions( linewidth=120)
 
@@ -144,14 +145,12 @@ def init_torch( num_accs_per_task) :
   if not use_cuda :
     return torch.device( 'cpu')
 
-  local_id_node = os.environ.get('SLURM_LOCALID', '-1')
-  if local_id_node == '-1' :
+  num_accs_per_task = torch.cuda.device_count()
+  if num_accs_per_task == '1' :
     devices = ['cuda']
   else :
-    devices = ['cuda:{}'.format(int(local_id_node) * num_accs_per_task + i) 
-                                                                  for i in range(num_accs_per_task)]
-  print( 'devices : {}'.format( devices) )
-  torch.cuda.set_device( int(local_id_node) * num_accs_per_task )
+    devices = [f'cuda:{i}' for i in range(num_accs_per_task)]
+  logger.info( 'Using devices : {}'.format( devices) )
 
   torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -176,6 +175,9 @@ def setup_ddp( with_ddp = True) :
     dist.init_process_group( backend='nccl', init_method='tcp://' + master_node + ':1345',
                               timeout=datetime.timedelta(seconds=10*8192),
                               world_size = size, rank = rank) 
+    logger.info( f'Using DDP with MASTER_ADDR={master_node}.' )
+  else :
+    logger.info( 'DDP is not used.' )
 
   return rank, size
 
@@ -370,12 +372,10 @@ def CRPS( y, mu, std_dev) :
 
 ########################################
 # def kernel_crps_ps( target, ens) :
-#   #breakpoint()
 #   val = ps.crps_ensemble(target.cpu().detach().numpy(), ens.permute([1,2,0]).cpu().detach().numpy())
 #   return torch.tensor(val)
 
 def kernel_crps( target, ens, fair = True) :
-  #breakpoint()
   ens_size = ens.shape[0]
   mae = torch.cat( [(target - mem).abs().mean().unsqueeze(0) for mem in ens], 0).mean()
 
@@ -384,7 +384,7 @@ def kernel_crps( target, ens, fair = True) :
 
   coef = -1.0 / (2.0 * ens_size * (ens_size - 1)) if fair else -1.0 / (2.0 * ens_size**2)
   temp = [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]
-  # breakpoint()
+
   ens_var = coef * torch.tensor( [(p1 - p2).abs().sum() for p1 in ens for p2 in ens]).sum()
   ens_var /= (ens.shape[1]*ens.shape[2])
 
