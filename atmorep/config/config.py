@@ -1,15 +1,62 @@
-import os 
+import json
 from pathlib import Path
+import dataclasses
+import typing
 
-fpath = os.path.dirname(os.path.realpath(__file__))
+PLATFORM_CONFIG_PATH = Path(__file__).resolve().parent
 
-path_models  = Path( fpath, '../../models/')
-path_results = Path( fpath, '../../results')
-path_plots   = Path( fpath, '../results/plots/') 
+# doesnt work for shared environments
+ATMOREP_PROJECT_DIR = PLATFORM_CONFIG_PATH.parent.parent
 
-#link the following path to be the default data folder using the follwing command:
-#ln -s <path> data 
-#ATOS: path = /ec/res4/scratch/nacl/atmorep/
-#JSC : path = /p/scratch/atmo-rep/data/era5_1deg/months/
-#BSC : path = /gpfs/scratch/ehpc03/
-path_data    = ('./data/era5_y1979_2021_res025_chunk8.zarr/')
+@dataclasses.dataclass
+class UserConfig:
+    models: Path
+    results: Path
+    output: Path
+    
+    @classmethod
+    def from_path(cls, output_dir: Path) -> typing.Self:
+        return cls(
+            output_dir / "models",
+            output_dir / "results",
+            output_dir / "output",
+        )
+
+def get_known_platforms() -> list[str]:
+    return [config_file.stem for config_file in PLATFORM_CONFIG_PATH.iterdir()]
+
+@dataclasses.dataclass
+class HPC_Platform:
+    input_data: Path
+    pretained_models: Path
+    
+    @classmethod
+    def get_platform(cls, platform: str) -> typing.Self:
+        known_platforms = get_known_platforms()
+        platform_config_file = PLATFORM_CONFIG_PATH / f"{platform}.json"
+        
+        try:
+            with open(platform_config_file, "r") as fp:
+                platform_config = json.load(fp)
+        except FileNotFoundError as e:
+            msg = f"computing platform: {platform_config_file} is unknown, should be one of : {', '.join(known_platforms)}"
+            raise ValueError(msg)
+        
+        platform = cls(**platform_config)
+        return platform
+
+    
+# compatibiltiy facade
+
+_platform = "jsc"
+# platform = "bsc"
+# platform = "atos"
+
+_user_config = UserConfig.get_user_config(ATMOREP_PROJECT_DIR)
+path_models = _user_config.models
+path_results = _user_config.results
+# TODO: still needed ???
+path_plots = ATMOREP_PROJECT_DIR / "atmorep" / "results" / "plots" 
+
+print(_user_config, HPC_Platform.get_platform(_platform))
+path_data = HPC_Platform.get_platform(_platform).input_data / 'era5_y1979_2021_res025_chunk8.zarr/'
