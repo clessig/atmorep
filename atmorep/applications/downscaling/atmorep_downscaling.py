@@ -104,6 +104,7 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.batch_size,
                     cf.n_size,
                     cf.num_samples_per_epoch,
+                    cf.downscaling_ratio,
                     with_shuffle=True
         )
         
@@ -120,6 +121,7 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.batch_size_validation,
                     cf.n_size,
                     cf.num_samples_validate,
+                    cf.downscaling_ratio,
                     with_shuffle=True
         )
         #self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,

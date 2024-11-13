@@ -36,8 +36,8 @@ from atmorep.utils.logger import logger
 
 def train():
 
-  num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  #num_accs_per_task = int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
+  device = init_torch()     #num_accs_per_task)
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
@@ -49,7 +49,7 @@ def train():
   cf = Config().load_json( model_id)
   # parallelization
   cf.with_ddp = with_ddp
-  cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
+  #cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
   cf.par_rank = par_rank
   cf.par_size = par_size
 
@@ -60,12 +60,13 @@ def train():
   #cf.model_id = "3kdutwqb" 
 
   cf.input_fields = cf.fields
-  
+ 
+  cf.downscaling_ratio = 3
   cf.fields_downscaling = [ ['total_precip', 
                             [1,1536,["velocity_u","velocity_v","specific_humidity"]],
                             [0],
                             [12,6,12],
-                            [3,9*3,9*3], 
+                            [3,9*cf.downscaling_ratio,9*cf.downscaling_ratio], 
                             1.0 ] ]
   cf.target_fields = cf.fields_downscaling
   cf.input_file_path = "/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr"
