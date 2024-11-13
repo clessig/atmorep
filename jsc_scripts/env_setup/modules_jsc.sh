@@ -18,3 +18,4 @@ ml ecCodes/2.31.0
 ml zarr/2.18.3
 ml PyYAML/6.0
 ml netcdf4-python/1.6.4-serial
+ml git/2.41.0-nodocs
