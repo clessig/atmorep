@@ -20,6 +20,7 @@ import sys
 import traceback
 import pdb
 import wandb
+from pathlib import Path
 
 import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
@@ -215,7 +216,7 @@ def train() :
 
 ####################################################################################################
 if __name__ == '__main__':
-  atmorep_project_dir = os.environ["SLURM_SUBMIT_DIR"]
+  atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
   print("Atmorep project dir:", atmorep_project_dir)
   user_config = config.UserConfig.from_path(atmorep_project_dir)
   
