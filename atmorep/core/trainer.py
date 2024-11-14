@@ -50,6 +50,7 @@ class Trainer_Base() :
   def __init__( self, cf, devices ) :
 
     self.cf = cf
+    self.user_config = self.cf.user_config
     self.devices = devices
     self.device_in = devices[0]
     self.device_out = devices[-1]
@@ -73,10 +74,10 @@ class Trainer_Base() :
       self.tok_infos_trans = getattr( token_infos_transformations, 'identity')
 
     if 0 == cf.par_rank :
-      directory = Path( config.path_results, 'id{}'.format( cf.wandb_id))
+      directory = self.user_config.results / f"id{cf.wandb_id}"
       if not os.path.exists(directory):
         os.makedirs( directory)
-      directory = Path( config.path_models, 'id{}'.format( cf.wandb_id))
+      directory = self.user_config.models / f'id{cf.wandb_id}'
       if not os.path.exists(directory):
         os.makedirs( directory)
 
