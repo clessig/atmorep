@@ -29,9 +29,7 @@ def write_item(ds_field, name_idx, data, levels, coords, name  = 'sample' ):
   return ds_batch_item
 
 ####################################################################################################
-def write_forecast( model_id, epoch, batch_idx, levels, sources, 
-                    targets, preds, ensembles, coords,  
-                    zarr_store_type = 'ZipStore' ) :
+def write_forecast(user_config: config.UserConfig, model_id, epoch, batch_idx, levels, sources, targets, preds, ensembles, coords, zarr_store_type = 'ZipStore' ) :
   ''' 
     sources : num_fields x [field name , data]
     targets :
@@ -39,11 +37,12 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
   '''
   sources_coords = [[c[:3] for c in coord_field ] for coord_field in coords]
   targets_coords = [[[c[-1], c[1], c[2]] for c in coord_field ] for coord_field in coords]
-  fname =  f'{config.path_results}/id{model_id}/results_id{model_id}_epoch{epoch:05d}' + '_{}.zarr'
+  fname_template = f"results_id{model_id}_epoch{epoch:05d}"+r"_{}.zarr"
+  dirname = user_config.results / f"id{model_id}"
 
   zarr_store = getattr( zarr, zarr_store_type)
 
-  store_source = zarr_store( fname.format( 'source'))
+  store_source = zarr_store( dirname / fname_template.format( 'source'))
   exp_source = zarr.group(store=store_source)
  
   for fidx, field in enumerate(sources) :
@@ -54,7 +53,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
       write_item(ds_field, sample, field[1][bidx], levels, sources_coords[fidx][bidx])
   store_source.close()
 
-  store_target = zarr_store( fname.format( 'target'))
+  store_target = zarr_store( dirname / fname_template.format( 'target'))
   exp_target = zarr.group(store=store_target)
   for fidx, field in enumerate(targets) :
     ds_field = exp_target.require_group( f'{field[0]}')
@@ -64,7 +63,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
       write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx])
   store_target.close()
 
-  store_pred = zarr_store( fname.format( 'pred'))
+  store_pred = zarr_store( dirname / fname_template.format( 'pred'))
   exp_pred = zarr.group(store=store_pred)
   for fidx, field in enumerate(preds) :
     ds_field = exp_pred.require_group( f'{field[0]}')
@@ -74,7 +73,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
       write_item(ds_field, sample, field[1][bidx], levels, targets_coords[fidx][bidx]) 
   store_pred.close()
 
-  store_ens = zarr_store( fname.format( 'ens'))
+  store_ens = zarr_store( dirname / fname_template.format( 'ens'))
   exp_ens = zarr.group(store=store_ens)
   for fidx, field in enumerate(ensembles) :
     ds_field = exp_ens.require_group( f'{field[0]}')
@@ -85,7 +84,7 @@ def write_forecast( model_id, epoch, batch_idx, levels, sources,
   store_ens.close()
 
 ####################################################################################################
-def write_BERT( model_id, epoch, batch_idx, levels, sources, 
+def write_BERT(user_config: config.UserConfig, model_id, epoch, batch_idx, levels, sources, 
                 targets, preds, ensembles, coords, 
                 zarr_store_type = 'ZipStore' ) : 
                                             
@@ -98,11 +97,12 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
   sources_coords = [[c[:3] for c in coord_field ] for coord_field in coords]
   targets_coords = [[c[3:] for c in coord_field ] for coord_field in coords]
   
-  fname =  f'{config.path_results}/id{model_id}/results_id{model_id}_epoch{epoch:05d}' + '_{}.zarr'
+  fname_template = f"results_id{model_id}_epoch{epoch:05d}"+r"_{}.zarr"
+  dirname = user_config.results / f"id{model_id}"
 
   zarr_store = getattr( zarr, zarr_store_type)
 
-  store_source = zarr_store( fname.format( 'source'))
+  store_source = zarr_store(dirname / fname_template.format( 'source'))
   exp_source = zarr.group(store=store_source)
   for fidx, field in enumerate(sources) :
     ds_field = exp_source.require_group( f'{field[0]}')
@@ -112,7 +112,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
       write_item(ds_field, sample, field[1][bidx], levels[fidx], sources_coords[fidx][bidx] )
   store_source.close()
 
-  store_target = zarr_store( fname.format( 'target'))
+  store_target = zarr_store( dirname / fname_template.format( 'target'))
   exp_target = zarr.group(store=store_target)
   for fidx, field in enumerate(targets) :
     if 0 == len(field[1]) :  # skip fields that were not predicted
@@ -126,7 +126,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
         write_item(ds_target_b, levels[fidx][vidx], field[1][vidx][bidx], levels[fidx][vidx], targets_coords[fidx][bidx][vidx], name = 'ml' )
   store_target.close()
 
-  store_pred = zarr_store( fname.format( 'pred'))
+  store_pred = zarr_store( dirname / fname_template.format( 'pred'))
   exp_pred = zarr.group(store=store_pred)
   for fidx, field in enumerate(preds) :
     if 0 == len(field[1]) :  # skip fields that were not predicted
@@ -141,7 +141,7 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
                                   targets_coords[fidx][bidx][vidx], name = 'ml' )
   store_pred.close()
 
-  store_ens = zarr_store( fname.format( 'ens'))
+  store_ens = zarr_store( dirname / fname_template.format( 'ens'))
   exp_ens = zarr.group(store=store_ens)
   for fidx, field in enumerate(ensembles) :
     if 0 == len(field[1]) :  # skip fields that were not predicted
@@ -157,12 +157,13 @@ def write_BERT( model_id, epoch, batch_idx, levels, sources,
   store_ens.close()
 
 ####################################################################################################
-def write_attention(model_id, epoch, batch_idx, levels, attn, coords, zarr_store_type = 'ZipStore' ) :
+def write_attention(user_config: config.UserConfig, model_id, epoch, batch_idx, levels, attn, coords, zarr_store_type = 'ZipStore' ) :
 
-  fname =  f'{config.path_results}/id{model_id}/results_id{model_id}_epoch{epoch:05d}' + '_{}.zarr'
+  fname = user_config.results / f"id{model_id}" / f"results_id{model_id}_epoch{epoch:05d}_attention.zarr"
+  
   zarr_store = getattr( zarr, zarr_store_type)
 
-  store_attn = zarr_store( fname.format( 'attention'))
+  store_attn = zarr_store(fname)
   exp_attn = zarr.group(store=store_attn)
 
   for fidx, atts_f in enumerate(attn) :

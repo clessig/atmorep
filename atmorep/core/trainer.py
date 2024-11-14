@@ -707,7 +707,7 @@ class Trainer_BERT( Trainer_Base) :
 
     levels = np.array(cf.fields[0][2])
     
-    write_forecast( cf.wandb_id, epoch, batch_idx,
+    write_forecast( cf.user_config, cf.wandb_id, epoch, batch_idx,
                                  levels, sources_out,
                                  targets_out, preds_out,
                                  ensembles_out, coords)
@@ -836,7 +836,7 @@ class Trainer_BERT( Trainer_Base) :
       ensembles_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_ens_b]] if is_predicted else [fn, []] )
 
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
-    write_BERT( cf.wandb_id, epoch, batch_idx, 
+    write_BERT( cf.user_config, cf.wandb_id, epoch, batch_idx, 
                 levels, sources_out, targets_out,
                 preds_out, ensembles_out, coords )
 
@@ -861,5 +861,5 @@ class Trainer_BERT( Trainer_Base) :
       attn_out.append([field_info[0], attention[fidx]] if is_predicted else [fn, []])
       
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
-    write_attention(cf.wandb_id, epoch,
+    write_attention(cf.user_config, cf.wandb_id, epoch,
                     bidx, levels, attn_out,  coords_b )
