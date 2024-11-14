@@ -63,6 +63,10 @@ class Config :
     wandb.config.update( self.__dict__)
 
   def get_self_dict( self) :
+    my_dict = {
+      key: value for key, value in self.__dict__.items()
+      if not key == "user_config"
+    }
     return self.__dict__
 
   def print( self) :
@@ -85,7 +89,7 @@ class Config :
     if not hasattr( wandb.run, 'id') :
       return
 
-    json_str = json.dumps(self.__dict__ )
+    json_str = json.dumps(self.get_self_dict())
 
     # save in directory with model files
     dirname = self.user_config.results / "models" / f"id{wandb.run.id}"
