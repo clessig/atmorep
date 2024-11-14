@@ -1,18 +1,15 @@
 #!/bin/bash -x
-##SBATCH --account=ehpc03
 #SBATCH --account=hclimrep
-#SBATCH --time=0-2:00:00
+#SBATCH --time=0-0:20:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:2
-#SBATCH --chdir=.
 #SBATCH --partition=develbooster
-#SBATCH --output=../logs/atmorep-%x.%j.out
-#SBATCH --error=../logs/atmorep-%x.%j.err
 
 # import modules and activate virtual environment
-source ${SLURM_SUBMIT_DIR}/env_setup/modules_jsc.sh
-source ${SLURM_SUBMIT_DIR}/virtual_envs/venv_jwb/bin/activate
+echo ${SLURM_SUBMIT_DIR}
+source ${SLURM_SUBMIT_DIR}/jsc_scripts/env_setup/modules_jsc.sh
+source ${SLURM_SUBMIT_DIR}/jsc_scripts/virtual_envs/venv_jwb/bin/activate
 
 # set system-dependant environment variables
 export UCX_TLS="^cma"
@@ -40,11 +37,7 @@ date
 
 export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
-CONFIG_DIR=${SLURM_SUBMIT_DIR}/atmorep_eval_${SLURM_JOBID}
-mkdir ${CONFIG_DIR}
-cp ${SLURM_SUBMIT_DIR}/../atmorep/core/evaluate.py ${CONFIG_DIR}
-echo "${CONFIG_DIR}/evaluate.py"
-srun --label --cpu-bind=v python -u ${CONFIG_DIR}/evaluate.py > ../output/output_${SLURM_JOBID}.txt
+srun --label --cpu-bind=v python -u ${SLURM_SUBMIT_DIR}/atmorep/core/evaluate.py --project_dir=$> output/output_${SLURM_JOBID}.txt
 
 echo "Finished job."
 date
