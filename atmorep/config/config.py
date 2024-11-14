@@ -58,4 +58,4 @@ _platform = "jsc"
 _my_platform = HPC_Platform.get_platform(_platform)
 
 path_data = _my_platform.input_data / 'era5_y1979_2021_res025_chunk8.zarr/'
-path_models = _my_platform.pretained_models
+path_models = _my_platform.pretrained_models
