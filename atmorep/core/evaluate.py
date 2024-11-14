@@ -72,7 +72,7 @@ if __name__ == '__main__':
                                        ], 
                                       'token_overlap' : [0, 0],
                                       'forecast_num_tokens' : 2,
-                                      'with_pytest' : True }
+                                      'with_pytest' : False }
   
   now = time.time()
   Evaluator.evaluate( mode, model_id, options, user_config=user_config)
