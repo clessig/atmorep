@@ -1,4 +1,4 @@
 {
     "input_data": "/p/scratch/atmo-rep/data/era5_1deg/months/",
-    "models": "/p/project1/atmo-rep/final_runs_2024"
+    "pretrained_models": "/p/project1/atmo-rep/final_runs_2024"
 }
