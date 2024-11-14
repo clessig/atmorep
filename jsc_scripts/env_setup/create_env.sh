@@ -64,7 +64,7 @@ else
 fi
 
 ## check integratability of operating system
-if [[ "${HOST_NAME}" == *jrlogin* || "${HOST_NAME}" == *jwlogin* ]]; then
+if [[ "${HOST_NAME}" == *jrlogin* || "${HOST_NAME}" == *jwlogin* || "${HOST_NAME}" == *jrc* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set
   unset PYTHONPATH
   modules_file="modules_jsc.sh"
