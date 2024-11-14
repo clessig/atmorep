@@ -67,13 +67,13 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, args = {}, model_epoch=-2, user_config=None) :
 
     devices = init_torch()
     with_ddp = True 
     par_rank, par_size = setup_ddp( with_ddp)
     
-    cf = Config().load_json( model_id)
+    cf = Config(user_config).load_json( model_id)
   
     cf.num_accs_per_task = len(devices)
     cf.with_wandb = True

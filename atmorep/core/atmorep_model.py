@@ -448,9 +448,9 @@ class AtmoRep( torch.nn.Module) :
   def load( model_id, devices, cf = None, epoch = -2, load_pretrained=False) :
     '''Load network from checkpoint'''
 
-    if not cf : 
-      cf = utils.Config()
-      cf.load_json( model_id)
+    if not cf : #Should never happen when inpecting the call stack
+      msg = f"missing configuration object.THIS SHOULD NEVER HAPPEN"
+      raise ValueError(msg)
 
     model = AtmoRep( cf).create( devices, load_pretrained=False)
     mloaded = torch.load( utils.get_model_filename( model, model_id, epoch) )
