@@ -251,8 +251,9 @@ def shape_to_str( shape) :
   return ret
 
 ####################################################################################################
-def get_model_filename( model = None, model_id = '', epoch=-2, with_model_path = True) :
 
+#TODO: should be a method of atmorep.core.atmorep_model.AtmoRep
+def get_model_filename(user_config: config.UserConfig, model = None, model_id = '', epoch=-2, with_model_path = True) :
   if isinstance( model, str) :
     name = model 
   elif model :
@@ -260,15 +261,21 @@ def get_model_filename( model = None, model_id = '', epoch=-2, with_model_path =
   else : # backward compatibility
     name = 'mod'
 
-  mpath = 'id{}'.format(model_id) if with_model_path else ''
+  if epoch > -2:
+    filename = '{}_id{}_epoch{}.mod'.format(name, model_id, epoch)
+  else:
+    filename = '{}_id{}.mod'.format( name, model_id)
 
-  if epoch > -2 :
-    # model_file = Path( config.path_results, 'models/id{}/{}_id{}_epoch{}.mod'.format(
-    #                                                        model_id, name, model_id, epoch))
-    model_file = Path( config.path_models, mpath, '{}_id{}_epoch{}.mod'.format(
-                                                           name, model_id, epoch))
-  else :
-    model_file = Path( config.path_models, mpath, '{}_id{}.mod'.format( name, model_id))
+  # pretrained_models_path = config.path_models
+  user_models_path = user_config.models
+  if with_model_path:
+    # pretrained_models_path = pretrained_models_path / f'id{model_id}'
+    user_models_path = user_models_path / f'id{model_id}'
+
+  # check both locations for matching model
+  # model_file = pretrained_models_path / filename
+  #if not model_file.is_file():
+  model_file = user_models_path / filename
       
   return model_file
 
