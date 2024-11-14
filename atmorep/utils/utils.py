@@ -109,7 +109,11 @@ class Config :
     if '/' in wandb_id :   # assumed to be full path instead of just id
       fname = wandb_id
     else :
-      fname = self.user_config.models / f"id{wandb_id}" / f"model_id{wandb_id}.json"
+      model_json_path = Path(f"id{wandb_id}") / f"model_id{wandb_id}.json"
+      fname = config.path_models / model_json_path # pretrained models
+      if not fname.is_file():
+        fpath = self.user_config.models /  model_json_path # user models
+
     try :
       with open(fname, 'r') as f :
         json_str = f.readlines() 
@@ -266,16 +270,16 @@ def get_model_filename(user_config: config.UserConfig, model = None, model_id = 
   else:
     filename = '{}_id{}.mod'.format( name, model_id)
 
-  # pretrained_models_path = config.path_models
+  pretrained_models_path = config.path_models
   user_models_path = user_config.models
   if with_model_path:
-    # pretrained_models_path = pretrained_models_path / f'id{model_id}'
+    pretrained_models_path = pretrained_models_path / f'id{model_id}'
     user_models_path = user_models_path / f'id{model_id}'
 
   # check both locations for matching model
-  # model_file = pretrained_models_path / filename
-  #if not model_file.is_file():
-  model_file = user_models_path / filename
+  model_file = pretrained_models_path / filename
+  if not model_file.is_file():
+    model_file = user_models_path / filename
       
   return model_file
 
