@@ -52,11 +52,7 @@ _platform = "jsc"
 # platform = "bsc"
 # platform = "atos"
 
-_user_config = UserConfig.get_user_config(ATMOREP_PROJECT_DIR)
-path_models = _user_config.models
-path_results = _user_config.results
-# TODO: still needed ???
-path_plots = ATMOREP_PROJECT_DIR / "atmorep" / "results" / "plots" 
+_my_platform = HPC_Platform.get_platform(_platform)
 
-print(_user_config, HPC_Platform.get_platform(_platform))
-path_data = HPC_Platform.get_platform(_platform).input_data / 'era5_y1979_2021_res025_chunk8.zarr/'
+path_data = _my_platform.input_data / 'era5_y1979_2021_res025_chunk8.zarr/'
+path_models = _my_platform.pretained_models
