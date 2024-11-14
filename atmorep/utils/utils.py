@@ -71,11 +71,12 @@ class Config :
         print("{} : {}".format( key, value))
 
   def create_dirs( self, wandb) :
-    dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
+    # TODO why safe in 2 dirs ???
+    dirname = self.user_config.results / "models" / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
       
-    dirname = Path( config.path_results, 'id{}'.format( wandb.run.id))
+    dirname = self.user_config.results / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
       
@@ -87,18 +88,20 @@ class Config :
     json_str = json.dumps(self.__dict__ )
 
     # save in directory with model files
-    dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
+    dirname = self.user_config.results / "models" / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
-    fname =Path(config.path_results,'models/id{}/model_id{}.json'.format(wandb.run.id,wandb.run.id))
+      
+    fname = dirname / "model_id{wandb.run.id}.json"
     with open(fname, 'w') as f :
       f.write( json_str)
 
     # also save in results directory
-    dirname = Path( config.path_results,'id{}'.format( wandb.run.id))
+    # TODO WHY ??? 
+    dirname = self.user_config.results / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
-    fname = Path( dirname, 'model_id{}.json'.format( wandb.run.id))
+    fname = dirname / f'model_id{wandb.run.id}.json'
     with open(fname, 'w') as f :
       f.write( json_str)
 
@@ -106,14 +109,14 @@ class Config :
     if '/' in wandb_id :   # assumed to be full path instead of just id
       fname = wandb_id
     else :
-      fname = Path( config.path_models, 'id{}/model_id{}.json'.format( wandb_id, wandb_id))
+      fname = self.user_config.models / f"id{wandb_id}" / f"model_id{wandb_id}.json"
     try :
       with open(fname, 'r') as f :
         json_str = f.readlines() 
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        fname = self.user_config.results / 'models' / f'id{wandb_id}' / f'model_id{wandb_id}.json'
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
