@@ -52,8 +52,12 @@ def json_default(o):
 ####################################################################################################
 class Config :
 
-  def __init__( self) :
-    pass
+  def __init__( self, user_config=None) :
+    if user_config is None:
+      # original dir that venv is created from will be used
+      user_config = config.UserConfig.from_path(config.ATMOREP_PROJECT_DIR)
+
+    self.user_config = user_config
 
   def add_to_wandb( self, wandb) :
     wandb.config.update( self.__dict__)

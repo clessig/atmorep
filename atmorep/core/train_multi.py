@@ -36,7 +36,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
-  cf = Config().load_json( wandb_id)
+  cf = Config(user_config=user_config).load_json( wandb_id)
 
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.with_ddp = with_ddp
@@ -84,7 +84,7 @@ def train() :
 
   torch.backends.cuda.matmul.allow_tf32 = True
 
-  cf = Config()
+  cf = Config(user_config=user_config)
   # parallelization
   cf.with_ddp = with_ddp
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
@@ -240,6 +240,9 @@ def train() :
 
 ####################################################################################################
 if __name__ == '__main__':
+  atmorep_project_dir = os.environ["SLURM_SUBMIT_DIR"]
+  print("Atmorep project dir:", atmorep_project_dir)
+  user_config = config.UserConfig.from_path(atmorep_project_dir)
   
   try :
     
