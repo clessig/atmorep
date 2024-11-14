@@ -28,7 +28,7 @@ def get_known_platforms() -> list[str]:
 @dataclasses.dataclass
 class HPC_Platform:
     input_data: Path
-    pretained_models: Path
+    pretrained_models: Path
     
     @classmethod
     def get_platform(cls, platform: str) -> typing.Self:
