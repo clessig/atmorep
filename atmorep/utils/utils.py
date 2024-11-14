@@ -127,7 +127,7 @@ class Config :
         print( f'Could not find fname due to {e}. Aborting.')
         quit()
 
-    self.__dict__ =| json.loads( json_str[0])
+    self.__dict__ = self.__dict__ | json.loads( json_str[0])
 
     # fix for backward compatibility
     if not hasattr( self, 'model_id') :
