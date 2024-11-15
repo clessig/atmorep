@@ -67,7 +67,7 @@ class Config :
       key: value for key, value in self.__dict__.items()
       if not key == "user_config"
     }
-    return self.__dict__
+    return my_dict
   
   def set_dict(self, my_dict):
     self.__dict__ = self.__dict__ | my_dict
