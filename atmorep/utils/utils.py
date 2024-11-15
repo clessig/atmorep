@@ -73,7 +73,7 @@ class Config :
     self.__dict__ = self.__dict__ | my_dict
 
   def print( self) :
-    for key, value in self.get_self_dict() : 
+    for key, value in self.get_self_dict().items(): 
         print("{} : {}".format( key, value))
 
   def create_dirs( self, wandb) :
