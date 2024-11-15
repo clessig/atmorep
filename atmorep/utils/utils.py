@@ -60,7 +60,7 @@ class Config :
     self.user_config = user_config
 
   def add_to_wandb( self, wandb) :
-    wandb.config.update( self.__dict__)
+    wandb.config.update( self.get_self_dict())
 
   def get_self_dict( self) :
     my_dict = {
@@ -68,10 +68,12 @@ class Config :
       if not key == "user_config"
     }
     return self.__dict__
+  
+  def set_dict(self, my_dict):
+    self.__dict__ = self.__dict__ | my_dict
 
   def print( self) :
-    self_dict = self.__dict__
-    for key, value in self_dict.items() : 
+    for key, value in self.get_self_dict() : 
         print("{} : {}".format( key, value))
 
   def create_dirs( self, wandb) :
@@ -131,7 +133,7 @@ class Config :
         print( f'Could not find fname due to {e}. Aborting.')
         quit()
 
-    self.__dict__ = self.__dict__ | json.loads( json_str[0])
+    self.set_dict(json.loads(json_str[0]))
 
     # fix for backward compatibility
     if not hasattr( self, 'model_id') :
