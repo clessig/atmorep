@@ -81,14 +81,12 @@ def plot_global_data(data: xr.DataArray, plt_fname: Path, lshow: bool = True, **
         plt.show()
 
 
-def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.DataArray, metric: dict,
+def plot_metric_line(data: xr.DataArray, metric: dict,
                      plt_fname: str, varname: str = "T2m", model_name= "AtmoRep", x_coord: str = "hour",
                      lshow: bool = True, **kwargs):
     """
     Create line plots of 2D-metric data (e.g. metric plotted against time)
-    :param data: DataArray containing the mean values
-    :param data_up: DataArray containing the upper error bounds
-    :param data_down: DataArray containing the lower error bounds
+    :param data: DataArray containing the metric values
     :param model_name: Name of model
     :param metric: Dictionary containing metric name and unit
     :param plt_fname: File name of plot
@@ -119,8 +117,6 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
 
     # create line plot
     ax.plot(data[x_coord].values, data.values, linestyle, label=model_name, **kwargs)
-    ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
-                    alpha=0.2)
 
     # add reference line if desired
     if ref_line is not None:
@@ -135,7 +131,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
 
     # save plot and close figure
-    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    plt_fname = plt_fname + ".png" if not str(plt_fname).endswith(".png") else plt_fname
     
     print(f"Save plot to '{plt_fname}'...")
     plt.savefig(plt_fname)
