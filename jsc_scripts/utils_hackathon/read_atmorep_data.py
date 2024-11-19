@@ -6,6 +6,8 @@
 """
 Class to read in AtmoRep output from zarr store. 
 Date: July 2023
+Update: 2024-11-19
+By: Michael Langguth (JSC)
 """
 
 # import packages
@@ -119,15 +121,16 @@ class HandleAtmoRepData(object):
             return self.input_token_config
     
     
-    def read_one_forecast_file(self, fname: str, varname: str, data_type: str):
+    def read_one_structured_file(self, fname: str, varname: str, data_type: str):
         """
-        Read data from a single output file of AtmoRep and convert to xarray DataArray with underlying coordinate information.
-        :param fname: Name of zarr-file that should be read
-        :param varname: name of variable in zarr-file to be accessed
+        Read data from a single, structured output file of AtmoRep and convert to xarray DataArray with underlying coordinate information.
+        Here, structured means that the output is not randomly masked (i.e. BERT) nor has an (implicit) lead-time dimension 
+        :param fname: path to zarr-store that should be read
+        :param varname: name of variable in zarr-store to be read
         :param data_type: Type of data which should be retrieved (either 'source', 'target', 'ens' or 'pred')
-        :return: list of DataArrays where each element provides one sample
+        :return: list of DataArrays where each element provides data from a local neighborhood tile; 
+                 dimensions (["ensemble"], ml", "datetime", "lat", "lon")
         """    
-        #store = zarr.DirectoryStore(fname) #
         store = zarr.ZipStore(fname)
         grouped_store = zarr.group(store)
             
@@ -139,20 +142,72 @@ class HandleAtmoRepData(object):
             coords = {}
             
         da = []
-        #for ip, patch in tqdm(enumerate(grouped_store[os.path.join(varname)])):    
-        for ip, patch in enumerate(grouped_store[os.path.join(varname)]):    
+        for _, patch in enumerate(grouped_store[os.path.join(varname)]):    
             coords.update({dim: grouped_store[os.path.join(varname, patch, dim)] for dim in dims})
             da_p = xr.DataArray(grouped_store[os.path.join(varname, patch, "data")], coords=coords,                
-                                dims = ["ensemble"] + dims if data_type == "ens" else dims, name=f"{varname}_{patch.replace('=', '')}")
+                                dims = ["ensemble"] + dims if data_type == "ens" else dims, name=f"{varname}_{patch.replace('=', '')}")            
+            
             da.append(da_p)
         
         # ML: This would trigger loading data into memory rather than lazy data access.
         #da = xr.concat(da, "patch")
         
         return da
+
+    def read_one_forecast_file(self, fname: str, varname: str, data_type: str):
+        """
+        Read data from a single, forecast output file of AtmoRep and convert to xarray DataArray with underlying coordinate information.
+        :param fname: path to zarr-store that should be read
+        :param varname: name of variable in zarr-store to be read
+        :param data_type: type of data which should be retrieved (either 'source', 'target', 'ens' or 'pred')
+        :return: list of DataArrays where each element provides data from a local neighborhood tile; 
+                 dimensions (["ensemble"], ml", "init_time", "lead_time", "lat", "lon")
+        """    
+        store = zarr.ZipStore(fname)
+        grouped_store = zarr.group(store)
+            
+        dims = ["ml", "datetime", "lat", "lon"]
+        idx_init = 1                         # index of axis to insert init_time-dimension
+        if data_type == "ens":
+            nens = self.config["net_tail_num_nets"]
+            coords = {"ensemble": range(nens)}
+            idx_init = 2
+        else:
+            coords = {}
+
+
+        # get lead time array from config
+        nfcst_tokens = self.config["forecast_num_tokens"]
+        vars = np.array([self.config["fields"][i][0] for i in range(len(self.config["fields"]))])
+        ivar = np.where(varname == vars)[0][0]
+    
+        tsteps_token = self.config["fields"][ivar][4][0]
+        lead_time = range(1, nfcst_tokens*tsteps_token + 1)
+    
+        da = []
+        for _, patch in enumerate(grouped_store[os.path.join(varname)]):    
+            coords.update({dim: grouped_store[os.path.join(varname, patch, dim)] for dim in dims})
+            da_p = xr.DataArray(grouped_store[os.path.join(varname, patch, "data")], coords=coords,                
+                                dims = ["ensemble"] + dims if data_type == "ens" else dims, name=f"{varname}_{patch.replace('=', '')}")
+            # split datetime-dimension to (init_time, lead_time)
+            da_p = da_p.assign_coords({"lead_time": ("datetime", lead_time)})\
+                       .expand_dims({"init_time": [coords["datetime"][0] - np.timedelta64(1, "h")]}, idx_init)\
+                       .swap_dims({"datetime": "lead_time"}).drop("datetime")  
+
+            da.append(da_p)
+        
+        
+        return da
     
     def read_one_bert_file(self, fname: str, varname: str, data_type: str, ml: int):
-        
+        """
+        Read data from single AtmoRep output file that has been written in BERT-mode
+        :param fname: path to zarr-store that should be read
+        :param varname: name of variable in zarr-store to be read
+        :param data_type: type of data which should be retrieved (either 'source', 'target', 'ens' or 'pred')
+        :param ml: model-level for which data should be read 
+        :return: list of xarray.DataArrays with dimensions ("itoken", "t", "y", "x")
+        """        
         store = zarr.ZipStore(fname)
         grouped_store = zarr.group(store)
         
@@ -163,8 +218,7 @@ class HandleAtmoRepData(object):
             
         da = []
             
-        #for ip, patch in tqdm(enumerate(grouped_store[os.path.join(varname)])):
-        for ip, patch in enumerate(grouped_store[os.path.join(varname)]):
+        for _, patch in enumerate(grouped_store[os.path.join(varname)]):
             data_coords = {dim: (dim_map, grouped_store[os.path.join(varname, patch, f"ml={ml:05d}", dim)]) for dim, dim_map in dims_map.items()}
             data = grouped_store[os.path.join(varname, patch, f"ml={ml:05d}", "data")]
             data_sh = data.shape
@@ -186,29 +240,33 @@ class HandleAtmoRepData(object):
         assert data_type in self.known_data_types, f"Data type '{data_type}' is unknown. Chosse one of the following: '{', '.join(self.known_data_types)}'"
         
         filelist = self.get_hierarchical_sorted_files(data_type, epoch)
-        
+        nfiles = len(filelist)
+
+        args = {"varname": varname, "data_type": data_type}
         if self.config["BERT_strategy"] in ["forecast", "global_forecast"]:
             self.read_one_file = self.read_one_forecast_file
-            args = {"varname": varname, "data_type": data_type}
-        elif self.config["BERT_strategy"] == "BERT" or self.config["BERT_strategy"] == "temporal_interpolation":
+        elif self.config["BERT_strategy"] == "BERT":
+        #elif self.config["BERT_strategy"] == "BERT" or self.config["BERT_strategy"] == "temporal_interpolation":
             assert isinstance(kwargs.get("ml", None), int), f"Model-level ml must be an integer, but '{kwargs.get('ml', None)}' was parsed."
             self.read_one_file = self.read_one_bert_file
-            args = {"varname": varname, "ml": kwargs.get("ml"), "data_type": data_type}
             # source data is still structured
             if data_type == "source":
-                self.read_one_file = self.read_one_forecast_file
-                args = {"varname": varname, "data_type": data_type}
+                self.read_one_file = self.read_one_structured_file
+            else:
+                # Add ml-key to args-dictionary for reading-method
+                args = {"varname": varname, "ml": kwargs.get("ml"), "data_type": data_type}
+            
         else:
-            print(f"Handling data with sampling strategy '{self.config['BERT_strategy']}' is not supported yet.")
+            self.read_one_file = self.read_one_structured_file
+            #print(f"Handling data with sampling strategy '{self.config['BERT_strategy']}' is not supported yet.")
+        msg = f"Start reading {nfiles} zarr stores..." if nfiles > 1 else f"Start reading one zarr store..." 
+        print(msg)
         
-        print(f"Start reading {len(filelist)} files...")
         da = []
-        for i, f in enumerate(filelist):
+        for _, f in enumerate(filelist):
             da += self.read_one_file(f, **args)
             
         # return global data if global forecasting evaluation mode was chosen 
-        # ML: preliminary approach: identification via token_overlap-attribute 
-        #if self.config["BERT_strategy"] == "forecast" and self.config.get("token_overlap", False):
         if self.config["BERT_strategy"] == "global_forecast":
             da = self.get_global_field(da)
 
@@ -217,28 +275,28 @@ class HandleAtmoRepData(object):
     @staticmethod
     def get_global_field(da_list):
         
-        # get unique time stamps
-        times_unique = list(set([time for da in da_list for time in da["datetime"].values]))
+        # get resolution from data
+        all_init_times = list(set([time for da in da_list for time in da["init_time"].values]))
         dx, dy = np.abs(da_list[0]["lon"][1] - da_list[0]["lon"][0]), \
                  np.abs(da_list[0]["lat"][1] - da_list[0]["lat"][0])
         
         # initialize empty global data array
         dims = da_list[0].dims
-        data_coords = {k: v for k, v in da_list[0].coords.items() if k not in ["lat", "lon"]}
+        data_coords = {dim: da_list[0].coords[dim] for dim in dims if dim not in ["lat", "lon"]}
         data_coords["lat"] = np.linspace(-90., 90., num=int(180/dy) + 1, endpoint=True)
         data_coords["lon"] = np.linspace(0, 360, num=int(360/dx), endpoint=False)  
-        data_coords["datetime"] = times_unique
+        data_coords["init_time"] = all_init_times
 
         da_global = xr.DataArray(np.empty(tuple(len(d) for d in data_coords.values())), 
                                  coords=data_coords, dims=dims)
         # fill global data array 
         for da in da_list:
-            da_global.loc[{"datetime": da["datetime"], "lat": da["lat"], "lon": da["lon"]}] = da
+            da_global.loc[{"init_time": da["init_time"], "lat": da["lat"], "lon": da["lon"]}] = da
 
         if np.any(da_global.isnull()): 
             raise ValueError(f"Could not get global data field.")
             
-        return da_global                      
+        return da_global                       
     
         
     def get_hierarchical_sorted_files(self, data_type: str, epoch: int = -1):
