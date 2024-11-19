@@ -202,9 +202,10 @@ def train() :
   setup_wandb( cf.with_wandb, cf, par_rank, 'train', mode='offline')  
 
   #calculate n_size: same for all fields
-  assert "res" in config.path_data, Exception("Resolution not in file name. Please specify it.")
+  data_path_str = config.path_data.as_posix()
+  assert "res" in data_path_str, Exception("Resolution not in file name. Please specify it.")
   size  = np.multiply(cf.fields[0][3], cf.fields[0][4]) #ntokens x token_size
-  resol = int(config.path_data.split("res")[1].split("_")[0])/100
+  resol = int(data_path_str.split("res")[1].split("_")[0])/100
   cf.n_size = [float(cf.time_sampling*size[0]), float(resol*size[1]), float(resol*size[2])]
   
   if cf.with_wandb and 0 == cf.par_rank :
