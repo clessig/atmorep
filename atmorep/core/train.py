@@ -136,7 +136,7 @@ def train() :
   cf.torch_seed = torch.initial_seed()
   # training params
   cf.batch_size_validation = 1 #64
-  cf.batch_size = 96
+  cf.batch_size = 16
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
