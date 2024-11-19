@@ -1,15 +1,19 @@
 #!/bin/bash -x
-#SBATCH --account=hclimrep
+#SBATCH --account=training2445
 #SBATCH --time=0-0:20:00
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=40
-#SBATCH --gres=gpu:2
-#SBATCH --partition=develbooster
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=10
+#SBATCH --gres=gpu:1
+#SBATCH --partition=dc-gpu
+
+#TODO: handle SBATCH directives in run_atmorep.py
 
 # import modules and activate virtual environment
 echo ${SLURM_SUBMIT_DIR}
 source ${SLURM_SUBMIT_DIR}/jsc_scripts/env_setup/modules_jsc.sh
-source ${SLURM_SUBMIT_DIR}/jsc_scripts/virtual_envs/venv_jwb/bin/activate
+#TODO: activate general environment
+source ${SLURM_SUBMIT_DIR}/jsc_scripts/virtual_envs/venv_jrc/bin/activate
 
 # set system-dependant environment variables
 export UCX_TLS="^cma"
@@ -37,7 +41,8 @@ date
 
 export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
-srun --label --cpu-bind=v python -u ${SLURM_SUBMIT_DIR}/atmorep/core/evaluate.py --project_dir=$> output/output_${SLURM_JOBID}.txt
+#TODO: directly output into file instead of redirecting stdout
+srun --label --cpu-bind=v python -u ${SLURM_SUBMIT_DIR}/atmorep/core/evaluate.py> output/output_${SLURM_JOBID}.txt
 
 echo "Finished job."
 date
