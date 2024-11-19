@@ -51,7 +51,7 @@ if __name__ == '__main__':
   #mode, options = 'BERT', {'years_val' : [2021], 'num_samples_validate' : 128, 'with_pytest' : True}
 
   # BERT forecast mode
-  #mode, options = 'forecast', {'forecast_num_tokens' : 2, 'num_samples_validate' : 128, 'with_pytest' : True }
+  mode, options = 'forecast', {'forecast_num_tokens' : 2, 'num_samples_validate' : 96, 'with_pytest' : False }
 
   #temporal interpolation 
   #idx_time_mask: list of relative time positions of the masked tokens within the cube wrt num_tokens[0]  
@@ -62,17 +62,17 @@ if __name__ == '__main__':
   user_config = UserConfig.from_path(atmorep_project_dir)
 
   # BERT forecast with patching to obtain global forecast
-  mode, options = 'global_forecast', { 
-                                      #'dates' : [[2021, 2, 10, 12]]
-                                      'dates' : [
-                                         [2021, 1, 10, 12] , [2021, 1, 11, 0], [2021, 1, 11, 12], [2021, 1, 12, 0], #[2021, 1, 12, 12], [2021, 1, 13, 0], 
-                                         [2021, 4, 10, 12], [2021, 4, 11, 0], [2021, 4, 11, 12], [2021, 4, 12, 0], #[2021, 4, 12, 12], [2021, 4, 13, 0], 
-                                         [2021, 7, 10, 12], [2021, 7, 11, 0], [2021, 7, 11, 12], [2021, 7, 12, 0], #[2021, 7, 12, 12], [2021, 7, 13, 0], 
-                                         [2021, 10, 10, 12], [2021, 10, 11, 0], [2021, 10, 11, 12], #[2021, 10, 12, 0], [2021, 10, 12, 12], [2021, 10, 13, 0]
-                                       ], 
-                                      'token_overlap' : [0, 0],
-                                      'forecast_num_tokens' : 2,
-                                      'with_pytest' : False }
+  # mode, options = 'global_forecast', { 
+                                      # 'dates' : [[2021, 2, 10, 12]],
+                                      # 'dates' : [
+                                      #    [2021, 1, 10, 12] , [2021, 1, 11, 0], [2021, 1, 11, 12], [2021, 1, 12, 0], #[2021, 1, 12, 12], [2021, 1, 13, 0], 
+                                      #    [2021, 4, 10, 12], [2021, 4, 11, 0], [2021, 4, 11, 12], [2021, 4, 12, 0], #[2021, 4, 12, 12], [2021, 4, 13, 0], 
+                                      #    [2021, 7, 10, 12], [2021, 7, 11, 0], [2021, 7, 11, 12], [2021, 7, 12, 0], #[2021, 7, 12, 12], [2021, 7, 13, 0], 
+                                      #    [2021, 10, 10, 12], [2021, 10, 11, 0], [2021, 10, 11, 12], #[2021, 10, 12, 0], [2021, 10, 12, 12], [2021, 10, 13, 0]
+                                      #  ], 
+                                      # 'token_overlap' : [0, 0],
+                                      # 'forecast_num_tokens' : 2,
+                                      # 'with_pytest' : False }
   
   now = time.time()
   Evaluator.evaluate( mode, model_id, options, user_config=user_config)
