@@ -233,6 +233,8 @@ class ModelConfig:
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
+        """ deserialize from model config format. """
+
         return cls(
             config_dict["with_mixed_precision"],
             config_dict["with_layer_norm"],
@@ -255,6 +257,8 @@ class ModelConfig:
         )
 
     def as_dict(self) -> dict[str, Any]:
+        """ serialize into model config format. """
+
         return {
             "with_mixed_precision": self.mixed_prec,
             "with_layer_norm": self.layernorm,
