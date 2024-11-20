@@ -307,8 +307,8 @@ class RunConfig:
 
     Attributes:
         wandb_id (str): Run ID assigned by the wandb
-        slurm_id (int): Job ID assigned by the SLURM
-        with_dpp (bool): Indicates whether Distributed Data Parallel (DDP) is used.
+        slurm_id (str): Job ID assigned by the SLURM
+        with_ddp (bool): Indicates whether Distributed Data Parallel (DDP) is used.
         num_accs (int): Number of accelerators available to each task.
         par_rank (int): Rank of the MPI parallel process. If DDP is not used, this is set to 0.
         par_size (int): Total number of MPI parallel processes. If DDP is not used, this is set to 1.
@@ -320,14 +320,15 @@ class RunConfig:
         rng_seed (Optional[int]): Seed for the random number generator. If not specified, a random seed is used.
         with_wandb (bool): Indicates whether Wandb is used for monitoring the run.
         torch_rng_seed (int): Seed for PyTorch's internal random number generator.
+        log_frequency (int): Number of batches between saving checkpoints.
     """
     wandb_id: str
     """ Run ID assigned by the wandb """
 
-    slurm_id: int
+    slurm_id: str
     """ Job ID assigned by the SLURM """
 
-    with_dpp: bool
+    with_ddp: bool
     """ If true Distributed Data Parallel is used """
 
     num_accs: int
@@ -363,6 +364,51 @@ class RunConfig:
     torch_rng_seed: int
     """ Seed for the torch's internal random number generator """
 
+    log_frequency: int
+    """ Number of batches between saving checkpoints """
+
+    @classmethod
+    def from_dict(cls, config_dict: dict[str, Any]) -> Self:
+        """ Deserialize from model config format. """
+
+        return cls(
+            config_dict["wandb_id"],
+            config_dict["slurm_job_id"],
+            config_dict["with_ddp"],
+            config_dict["num_accs_per_task"],
+            config_dict["par_rank"],
+            config_dict["par_size"],
+            config_dict["log_test_num_ranks"],
+            config_dict["save_grads"],
+            config_dict["profile"],
+            config_dict["test_initial"],
+            config_dict["attention"],
+            config_dict["rng_seed"],
+            config_dict["with_wandb"],
+            config_dict["torch_seed"],
+            config_dict["model_log_frequency"]
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        """ Serialize into model config format. """
+
+        return {
+            "wandb_id": self.wandb_id,
+            "slurm_job_id": self.slurm_id,
+            "with_ddp": self.with_ddp,
+            "num_accs_per_task": self.num_accs,
+            "par_rank": self.par_rank,
+            "par_size": self.par_size,
+            "log_test_num_ranks": self.log_num_ranks,
+            "save_grads": self.save_grads,
+            "profile": self.save_grads,
+            "test_initial": self.test_initial,
+            "attention": self.log_att,
+            "rng_seed": self.rng_seed,
+            "with_wandb": self.with_wandb,
+            "torch_seed": self.torch_rng_seed,
+            "model_log_frequency": self.log_frequency,
+        }
 
 @dc.dataclass
 class TrainingConfig:
