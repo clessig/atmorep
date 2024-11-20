@@ -1,8 +1,9 @@
 import dataclasses as dc
-from typing import Iterable, Any, Self
+from typing import Iterable, Any, Self, Optional
 from collections import namedtuple
 
 TimeLatLon = namedtuple("TimeLatLon", ["time", "lat", "lon"])
+GeoRange = namedtuple("GeoRange", ["start", "stop"])
 
 
 @dc.dataclass
@@ -176,6 +177,9 @@ class ModelConfig:
         decoder_cross_att_rate (float): Ratio of attention heads used for cross-attention with the encoder.
         tail_nets (int): Number of tail networks.
         tail_nets_layers (int): Number of layers in each tail network.
+        token_info_size (int): Size for the token_info array used for computing positional embeddings.
+        token_embed_size (int): Number of elements in the token used for storing positional embedding.
+        class_token (bool): If true model appends class token to the tokens created from input data.
     """
     mixed_prec: bool
     """ If true, model uses mixed precision """
@@ -231,9 +235,18 @@ class ModelConfig:
     tail_nets_layers: int
     """ Number of layers in tail networks """
 
+    token_info_size: int
+    """ Size for the token_info tensor used for computing positional embeddings """
+
+    token_embed_size: int
+    """ Number of elements in the token used for storing positional embedding """
+
+    class_token: bool
+    """ If true model appends class token to the tokens created from input data. """
+
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
-        """ deserialize from model config format. """
+        """ Deserialize from model config format. """
 
         return cls(
             config_dict["with_mixed_precision"],
@@ -253,11 +266,14 @@ class ModelConfig:
             config_dict["decoder_cross_att_ratio"],
             config_dict["decoder_cross_att_rate"],
             config_dict["net_tail_num_nets"],
-            config_dict["net_tail_num_layers"]
+            config_dict["net_tail_num_layers"],
+            config_dict["size_token_info"],
+            config_dict["size_token_info_net"],
+            config_dict["with_cls"],
         )
 
     def as_dict(self) -> dict[str, Any]:
-        """ serialize into model config format. """
+        """ Serialize into model config format. """
 
         return {
             "with_mixed_precision": self.mixed_prec,
@@ -277,5 +293,135 @@ class ModelConfig:
             "decoder_cross_att_ratio": self.decoder_cross_att_ratio,
             "decoder_cross_att_rate": self.decoder_cross_att_rate,
             "net_tail_num_nets": self.tail_nets,
-            "net_tail_num_layers": self.tail_nets_layers
+            "net_tail_num_layers": self.tail_nets_layers,
+            "size_token_info": self.token_info_size,
+            "size_token_info_net": self.token_embed_size,
+            "with_cls": self.class_token
         }
+
+
+@dc.dataclass
+class RunConfig:
+    """
+    Configuration class for run parameters.
+
+    Attributes:
+        with_dpp (bool): Indicates whether Distributed Data Parallel (DDP) is used.
+        num_accs (int): Number of accelerators available to each task.
+        par_rank (int): Rank of the MPI parallel process. If DDP is not used, this is set to 0.
+        par_size (int): Total number of MPI parallel processes. If DDP is not used, this is set to 1.
+        log_num_ranks (int): Maximum number of tasks that log output in validation mode.
+        save_grads (bool): Indicates whether gradients are saved along with weights and biases.
+        profiler (bool): Indicates whether a profiler is used during the run.
+        test_initial (bool): Indicates whether the initial test loss is computed. Defaults to 1.0 if false.
+        log_att (bool): Indicates whether attention is being logged.
+        rng_seed (Optional[int]): Seed for the random number generator. If not specified, a random seed is used.
+        with_wandb (bool): Indicates whether Wandb is used for monitoring the run.
+        torch_rng_seed (int): Seed for PyTorch's internal random number generator.
+    """
+    with_dpp: bool
+    """ If true Distributed Data Parallel is used"""
+
+    num_accs: int
+    """ Number of accelerators aviable to each task """
+
+    par_rank: int
+    """ Rank of used MPI parallel process. If DDP is false, it's 0 """
+
+    par_size: int
+    """ Number of all running MPI parallel processes. If DDP is false, it's 1 """
+
+    log_num_ranks: int
+    """ Upper limit of tasks that log output in validation mode. """
+
+    save_grads: bool
+    """ If true gradients are saved along weights and biases """
+
+    profiler: bool
+    """ If true, profiler is used during the run """
+
+    test_initial: bool
+    """ If true, initial test loss is computed, otherwise it's 1.0 """
+
+    log_att: bool
+    """ If true attention is being logged """
+
+    rng_seed: Optional[int]
+    """ Seed for the random number generator, if not specified random seed is used"""
+
+    with_wandb: bool
+    """ If true Wandb will be used for monitoring the run. """
+
+    torch_rng_seed: int
+    """ Seed for the torch's internal random number generator """
+
+
+@dc.dataclass
+class TrainingConfig:
+    """
+    Configuration class for training parameters.
+
+    Attributes:
+        fields (Iterable[FieldConfig]): List of configuration objects for each field.
+        fields_prediction (PredictionFieldConfig): Configuration object for predicted fields.
+        field_targets (PredictionFieldConfig): Configuration object for fields to be targeted in downscaling applications.
+        years_training (Iterable[int]): List of years to be used for training.
+        years_validation (Iterable[int]): List of years to be used for validation.
+        sampling_range_lat (GeoRange): Range of sampling for latitude.
+        sampling_range_lon (GeoRange): Range of sampling for longitude.
+        sampling_time_rate (int): Sampling rate for timesteps.
+        batch_size_train (int): Batch size for training.
+        batch_size_val (int): Batch size for validation.
+        num_epochs (int): Number of training epochs.
+        samples_per_epoch (int): Number of samples per epoch.
+        samples_validation (int): Number of samples for validation.
+        num_workers (int): Number of workers to be used by data loaders.
+        grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
+    """
+
+    fields: Iterable[FieldConfig]
+    """ List of configuration objects for each field """
+
+    fields_prediction: PredictionFieldConfig
+    """ Configuration object for predicted fields """
+
+    field_targets: PredictionFieldConfig
+    """ Configuration object for fields that are to be target in downscaling application"""
+
+    years_training: Iterable[int]
+    """ List of years to be used for training """
+
+    years_validation: Iterable[int]
+    """ List of years to be used for validation """
+
+    sampling_range_lat: GeoRange
+    """ Range of sampling for latitude """
+
+    sampling_range_lon: GeoRange
+    """ Range of sampling for longitude """
+
+    sampling_time_rate: int
+    """ Sampling rate for timesteps """
+
+    batch_size_train: int
+    """ Batch size for training """
+
+    batch_size_val: int
+    """ Batch size for validation """
+
+    num_epochs: int
+    """ Number of epochs """
+
+    samples_per_epoch: int
+    """ Number of samples per epoch """
+
+    samples_validation: int
+    """ Number of samples per validation """
+
+    num_workers: int
+    """ Number of workers for to be used by dataloaders """
+
+    grad_checkpointing: bool
+    """ If true, checkpointing is used in training """
+    
+
