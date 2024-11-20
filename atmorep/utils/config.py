@@ -306,6 +306,8 @@ class RunConfig:
     Configuration class for run parameters.
 
     Attributes:
+        wandb_id (str): Run ID assigned by the wandb
+        slurm_id (int): Job ID assigned by the SLURM
         with_dpp (bool): Indicates whether Distributed Data Parallel (DDP) is used.
         num_accs (int): Number of accelerators available to each task.
         par_rank (int): Rank of the MPI parallel process. If DDP is not used, this is set to 0.
@@ -319,8 +321,14 @@ class RunConfig:
         with_wandb (bool): Indicates whether Wandb is used for monitoring the run.
         torch_rng_seed (int): Seed for PyTorch's internal random number generator.
     """
+    wandb_id: str
+    """ Run ID assigned by the wandb """
+
+    slurm_id: int
+    """ Job ID assigned by the SLURM """
+
     with_dpp: bool
-    """ If true Distributed Data Parallel is used"""
+    """ If true Distributed Data Parallel is used """
 
     num_accs: int
     """ Number of accelerators aviable to each task """
@@ -377,6 +385,17 @@ class TrainingConfig:
         samples_validation (int): Number of samples for validation.
         num_workers (int): Number of workers to be used by data loaders.
         grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
+        losses (Iterable[str]): List of loss functions to be used. Available options: 'mse', 'mse_ensemble', 'stats', 'crps', 'weighted_mse'.
+        lr_start (float): Initial learning rate for computing learning rates.
+        lr_max (float): Maximum learning rate for computing learning rates.
+        lr_min (float): Minimum learning rate for computing learning rates.
+        lr_decay (float): Learning rate decay for computing learning rates.
+        lr_start_epochs (int): Number of epochs used to test learning rates from `lr_start` to `lr_max`.
+        weight_decay (float): Weight decay for the optimizer.
+        strategy (str): Strategy used for BERT training. Options: 'BERT', 'forecast', 'temporal_interpolation'.
+        num_forecast_tokens (int): Number of tokens to forecast when the strategy is set to 'forecast'.
+        fields_synced (bool): Indicates whether identical masking is applied to all fields.
+        maximum_res_reduction (int): Maximum reduction for the resolution.
     """
 
     fields: Iterable[FieldConfig]
@@ -423,5 +442,37 @@ class TrainingConfig:
 
     grad_checkpointing: bool
     """ If true, checkpointing is used in training """
-    
 
+    losses: Iterable[str]
+    """ List of loss functions to be used. Available are: mse, mse_ensemble, stats, crps, weighted_mse """
+
+    lr_start: float
+    """ Initial learining rate for computing learning rates """
+
+    lr_max: float
+    """ Maximal learining rate for computing learning rates """
+
+    lr_min: float
+    """ Minimal learining rate for computing learning rates """
+
+    lr_decay: float
+    """ Learing rate decay for computing learning rates """
+
+    lr_start_epochs: int
+    """ Set number of epochs used for testing learning rates from lr_start to lr_max """
+
+    weight_decay: float
+    """ Weight decay for the optimizer """
+
+    strategy: str
+    """ Strategy used for BERT training. Available are: 'BERT', 'forecast', 'temporal_interpolation' """
+
+    num_forecast_tokens: int
+    """ Number of tokens to be forecasten when strategy is set to 'forecast' """
+
+    fields_synced: bool
+    """ If true identical masking is applied to all fields """
+
+    maximum_res_reduction: int
+    """ Maximum reduction for the resolution """
+    
