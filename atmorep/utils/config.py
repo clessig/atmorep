@@ -1,5 +1,5 @@
 import dataclasses as dc
-from typing import Iterable
+from typing import Iterable, Any, Self
 from collections import namedtuple
 
 TimeLatLon = namedtuple("TimeLatLon", ["time", "lat", "lon"])
@@ -19,6 +19,15 @@ class PredictionFieldConfig:
     
     weight: float
     """ Weight of this variable in the loss funtion. Weights of all fields shoud add up to 1 """
+    
+    @classmethod
+    def from_list(cls, prediction_field: list[Any]) -> Self:
+        """ deserialize from model config format. """
+        return cls(prediction_field[0], prediction_field[1])
+    
+    def as_list(self) -> list[Any]:
+        """ serialize into model config format. """
+        return [self.name, self.weight]
 
 
 @dc.dataclass
@@ -79,6 +88,45 @@ class FieldConfig:
         """
         return PredictionFieldConfig(self.name, weight)
     
+    @classmethod
+    def from_list(cls, field: list[Any]) -> Self:
+        """ deserialize from model config format. """
+        name = field[0]
+        dynamic = field[1][0]
+        embed_dim = field[1][1]
+        dev_id = field[1][2]
+        vertical_lvls = field[2]
+        num_tokens = TimeLatLon(*field[3])
+        token_size = TimeLatLon(*field[4])
+        total_mask_rate = field[5][0]
+        mask_rate = field[5][1]
+        noise_rate = field[5][2]
+        dist_rate = field[5][3]
+        
+        return cls(
+            name,
+            dynamic,
+            embed_dim,
+            dev_id,
+            vertical_lvls,
+            num_tokens,
+            token_size,
+            total_mask_rate,
+            mask_rate,
+            noise_rate,
+            dist_rate
+        )
+    
+    def as_list(self) -> list[Any]:
+        """ serialize into model config format. """
+        return [
+            self.name,
+            [self.dynamic, self.embed_dim, self.dev_id],
+            self.vertical_levels,
+            list(self.num_tokens),
+            list(self.token_size),
+            [self.total_mask_rate, self.mask_rate, self.noise_rate, self.dist_rate]
+        ]
 
 
 @dc.dataclass
@@ -91,6 +139,17 @@ class PredictionConfig:
     """
     fields: Iterable[PredictionFieldConfig]
     """ List of configuration object for each field """
+    
+    @classmethod
+    def from_list(cls, fields: list[list[Any]]) -> Self:
+        """ deserialize from model config format. """
+        return cls(
+            [FieldConfig.from_list(field) for field in fields]
+        )
+
+    def as_list(self) -> list[list[Any]]:
+        """ serialize into model config format. """
+        return [field.as_list() for field in self.fields]
 
 
 @dc.dataclass
@@ -172,3 +231,47 @@ class ModelConfig:
     tail_nets_layers: int
     """ Number of layers in tail networks """
 
+    @classmethod
+    def from_dict(cls, config_dict: dict[str, Any]) -> Self:
+        return cls(
+            config_dict["with_mixed_precision"],
+            config_dict["with_layer_norm"],
+            config_dict["coupling_num_heads_per_field"],
+            config_dict["dropout_rate"],
+            config_dict["with_qk_lnorm"],
+            config_dict["encoder_num_layers"],
+            config_dict["encoder_num_heads"],
+            config_dict["encoder_num_mlp_layers"],
+            config_dict["encoder_att_type"],
+            config_dict["decoder_num_layers"],
+            config_dict["decoder_num_heads"],
+            config_dict["decoder_num_mlp_layers"],
+            config_dict["decoder_att_type"],
+            config_dict["decoder_self_att"],
+            config_dict["decoder_cross_att_ratio"],
+            config_dict["decoder_cross_att_rate"],
+            config_dict["net_tail_num_nets"],
+            config_dict["net_tail_num_layers"]
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "with_mixed_precision": self.mixed_prec,
+            "with_layer_norm": self.layernorm,
+            "coupling_num_heads_per_field": self.couple_heads,
+            "dropout_rate": self.dropout_rate,
+            "with_qk_lnorm": self.qk_norm,
+            "encoder_num_layers": self.encoder_layers,
+            "encoder_num_heads": self.encoder_heads,
+            "encoder_num_mlp_layers": self.encoder_mlp_layers,
+            "encoder_att_type": self.encoder_attn_type,
+            "decoder_num_layers": self.decoder_layers,
+            "decoder_num_heads": self.decoder_heads,
+            "decoder_num_mlp_layers": self.decoder_mlp_layers,
+            "decoder_att_type": self.decoder_attn_type,
+            "decoder_self_att": self.decoder_self_att,
+            "decoder_cross_att_ratio": self.decoder_cross_att_ratio,
+            "decoder_cross_att_rate": self.decoder_cross_att_rate,
+            "net_tail_num_nets": self.tail_nets,
+            "net_tail_num_layers": self.tail_nets_layers
+        }
