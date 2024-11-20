@@ -51,12 +51,10 @@ class PerceiverCrossAttentionHead(torch.nn.Module):
         for coupled_emb_dim in coupled_emb_dims:
             self.proj_kv_coupled.append( torch.nn.Linear( coupled_emb_dim, dim_embed*2, bias=True))
     
-    
     self.ln_q = torch.nn.LayerNorm( dim_embed)
     self.ln_k = torch.nn.LayerNorm( dim_embed)
 
     self.ln_k_coupled = torch.nn.ModuleList()
-
     
     if coupled_emb_dims is not None:
         for _ in coupled_emb_dims:
@@ -132,7 +130,6 @@ class PerceiverOutputProjection(torch.nn.Module):
         super(PerceiverOutputProjection, self).__init__()
         self.input_emb = input_emb
         self.output_emb = output_emb
-
         self.proj = torch.nn.Linear(input_emb, output_emb)
 
     def forward(self, x):
@@ -179,7 +176,7 @@ class Perceiver(torch.nn.Module) :
 
         self.output_proj = PerceiverOutputProjection( dim_embed, cf.perceiver_output_emb)
 
-        output_shape = [field_info[3][1], field_info[3][2]]
+        output_shape = [len(field_info[2]), field_info[3][0], field_info[3][1], field_info[3][2]]
         self.output_latents = torch.nn.Parameter(torch.empty(np.prod(output_shape),cf.perceiver_output_emb))
 
         if cf.init_scale > 0.0:
@@ -193,12 +190,9 @@ class Perceiver(torch.nn.Module) :
     def forward( self, x, x_couples):
         
         x, atts =  self.cross_attn(self.latent_arrays, x, x_couples)
-
         for idx,block in enumerate(self.blocks):
             x = block(x)
-
         x = self.output_proj(x)
-
         x ,atts = self.output_cross_attn(self.output_latents, x, [])
 
         return x

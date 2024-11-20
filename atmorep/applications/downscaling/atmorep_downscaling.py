@@ -75,25 +75,14 @@ class AtmoRepDownscalingData( torch.nn.Module) :
         return pred
 
     ###################################################
-    def create( self, pre_batch, devices, create_net = True, pre_batch_targets = None,
-            load_pretrained=True) :
+    def create( self, devices, create_net = True, load_pretrained=True) :
 
         if create_net :
             self.net = self.net.create( devices, load_pretrained)
 
-        self.pre_batch = pre_batch
-        self.pre_batch_targets = pre_batch_targets
-
         cf = self.net.cf
         loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
-
-        #self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
-        #                                        cf.batch_size,
-        #                                        pre_batch, cf.n_size, cf.num_samples_per_epoch,
-        #                                        with_shuffle = (cf.BERT_strategy != 'global_forecast'), 
-        #                                        with_source_idxs = True, 
-        #                                        compute_weights = (cf.losses.count('weighted_mse') > 0) )
         
         self.dataset_train = MultifieldDownscalingSampler(
                     cf.input_file_path,
@@ -108,9 +97,7 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     with_shuffle=True
         )
         
-        self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
-                                                          sampler = None)
-
+        self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params, sampler = None)
 
         self.dataset_test = MultifieldDownscalingSampler(
                     cf.input_file_path,
@@ -124,15 +111,8 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.downscaling_ratio,
                     with_shuffle=True
         )
-        #self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
-        #                                       cf.batch_size_validation,
-        #                                       pre_batch, cf.n_size, cf.num_samples_validate,
-        #                                       with_shuffle = (cf.BERT_strategy != 'global_forecast'),
-        #                                       with_source_idxs = True, 
-        #                                       compute_weights = (cf.losses.count('weighted_mse') > 0) )                                               
-        self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params,
-                                                          sampler = None)
-
+        
+        self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params, sampler = None)
         return self
 
 class AtmoRepDownscaling( AtmoRep) :
@@ -174,8 +154,6 @@ class AtmoRepDownscaling( AtmoRep) :
             logger.info("field_idx",field_idx)
             self.perceivers.append(Perceiver(cf, field_info, coupled_dim_embeds).create().to(device))
             self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_output_emb, np.prod(field_info[4])).create().to(device))
-        
-
 
         return self
 

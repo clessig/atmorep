@@ -101,7 +101,7 @@ def train():
   #training params
   cf.batch_size_validation = 1 #64
 
-  cf.batch_size = 8
+  cf.batch_size = 2
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 8
   cf.num_samples_validate = 8

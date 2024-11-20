@@ -42,12 +42,10 @@ class Trainer_Downscaling( Trainer_Base):
         self.loss_weights = torch.zeros( len(cf.fields_downscaling) )
         for ifield, field in enumerate(cf.fields_downscaling) :
             self.loss_weights[ifield] = self.cf.fields_downscaling[ifield][5]
-                    
         self.MSELoss = torch.nn.MSELoss()
         self.rng_seed = cf.rng_seed
         if not self.rng_seed :
             self.rng_seed = int(torch.randint( 10000000000, (1,))) 
-
         if 0 == cf.par_rank :
             directory = Path( config.path_results, 'id{}'.format( cf.wandb_id))
         if not os.path.exists(directory):
@@ -55,18 +53,12 @@ class Trainer_Downscaling( Trainer_Base):
             directory = Path( config.path_models, 'id{}'.format( cf.wandb_id))
         if not os.path.exists(directory):
             os.makedirs( directory)
-        ll = len(cf.fields) * 8 #len(cf.vertical_levels)
-        if cf.BERT_fields_synced :
-            self.rngs = [np.random.default_rng(self.rng_seed) for _ in range(ll)]
-        else :
-            self.rngs = [np.random.default_rng(self.rng_seed+i) for i in range(ll)]
-        self.pre_batch = functools.partial( prepare_batch_BERT_multifield, self.cf, self.rngs, 
-                                                          self.cf.fields, self.cf.BERT_strategy )
+    
     def create( self, load_embeds=True):
         net = AtmoRepDownscaling( self.cf)
         self.model = AtmoRepDownscalingData( net)
 
-        self.model.create(self.pre_batch, self.devices)
+        self.model.create( self.devices)
 
         for idx, _ in enumerate(self.model.net.tails) :
             self.model.net.tails[idx] = torch.nn.Identity()
@@ -88,7 +80,6 @@ class Trainer_Downscaling( Trainer_Base):
         trainer.decoder_to_tail = self.decoder_to_tail
 
         print_statement = "Loaded model id = {}{}.".format(model_id, f' at epoch = {epoch}' if epoch > -2 else "")
-        print(print_statement)
         return trainer
 
     def save( self, epoch) :
@@ -112,7 +103,6 @@ class Trainer_Downscaling( Trainer_Base):
         
         cf = self.cf
         model = self.model
-        print(model)
 
         learn_rates = self.get_learn_rates()
         if cf.with_ddp :
@@ -379,7 +369,7 @@ class Trainer_Downscaling( Trainer_Base):
 
         for pred, target in zip( preds, targets) :
 
-            target = torch.flatten(torch.flatten(target,-3,-1),-3,-2)
+            target = torch.flatten(torch.flatten(target,-3,-1),1,-2)
             mse_loss = self.MSELoss( pred[0], target = target)
             mse_loss_total += mse_loss.cpu().detach()
 
@@ -436,41 +426,51 @@ class Trainer_Downscaling( Trainer_Base):
 
         (sources, token_infos) = xin[0]
         (self.sources_idxs, self.sources_info) = xin[1]
-        (self.targets, self.target_token_infos) = xin[2]
+        #(self.targets, self.target_token_infos) = xin[2]
+        targets = xin[2]
+        
+        logger.info("sources_prepare_batch_script", len(sources), sources[0].shape)
+        logger.info("token_infos_batch_script", len(token_infos), token_infos[0].shape)
 
-        logger.info("sources_prepare_batch_script", sources.shape)
-        logger.info("token_infos_batch_script", token_infos.shape)
+        logger.info("sources_idxs_batch_script", len(self.sources_idxs))
+        logger.info("sources_info_batch_script", len(self.sources_info))
 
-        logger.info("sources_idxs_batch_script", self.sources_idxs.shape)
-        logger.info("sources_info_batch_script", self.sources_info.shape)
-
-        logger.info("targets_batch_script", self.targets.shape)
-        logger.info("target_token_infos", self.target_token_infos.shape)
+        logger.info("targets_batch_script", len(targets), targets[0].shape)
+        #logger.info("target_token_infos", self.target_token_infos.shape)
 
         # network input
-        #batch_data = [ ( sources[i].to( devs[ cf.input_fields[i][1][3] ], non_blocking=True), 
-        #                self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
-        #                  for i in range(len(sources))  ]
-        batch_data = [
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[0][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        batch_data = [ ( sources[i].to( devs[ cf.input_fields[i][1][3] ], non_blocking=True), 
+                        self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
+                          for i in range(len(sources))  ]
 
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[1][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        for batch_idx,batch in enumerate(batch_data):
+            logger.info( f"batch_{batch_idx}", batch[0].shape, batch[1].shape)
+
+        #batch_data = [
+        #        (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[0][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+
+        #        (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[1][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        #
+        #        (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[2][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        #        
+        #        (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[3][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
+        #        
+        #        (torch.randn((16,5,12,2,4,3,27,27)).to( devs[ cf.input_fields[4][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,5,12*2*4,8)).to( self.devices[0], non_blocking=True))),
+        #        
+        #        (torch.randn((16,1,12,6,12,3,9,9)).to( devs[ cf.input_fields[5][1][3] ],non_blocking=True),
+        #        self.tok_infos_trans(torch.randn((16,1,12*6*12,8)).to( self.devices[0], non_blocking=True)))]
         
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[2][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
-                
-                (torch.randn((16,5,12,6,12,3,9,9)).to( devs[ cf.input_fields[3][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*6*12,8)).to( self.devices[0], non_blocking=True))),
-                
-                (torch.randn((16,5,12,2,4,3,27,27)).to( devs[ cf.input_fields[4][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,5,12*2*4,8)).to( self.devices[0], non_blocking=True))),
-                
-                (torch.randn((16,1,12,6,12,3,9,9)).to( devs[ cf.input_fields[5][1][3] ],non_blocking=True),
-                self.tok_infos_trans(torch.randn((16,1,12*6*12,8)).to( self.devices[0], non_blocking=True)))]
-        target = [torch.randn((16,12,6,3,27,27)).to(cf.input_fields[5][1][3])]
 
-        assert False
+        for field_downscaling_idx,field_downscaling in enumerate(cf.fields_downscaling):
 
-        return batch_data, target
+            target_device = self.model.net.cf.fields[
+                                self.model.net.field_pred_idxs[
+                                    self.model.net.fields_downscaling_idx[field_downscaling_idx]]][1][3]
+            targets[field_downscaling_idx] = targets[field_downscaling_idx].to(devs[target_device])
+
+        return batch_data,targets

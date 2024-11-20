@@ -188,7 +188,7 @@ def lat_lon_time_range(global_zarr_filepath, local_zarr_filepath):
 if __name__ == "__main__":
 
     era5_zarr_file =  "/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr"
-    imerg_zarr_file = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res083_chunk8_test.zarr"
+    imerg_zarr_file = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res083_chunk8.zarr"
     old_imerg_zarr_file =  "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res008_chunk8.zarr"
     
     era5_group = zarr.group(era5_zarr_file)

@@ -30,7 +30,7 @@ class CouplingAttentionMode( Enum) :
 class MultiSelfAttentionHead(torch.nn.Module):
 
   #########################################
-  def __init__(self, dim_embed, num_heads, dropout_rate=0., with_qk_lnorm=True, with_flash=True) :
+  def __init__(self, dim_embed, num_heads, dropout_rate=0., with_qk_lnorm=True, with_flash=False) :
     
     super(MultiSelfAttentionHead, self).__init__()
 
@@ -88,7 +88,7 @@ class MultiSelfAttentionHead(torch.nn.Module):
 class MultiCrossAttentionHead(torch.nn.Module):
 
   def __init__(self, dim_embed, num_heads, num_heads_other, dropout_rate = 0., with_qk_lnorm =False,
-                     grad_checkpointing = False, with_attention=False, with_flash=True):
+                     grad_checkpointing = False, with_attention=False, with_flash=False):
     super(MultiCrossAttentionHead, self).__init__()
 
     self.num_heads = num_heads
@@ -155,6 +155,16 @@ class MultiCrossAttentionHead(torch.nn.Module):
     atts = []
     return x_in + outs, atts
 
+  #########################################
+  def attention( self, q, k, v) :
+    scaling = 1. / torch.sqrt( torch.tensor(q.shape[-1]))
+    return torch.matmul( self.softmax( scaling * self.score( q, k)), v)
+      
+  #########################################
+  def score( self, q, k) :
+    # code.interact( local=locals())
+    return torch.matmul( q, torch.transpose( k, -2, -1))
+
 ####################################################################################################
 
 class MultiInterAttentionHead(torch.nn.Module):
@@ -162,7 +172,7 @@ class MultiInterAttentionHead(torch.nn.Module):
   #####################################
   def __init__( self, num_heads_self, num_fields_other, num_heads_coupling_per_field, dims_embed,
                       with_lnorm = True, dropout_rate = 0., with_qk_lnorm = False, 
-                      grad_checkpointing = False, with_attention=False, with_flash=True) :
+                      grad_checkpointing = False, with_attention=False, with_flash=False) :
     '''Multi-head attention with multiple interacting fields coupled through attention.'''
 
     super(MultiInterAttentionHead, self).__init__()

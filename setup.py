@@ -18,9 +18,9 @@ setup(
 #ATOS: 
 # path = '/ec/res4/scratch/nacl/atmorep/'
 #JSC : 
-# path = '/p/scratch/atmo-rep/data/era5_1deg/months/'
+path = '/p/scratch/atmo-rep/data/era5_1deg/months/'
 #BSC : 
-path = '/gpfs/scratch/ehpc03/'
+#path = '/gpfs/scratch/ehpc03/'
 assert os.path.exists(path), "The chosen data path does not exist on this device. Please chhange it in setup.py"
 
 if not os.path.exists('./data'):

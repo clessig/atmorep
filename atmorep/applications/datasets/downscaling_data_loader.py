@@ -220,7 +220,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                     lon_list = np.arange(idx_lon_era5[0], self.era5_num_lons)
                     lon_list = np.concatenate((lon_list,np.arange(0,idx_lon_era5[1]%self.era5_num_lons)))
 
-                if idx_lon_era5[0] > self.era5_num_lons:
+                if idx_lon_era5[0] >= self.era5_num_lons:
                     idx_lon_era5[0] = idx_lon_era5[0]%self.era5_num_lons
                     idx_lon_era5[1] = idx_lon_era5[1]%self.era5_num_lons
             
@@ -270,7 +270,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                         
                         cdata = data_t[ :, 
                                  idx_lat_era5[0]:idx_lat_era5[1], 
-                                 idx_lon_era5[0]:idx_lon_era5[1]] 
+                                 list(np.arange(idx_lon_era5[0],idx_lon_era5[1])) if lon_list is None else lon_list] 
 
                         
                         normalizer = self.input_normalizers[ifield][ilevel]
@@ -278,10 +278,10 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                         if corr_type != 'global':
                             normalizer = normalizer[ : , : , 
                                    idx_lat_era5[0]:idx_lat_era5[1] ,
-                                   idx_lon_era5[0]:idx_lon_era5[1]]
+                                   list(np.arange(idx_lon_era5[0],idx_lon_era5[1])) if lon_list is None else lon_list]
                         
                         cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
-
+                        
                         source_data = tokenize( torch.from_numpy( cdata), tok_size)
 
                         dates = self.era5_ds['time'][ idxs_t_era5[0]:idxs_t_era5[1]].astype(datetime)
@@ -292,9 +292,9 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                         if lon_list is None:
                             lons_sidx = self.era5_ds['lons'][idx_lon_era5[0]: idx_lon_era5[1]][tok_size[2]//2 :: tok_size[2] ]
                         else:
-                            lons_idx = self.era5_ds['lons'][lon_list][tok_size[2]//2 :: tok_size[2]]
+                            lons_sidx = self.era5_ds['lons'][lon_list][tok_size[2]//2 :: tok_size[2]]
 
-                        tok_info += [[[[[ year, day, hour, vl, lat, lon, vl, self.input_res[0]] for lon in lons_sidx]
+                        tok_info += [[[[[ year, day, hour, vl, lat, lon, vl, self.era5_res[0]] for lon in lons_sidx]
                                                                               for lat in lats_sidx]
                                                                   for (year, day, hour) in dates]]                                                       
                         source_lvl += [ source_data ]
@@ -304,8 +304,9 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                     sources[ifield] += [ torch.stack(source_lvl, 0) ]
                     token_infos[ifield] += [ torch.stack(tok_info_lvl, 0)]
                 
-                for ifield, field_info in enumerte(self.target_fields):
-                    target_lvl, target_tok_info_lvl = [], []
+                for ifield, field_info in enumerate(self.target_fields):
+                    #target_lvl, target_tok_info_lvl = [], []
+                    target_lvl = []
                     target_tok_size = field_info[4]
                     target_num_tokens = field_info[3]
 
@@ -336,30 +337,18 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                         target_data = tokenize( torch.from_numpy( cdata_imerg), target_tok_size)
                         ##need to fill based on how the positional encoding needs to be done for output_latent_arrays
                         target_lvl += [ target_data ]
-                        target_tok_info_lvl += [np.array([0])]
+                        #target_tok_info_lvl += [np.array([0])]
 
                     targets[ifield] += [torch.stack(target_lvl, 0)]
-                    target_token_infos[ifield] += [ torch.stack(target_tok_info_lvl, 0)]
+                    #target_token_infos[ifield] += [ torch.stack(target_tok_info_lvl, 0)]
 
-            sources = [torch.stack(sources_field).transpose(1,0) for sources_field in sources]
-            token_infos = [torch.stack(tis_field).transpose(1,0) for tis_field in token_infos]
+            sources = [torch.stack(sources_field) for sources_field in sources]
+            token_infos = [torch.stack(tis_field) for tis_field in token_infos]
 
-            targets = [torch.stack(targets_field).transpose(1,0) for targets_field in targets]
-            target_token_infos = [torch.stack(target_tis_field).transpose(1,0) for target_tis_field in target_token_infos]
-
-            logger.info("len(sources)", len(sources))
-            logger.info("len(token_infos)", len(token_infos))
-
-            logger.info("len(sources[0])", sources[0].shape)
-            logger.info("len(token_infos[0])", token_infos[0].shape)
-
-            logger.info("len(targets)",len(targets))
-            logger.info("len(target_token_infos)", len(target_token_infos))
-
-            logger.info("len(targets[0])", targets[0].shape)
-            logger.info("len(target_token_infos[0]", target_token_infos[0].shape)
+            targets = [torch.stack(targets_field) for targets_field in targets]
+            #target_token_infos = [torch.stack(target_tis_field).transpose(1,0) for target_tis_field in target_token_infos]
             
-            yield ((sources, token_infos), (source_idxs, sources_infos), (target, target_token_infos))
+            yield ((sources, token_infos), (source_idxs, sources_infos), targets)          # (targets, target_token_infos))
   
     def __len__(self):
         return self.num_samples // self.batch_size
