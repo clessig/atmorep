@@ -280,9 +280,12 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                                    idx_lat_era5[0]:idx_lat_era5[1] ,
                                    list(np.arange(idx_lon_era5[0],idx_lon_era5[1])) if lon_list is None else lon_list]
                         
-                        cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
+                        # removed normalize and tokenize for test purpose
+                        #cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
                         
-                        source_data = tokenize( torch.from_numpy( cdata), tok_size)
+                        #source_data = tokenize( torch.from_numpy( cdata), tok_size)
+                        
+                        source_data = cdata #need to remove this line once the test is done
 
                         dates = self.era5_ds['time'][ idxs_t_era5[0]:idxs_t_era5[1]].astype(datetime)
                         cdates = dates[tok_size[0]-1::tok_size[0]]
@@ -332,9 +335,13 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                                    idx_lat_era5[0]:idx_lat_era5[1] ,
                                    idx_lon_era5[0]:idx_lon_era5[1]]
 
-                        cdata_imerg = normalize(cdata_imerg, normalizer, target_infos[-1][0], year_base = self.year_base)
+                        #uncomment these lines after testing
+                        #cdata_imerg = normalize(cdata_imerg, normalizer, target_infos[-1][0], year_base = self.year_base)
                         
-                        target_data = tokenize( torch.from_numpy( cdata_imerg), target_tok_size)
+                        #target_data = tokenize( torch.from_numpy( cdata_imerg), target_tok_size)
+
+                        target_data = cdata_imerg #remove this line once testing is done
+
                         ##need to fill based on how the positional encoding needs to be done for output_latent_arrays
                         target_lvl += [ target_data ]
                         #target_tok_info_lvl += [np.array([0])]
