@@ -1,5 +1,8 @@
 import dataclasses as dc
 from typing import Iterable
+from collections import namedtuple
+
+TimeLatLon = namedtuple("TimeLatLon", ["time", "lat", "lon"])
 
 
 @dc.dataclass
@@ -41,7 +44,7 @@ class FieldConfig:
     name: str # fields[x][0]
     """ Name of the variable used in the zarr """
 
-    dynamic: bool # field[x][1][0]
+    dynamic: bool # field[x][1][0] # TODO: maybe ignore while parsing ??
     """ If true filed is dynamic, otherwise it's static """
 
     embed_dim: int # field[x][1][1]
@@ -53,10 +56,10 @@ class FieldConfig:
     vertical_levels: Iterable[int] # fields[x][2]
     """ Vertical levels that are to be used. They have to match zarr file convention"""
 
-    num_tokens: Iterable[int] # fields[x][3]
+    num_tokens: TimeLatLon # fields[x][3]
     """ List containing number of tokens for each dimension in order [time, lon, lat]"""
 
-    token_size: Iterable[int] # fields[x][4] ()
+    token_size: TimeLatLon # fields[x][4] ()
     """ List containing sizes of the tokens for each dimension in order [time, lon, lat] """
     
     total_mask_rate: float # fields[x][5][0]
