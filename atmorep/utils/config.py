@@ -54,10 +54,10 @@ class FieldConfig:
     """ CUDA device ID within the process """
     
     vertical_levels: Iterable[int] # fields[x][2]
-    """ Vertical levels that are to be used. They have to match zarr file convention"""
+    """ Vertical levels that are to be used. They have to match zarr file convention """
 
     num_tokens: TimeLatLon # fields[x][3]
-    """ List containing number of tokens for each dimension in order [time, lon, lat]"""
+    """ List containing number of tokens for each dimension in order [time, lon, lat] """
 
     token_size: TimeLatLon # fields[x][4] ()
     """ List containing sizes of the tokens for each dimension in order [time, lon, lat] """
@@ -91,3 +91,84 @@ class PredictionConfig:
     """
     fields: Iterable[PredictionFieldConfig]
     """ List of configuration object for each field """
+
+
+@dc.dataclass
+class ModelConfig:
+    """
+    Configuration class for the Atmorep model.
+
+    Attributes:
+        mixed_prec (bool): Indicates whether the model uses mixed precision.
+        layernorm (bool): Specifies whether the model uses layer normalization.
+        couple_heads (int): Number of attention heads used for each field.
+        dropout_rate (float): Dropout rate used during training.
+        qk_norm (bool): Indicates whether the model uses Query-Key normalization.
+        encoder_layers (int): Number of layers in the encoder.
+        encoder_heads (int): Number of attention heads in the encoder.
+        encoder_mlp_layers (int): Number of MLP layers in the encoder.
+        encoder_attn_type (str): Type of attention in the encoder. Can be 'dense' or 'axial'.
+        decoder_layers (int): Number of layers in the decoder.
+        decoder_heads (int): Number of attention heads in the decoder.
+        decoder_mlp_layers (int): Number of MLP layers in the decoder.
+        decoder_attn_type (str): Type of attention in the decoder. Can be 'dense' or 'axial'.
+        decoder_self_att (bool): Indicates whether the decoder uses self-attention.
+        decoder_cross_att_ratio (float): Ratio of attention heads used for cross-attention with other fields.
+        decoder_cross_att_rate (float): Ratio of attention heads used for cross-attention with the encoder.
+        tail_nets (int): Number of tail networks.
+        tail_nets_layers (int): Number of layers in each tail network.
+    """
+    mixed_prec: bool
+    """ If true, model uses mixed precision """
+
+    layernorm: bool 
+    """ If true model uses layer normalisation """
+
+    couple_heads: int
+    """ Number of attention heads used for each field """
+
+    dropout_rate: float
+    """ Dropout rate for training """
+
+    qk_norm: bool
+    """ If true model uses Query-Key normalisation """
+
+    encoder_layers: int
+    """ Number of layers inside the encoder """
+
+    encoder_heads: int
+    """ Number of attention heads inside the encoder """
+
+    encoder_mlp_layers: int
+    """ Number of MLP layers inside the encoder """
+
+    encoder_attn_type: str
+    """ Type of attention for the encoder. Can be 'dense' or 'axial' """
+
+    decoder_layers: int
+    """ Number of layers inside the decoder """
+
+    decoder_heads: int
+    """ Number of attention heads inside the decoder """
+
+    decoder_mlp_layers: int
+    """ Number of MLP layers inside the decoder """
+
+    decoder_attn_type: str
+    """ Type of attention for the decoder. Can be 'dense' or 'axial' """
+
+    decoder_self_att: bool
+    """ If true decoder uses self attention """
+
+    decoder_cross_att_ratio: float
+    """ Set's rate of attention heads used for cross attention with other fields """
+
+    decoder_cross_att_rate: float
+    """ Set's rate of attention heads to be used for cross attention with encoder """
+
+    tail_nets: int
+    """ Number of tail networks """
+
+    tail_nets_layers: int
+    """ Number of layers in tail networks """
+
