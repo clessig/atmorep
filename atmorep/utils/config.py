@@ -229,7 +229,7 @@ class ModelConfig:
 
         return cls(
             config_dict["with_mixed_precision"],
-            config_dict["with_layer_norm"],
+            config_dict["with_layernorm"],
             config_dict["coupling_num_heads_per_field"],
             config_dict["dropout_rate"],
             config_dict["with_qk_lnorm"],
@@ -256,7 +256,7 @@ class ModelConfig:
 
         return {
             "with_mixed_precision": self.mixed_prec,
-            "with_layer_norm": self.layernorm,
+            "with_layernorm": self.layernorm,
             "coupling_num_heads_per_field": self.couple_heads,
             "dropout_rate": self.dropout_rate,
             "with_qk_lnorm": self.qk_norm,
