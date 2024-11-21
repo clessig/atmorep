@@ -131,29 +131,6 @@ class FieldConfig:
 
 
 @dc.dataclass
-class PredictionConfig:
-    """
-    Configuration class for the fields to be predicted.
-
-    Attributes:
-        fields (Iterable[PredictionFieldConfig]): List of configuration objects for each field to be predicted.
-    """
-    fields: Iterable[PredictionFieldConfig]
-    """ List of configuration object for each field """
-    
-    @classmethod
-    def from_list(cls, fields: list[list[Any]]) -> Self:
-        """ deserialize from model config format. """
-        return cls(
-            [FieldConfig.from_list(field) for field in fields]
-        )
-
-    def as_list(self) -> list[list[Any]]:
-        """ serialize into model config format. """
-        return [field.as_list() for field in self.fields]
-
-
-@dc.dataclass
 class ModelConfig:
     """
     Configuration class for the Atmorep model.
@@ -417,8 +394,8 @@ class TrainingConfig:
 
     Attributes:
         fields (Iterable[FieldConfig]): List of configuration objects for each field.
-        fields_prediction (PredictionFieldConfig): Configuration object for predicted fields.
-        field_targets (PredictionFieldConfig): Configuration object for fields to be targeted in downscaling applications.
+        fields_prediction (Iterable[PredictionFieldConfig]): Configuration object for predicted fields.
+        field_targets (Iterable[PredictionFieldConfig]): Configuration object for fields to be targeted in downscaling applications.
         years_training (Iterable[int]): List of years to be used for training.
         years_validation (Iterable[int]): List of years to be used for validation.
         sampling_range_lat (GeoRange): Range of sampling for latitude.
@@ -447,10 +424,10 @@ class TrainingConfig:
     fields: Iterable[FieldConfig]
     """ List of configuration objects for each field """
 
-    fields_prediction: PredictionFieldConfig
+    fields_prediction: Iterable[PredictionFieldConfig]
     """ Configuration object for predicted fields """
 
-    field_targets: PredictionFieldConfig
+    field_targets: Iterable[PredictionFieldConfig]
     """ Configuration object for fields that are to be target in downscaling application"""
 
     years_training: Iterable[int]
