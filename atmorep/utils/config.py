@@ -1,4 +1,6 @@
 import dataclasses as dc
+import pathlib as pl
+import json
 from typing import Iterable, Any, Self, Optional
 from collections import namedtuple
 
@@ -500,3 +502,104 @@ class TrainingConfig:
 
     maximum_res_reduction: int
     """ Maximum reduction for the resolution """
+
+    @classmethod
+    def from_dict(cls, config_dict: dict[str, Any]) -> Self:
+        """ Deserialize from model config format. """
+
+        fields = [FieldConfig.from_list(field) for field in config_dict["fields"]]
+        fields_prediction = [
+            PredictionFieldConfig.from_list(field)
+            for field in config_dict["fields_prediction"]
+        ]
+        fields_targets = [
+            PredictionFieldConfig.from_list(field)
+            for field in config_dict["fields_targets"]
+        ]
+        sampling_lat, sampling_lon = config_dict["geo_range_sampling"]
+        sampling_range_lat = GeoRange(*sampling_lat)
+        sampling_range_lon = GeoRange(*sampling_lon)
+
+        return cls(
+            fields,
+            fields_prediction,
+            fields_targets,
+            config_dict["years_train"],
+            config_dict["years_val"],
+            sampling_range_lat,
+            sampling_range_lon,
+            config_dict["time_sampling"],
+            config_dict["batch_size"],
+            config_dict["batch_size_validation"],
+            config_dict["num_epochs"],
+            config_dict["num_samples_per_epoch"],
+            config_dict["num_samples_validate"],
+            config_dict["num_loader_workers"],
+            config_dict["losses"],
+            config_dict["lr_start"],
+            config_dict["lr_max"],
+            config_dict["lr_min"],
+            config_dict["lr_decay_rate"],
+            config_dict["lr_start_epochs"],
+            config_dict["weight_decay"],
+            config_dict["BERT_strategy"],
+            config_dict["forecast_num_tokens"],
+            config_dict["BERT_fields_synced"],
+            config_dict["BERT_mr_max"]
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "fields": [field.as_list() for field in self.fields],
+            "fields_prediction": [
+                field.as_list() for field in self.fields_prediction
+            ],
+            "fields_targets": [field.as_list() for field in self.field_targets],
+            "years_train": self.years_training,
+            "years_val": self.years_validation,
+            "time_sampling": self.sampling_time_rate,
+            "batch_size": self.batch_size_train,
+            "batch_size_validation": self.batch_size_val,
+            "num_epochs": self.num_epochs,
+            "num_samples_per_epoch": self.samples_per_epoch,
+            "num_samples_validate": self.samples_validation,
+            "num_loader_workers": self.num_workers,
+            "losses": self.losses,
+            "lr_start": self.lr_start,
+            "lr_max": self.lr_max,
+            "lr_min": self.lr_min,
+            "lr_decay_rate": self.lr_decay,
+            "lr_start_epochs": self.lr_start_epochs,
+            "weight_decay": self.weight_decay,
+            "BERT_strategy": self.strategy,
+            "forecast_num_tokens": self.num_forecast_tokens,
+            "BERT_fields_synced": self.fields_synced,
+            "BERT_mr_max": self.maximum_res_reduction
+        }
+
+@dc.dataclass
+class AtmorepConfig:
+    model: ModelConfig
+    run: RunConfig
+    training: TrainingConfig
+
+    @classmethod
+    def from_json(cls, config_file: pl.Path) -> Self:
+        """ deserialize Config from model.json file. """
+
+        with open(config_file, "r") as config:
+            config_dict = json.load(config)
+
+        return cls(
+            ModelConfig.from_dict(config_dict),
+            RunConfig.from_dict(config_dict),
+            TrainingConfig.from_dict(config_dict)
+        )
+
+    def as_json(self, config_file: pl.Path):
+        """ serialize Config into model.json file. """
+    
+        config_dict = self.model.as_dict() | self.run.as_dict() | self.training.as_dict()
+
+        with open(config_file, "w") as config:
+            json.dump(config_dict, config)
