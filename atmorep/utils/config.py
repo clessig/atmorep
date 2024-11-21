@@ -342,11 +342,11 @@ class RunConfig:
     torch_rng_seed: int
     """ Seed for the torch's internal random number generator """
 
-    grad_checkpointing: bool
-    """ If true, checkpointing is used in training """
-
     log_frequency: int
     """ Number of batches between saving checkpoints """
+
+    grad_checkpointing: bool
+    """ If true, checkpointing is used in training """
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
