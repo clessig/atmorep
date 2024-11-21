@@ -557,6 +557,9 @@ class TrainingConfig:
             "fields_targets": [field.as_list() for field in self.field_targets],
             "years_train": self.years_training,
             "years_val": self.years_validation,
+            "geo_range_sampling": [
+                list(self.sampling_range_lat), list(self.sampling_range_lon)
+            ],
             "time_sampling": self.sampling_time_rate,
             "batch_size": self.batch_size_train,
             "batch_size_validation": self.batch_size_val,
