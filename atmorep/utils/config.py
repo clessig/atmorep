@@ -298,6 +298,7 @@ class RunConfig:
         with_wandb (bool): Indicates whether Wandb is used for monitoring the run.
         torch_rng_seed (int): Seed for PyTorch's internal random number generator.
         log_frequency (int): Number of batches between saving checkpoints.
+        grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
     """
     wandb_id: str
     """ Run ID assigned by the wandb """
@@ -341,6 +342,9 @@ class RunConfig:
     torch_rng_seed: int
     """ Seed for the torch's internal random number generator """
 
+    grad_checkpointing: bool
+    """ If true, checkpointing is used in training """
+
     log_frequency: int
     """ Number of batches between saving checkpoints """
 
@@ -363,7 +367,8 @@ class RunConfig:
             config_dict["rng_seed"],
             config_dict["with_wandb"],
             config_dict["torch_seed"],
-            config_dict["model_log_frequency"]
+            config_dict["model_log_frequency"],
+            config_dict["grad_checkpointing"]
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -385,6 +390,7 @@ class RunConfig:
             "with_wandb": self.with_wandb,
             "torch_seed": self.torch_rng_seed,
             "model_log_frequency": self.log_frequency,
+            "grad_checkpointing": self.grad_checkpointing
         }
 
 @dc.dataclass
@@ -407,7 +413,6 @@ class TrainingConfig:
         samples_per_epoch (int): Number of samples per epoch.
         samples_validation (int): Number of samples for validation.
         num_workers (int): Number of workers to be used by data loaders.
-        grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
         losses (Iterable[str]): List of loss functions to be used. Available options: 'mse', 'mse_ensemble', 'stats', 'crps', 'weighted_mse'.
         lr_start (float): Initial learning rate for computing learning rates.
         lr_max (float): Maximum learning rate for computing learning rates.
@@ -463,9 +468,6 @@ class TrainingConfig:
     num_workers: int
     """ Number of workers for to be used by dataloaders """
 
-    grad_checkpointing: bool
-    """ If true, checkpointing is used in training """
-
     losses: Iterable[str]
     """ List of loss functions to be used. Available are: mse, mse_ensemble, stats, crps, weighted_mse """
 
@@ -498,4 +500,3 @@ class TrainingConfig:
 
     maximum_res_reduction: int
     """ Maximum reduction for the resolution """
-    
