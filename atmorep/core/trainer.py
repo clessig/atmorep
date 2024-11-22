@@ -40,7 +40,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
-from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
+from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize, unique_unsorted
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
@@ -800,8 +800,8 @@ class Trainer_BERT( Trainer_Base) :
           
             idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-            lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-            lons_mskd = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
+            lats_mskd = np.array([unique_unsorted(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lons_mskd = np.array([unique_unsorted(t) for t in grid_lons_toked[ idx_loc ].numpy()])
 
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
