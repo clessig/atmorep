@@ -409,3 +409,10 @@ def weighted_mse(x, target, weights):
 
 def check_num_samples(num_samples_validate, batch_size):
   assert num_samples_validate // batch_size > 0, f"Num samples validate: {num_samples_validate} is smaller than batch size: {batch_size}. Please increase it."
+
+########################################
+
+def unique_unsorted(x):
+  x_flattened = x.flatten() 
+  _, x_idx = np.unique(x_flattened, return_index=True)
+  return x_flattened[np.sort(x_idx)]
