@@ -146,6 +146,7 @@ class Trainer_Base() :
                                                               optimizer_class=torch.optim.AdamW,
                                                               lr=cf.lr_start )
     else :
+      self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                           weight_decay=cf.weight_decay)
     
@@ -185,7 +186,7 @@ class Trainer_Base() :
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
 
       self.train( epoch)
-      
+
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
 
@@ -503,12 +504,14 @@ class Trainer_Base() :
         losses['kernel_crps'].append( kcrps_loss)
     
     #TODO: uncomment it and add it when running in debug mode
+    # field_losses = ""
     # for ifield, field in enumerate(cf.fields):
     #   ifield_loss = 0
     #   for key in losses :  
     #     ifield_loss += losses[key][ifield].to(self.device_out)
     #   ifield_loss /= len(losses.keys())
-    #   print("LOSS :", field[0], ifield_loss, flush = True)
+    #   field_losses +=  f"{field[0]}: {ifield_loss}; "
+    # print(field_losses, flush = True)
           
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
