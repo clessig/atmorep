@@ -217,11 +217,16 @@ class Evaluator( Trainer_BERT) :
     # set/over-write options
     cf.BERT_strategy = 'temporal_interpolation'
 
-    if hasattr(cf, 'type') and cf.type == 'global':
+    # handdling missing arguments
+    if 'type' not in args:
+      args['type'] = 'BERT'      
+
+    if args['type'] == 'global': 
+      if 'token_overlap' not in args:
+        args['token_overlap'] = [0, 0]
       cf.batch_size_test = 24
       cf.num_loader_workers = 12 #1
       cf.log_test_num_ranks = 1
-      cf.forecast_num_tokens = len(cf.idx_time_mask)
 
       #TODO: temporary solution. Add support for batch_size > 1 
       cf.batch_size_validation = 1 #64
@@ -229,9 +234,13 @@ class Evaluator( Trainer_BERT) :
       
       if not hasattr(cf, 'num_samples_validate'):
         cf.num_samples_validate = 196 
+      #if not hasattr(cf,'with_mixed_precision'):
       cf.with_mixed_precision = True
+
       Evaluator.parse_args( cf, args)
 
+      cf.forecast_num_tokens = len(cf.idx_time_mask)
+      cf.years_val = [2021] # because the year 2018 isn't found in grib format
       dates = args['dates']
       evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
       evaluator.model.set_global( NetMode.test, np.array( dates))
@@ -239,11 +248,12 @@ class Evaluator( Trainer_BERT) :
         cf.print()
         cf.write_json( wandb)
       evaluator.validate( 0, cf.BERT_strategy)
+
     else:
-      print(f"BERT temporal interpolation is happening")
       cf.log_test_num_ranks = 4
       cf.num_samples_validate = 128
       Evaluator.parse_args( cf, args)
+      cf.years_val = [2021] # because the year 2018 isn't found in grib format
       utils.check_num_samples(cf.num_samples_validate, cf.batch_size)
       Evaluator.run( cf, model_id, model_epoch, devices)
 
