@@ -623,10 +623,10 @@ class Trainer_BERT( Trainer_Base) :
     elif 'BERT' in self.cf.BERT_strategy:
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     elif 'temporal_interpolation' == self.cf.BERT_strategy :
-      if hasattr(self.cf, 'type') and self.cf.type == 'global':
-        self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
-      else: 
+      if getattr(self.cf, 'type', 'BERT') != 'global':
         self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
+      else: 
+        self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
     else :
       assert False
   
