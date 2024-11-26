@@ -432,6 +432,7 @@ class TrainingConfig:
         num_forecast_tokens (int): Number of tokens to forecast when the strategy is set to 'forecast'.
         fields_synced (bool): Indicates whether identical masking is applied to all fields.
         maximum_res_reduction (int): Maximum reduction for the resolution.
+        n_size (TimeLatLon): Physical size of patches.
     """
 
     fields: list[FieldConfig]
@@ -509,6 +510,9 @@ class TrainingConfig:
     maximum_res_reduction: int
     """ Maximum reduction for the resolution """
 
+    n_size: TimeLatLon
+    """ Physical size of patches. """
+
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
         """ Deserialize from model config format. """
@@ -551,7 +555,8 @@ class TrainingConfig:
             config_dict["BERT_strategy"],
             config_dict["forecast_num_tokens"],
             config_dict["BERT_fields_synced"],
-            config_dict["BERT_mr_max"]
+            config_dict["BERT_mr_max"],
+            TimeLatLon(*config_dict["n_size"])
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -583,7 +588,8 @@ class TrainingConfig:
             "BERT_strategy": self.strategy,
             "forecast_num_tokens": self.num_forecast_tokens,
             "BERT_fields_synced": self.fields_synced,
-            "BERT_mr_max": self.maximum_res_reduction
+            "BERT_mr_max": self.maximum_res_reduction,
+            "n_size": list(self.n_size)
         }
 
 @dc.dataclass
