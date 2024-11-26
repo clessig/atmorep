@@ -9,6 +9,10 @@ SAMPLE_CONFIG = pl.Path(__file__).parent / "model_idwc5e2i3t.json"
 def legacy_config_dict():
     with open(SAMPLE_CONFIG, "r") as fp_config:
         legacy_config_dict = json.load(fp_config)
+        
+        # remove irrelevant options
+        del legacy_config_dict["file_path"]
+        del legacy_config_dict["month"]
     
     return legacy_config_dict
 
@@ -22,7 +26,7 @@ def test_serialization_identity(deserialized_config):
     
     assert deserialized_config == redeserialized_config
 
-def test_missing_keys(legacy_config_dict, deserialized_config):
+def test_compatibility(legacy_config_dict, deserialized_config):
     config_dict = deserialized_config.as_dict()
     
     assert config_dict == legacy_config_dict
