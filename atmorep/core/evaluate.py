@@ -14,7 +14,10 @@
 #
 ####################################################################################################
 
+import os
+from pathlib import Path
 from atmorep.core.evaluator import Evaluator
+from atmorep.config.config import UserConfig
 import time
 
 if __name__ == '__main__':
@@ -53,6 +56,10 @@ if __name__ == '__main__':
   #temporal interpolation 
   #idx_time_mask: list of relative time positions of the masked tokens within the cube wrt num_tokens[0]  
   #mode, options = 'temporal_interpolation', {'idx_time_mask': [5,6,7], 'num_samples_validate' : 128, 'with_pytest' : True}
+  
+  atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
+  print("Atmorep project dir:", atmorep_project_dir)
+  user_config = UserConfig.from_path(atmorep_project_dir)
 
   # BERT forecast with patching to obtain global forecast
   mode, options = 'global_forecast', { 
@@ -65,8 +72,8 @@ if __name__ == '__main__':
                                        ], 
                                       'token_overlap' : [0, 0],
                                       'forecast_num_tokens' : 2,
-                                      'with_pytest' : True }
+                                      'with_pytest' : False }
   
   now = time.time()
-  Evaluator.evaluate( mode, model_id, options)
+  Evaluator.evaluate( mode, model_id, options, user_config=user_config)
   print("time", time.time() - now)

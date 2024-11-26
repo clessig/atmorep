@@ -40,7 +40,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
-from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
+from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize, unique_unsorted
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
@@ -50,6 +50,7 @@ class Trainer_Base() :
   def __init__( self, cf, devices ) :
 
     self.cf = cf
+    self.user_config = self.cf.user_config
     self.devices = devices
     self.device_in = devices[0]
     self.device_out = devices[-1]
@@ -73,10 +74,10 @@ class Trainer_Base() :
       self.tok_infos_trans = getattr( token_infos_transformations, 'identity')
 
     if 0 == cf.par_rank :
-      directory = Path( config.path_results, 'id{}'.format( cf.wandb_id))
+      directory = self.user_config.results / f"id{cf.wandb_id}"
       if not os.path.exists(directory):
         os.makedirs( directory)
-      directory = Path( config.path_models, 'id{}'.format( cf.wandb_id))
+      directory = self.user_config.models / f'id{cf.wandb_id}'
       if not os.path.exists(directory):
         os.makedirs( directory)
 
@@ -706,7 +707,7 @@ class Trainer_BERT( Trainer_Base) :
 
     levels = np.array(cf.fields[0][2])
     
-    write_forecast( cf.wandb_id, epoch, batch_idx,
+    write_forecast( cf.user_config, cf.wandb_id, epoch, batch_idx,
                                  levels, sources_out,
                                  targets_out, preds_out,
                                  ensembles_out, coords)
@@ -800,8 +801,8 @@ class Trainer_BERT( Trainer_Base) :
           
             idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-            lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-            lons_mskd = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
+            lats_mskd = np.array([unique_unsorted(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lons_mskd = np.array([unique_unsorted(t) for t in grid_lons_toked[ idx_loc ].numpy()])
 
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
@@ -835,7 +836,7 @@ class Trainer_BERT( Trainer_Base) :
       ensembles_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_ens_b]] if is_predicted else [fn, []] )
 
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
-    write_BERT( cf.wandb_id, epoch, batch_idx, 
+    write_BERT( cf.user_config, cf.wandb_id, epoch, batch_idx, 
                 levels, sources_out, targets_out,
                 preds_out, ensembles_out, coords )
 
@@ -860,5 +861,5 @@ class Trainer_BERT( Trainer_Base) :
       attn_out.append([field_info[0], attention[fidx]] if is_predicted else [fn, []])
       
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
-    write_attention(cf.wandb_id, epoch,
+    write_attention(cf.user_config, cf.wandb_id, epoch,
                     bidx, levels, attn_out,  coords_b )

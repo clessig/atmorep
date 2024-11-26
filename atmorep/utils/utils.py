@@ -52,26 +52,37 @@ def json_default(o):
 ####################################################################################################
 class Config :
 
-  def __init__( self) :
-    pass
+  def __init__( self, user_config=None) :
+    if user_config is None:
+      # original dir that venv is created from will be used
+      user_config = config.UserConfig.from_path(config.ATMOREP_PROJECT_DIR)
+
+    self.user_config = user_config
 
   def add_to_wandb( self, wandb) :
-    wandb.config.update( self.__dict__)
+    wandb.config.update( self.get_self_dict())
 
   def get_self_dict( self) :
-    return self.__dict__
+    my_dict = {
+      key: value for key, value in self.__dict__.items()
+      if not key == "user_config"
+    }
+    return my_dict
+  
+  def set_dict(self, my_dict):
+    self.__dict__ = self.__dict__ | my_dict
 
   def print( self) :
-    self_dict = self.__dict__
-    for key, value in self_dict.items() : 
+    for key, value in self.get_self_dict().items(): 
         print("{} : {}".format( key, value))
 
   def create_dirs( self, wandb) :
-    dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
+    # TODO why safe in 2 dirs ???
+    dirname = self.user_config.results / "models" / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
       
-    dirname = Path( config.path_results, 'id{}'.format( wandb.run.id))
+    dirname = self.user_config.results / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
       
@@ -80,21 +91,23 @@ class Config :
     if not hasattr( wandb.run, 'id') :
       return
 
-    json_str = json.dumps(self.__dict__ )
+    json_str = json.dumps(self.get_self_dict())
 
     # save in directory with model files
-    dirname = Path( config.path_results, 'models/id{}'.format( wandb.run.id))
+    dirname = self.user_config.results / "models" / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
-    fname =Path(config.path_results,'models/id{}/model_id{}.json'.format(wandb.run.id,wandb.run.id))
+      
+    fname = dirname / "model_id{wandb.run.id}.json"
     with open(fname, 'w') as f :
       f.write( json_str)
 
     # also save in results directory
-    dirname = Path( config.path_results,'id{}'.format( wandb.run.id))
+    # TODO WHY ??? 
+    dirname = self.user_config.results / f"id{wandb.run.id}"
     if not os.path.exists(dirname):
       os.makedirs( dirname)
-    fname = Path( dirname, 'model_id{}.json'.format( wandb.run.id))
+    fname = dirname / f'model_id{wandb.run.id}.json'
     with open(fname, 'w') as f :
       f.write( json_str)
 
@@ -102,21 +115,25 @@ class Config :
     if '/' in wandb_id :   # assumed to be full path instead of just id
       fname = wandb_id
     else :
-      fname = Path( config.path_models, 'id{}/model_id{}.json'.format( wandb_id, wandb_id))
+      model_json_path = Path(f"id{wandb_id}") / f"model_id{wandb_id}.json"
+      fname = config.path_models / model_json_path # pretrained models
+      if not fname.is_file():
+        fpath = self.user_config.models /  model_json_path # user models
+
     try :
       with open(fname, 'r') as f :
         json_str = f.readlines() 
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        fname = self.user_config.results / 'models' / f'id{wandb_id}' / f'model_id{wandb_id}.json'
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
         print( f'Could not find fname due to {e}. Aborting.')
         quit()
 
-    self.__dict__ = json.loads( json_str[0])
+    self.set_dict(json.loads(json_str[0]))
 
     # fix for backward compatibility
     if not hasattr( self, 'model_id') :
@@ -194,6 +211,7 @@ def setup_wandb( with_wandb, cf, rank, project_name = None, entity = 'atmorep', 
       if slurm_job_id_node != '-1' :
         cf.slurm_job_id = slurm_job_id_node
 
+      print("find issue with serialization\n", cf.get_self_dict())
       if None == wandb_id : 
         wandb.init( project = project_name, entity = entity,
                     mode = mode,
@@ -244,8 +262,9 @@ def shape_to_str( shape) :
   return ret
 
 ####################################################################################################
-def get_model_filename( model = None, model_id = '', epoch=-2, with_model_path = True) :
 
+#TODO: should be a method of atmorep.core.atmorep_model.AtmoRep
+def get_model_filename(user_config: config.UserConfig, model = None, model_id = '', epoch=-2, with_model_path = True) :
   if isinstance( model, str) :
     name = model 
   elif model :
@@ -253,15 +272,21 @@ def get_model_filename( model = None, model_id = '', epoch=-2, with_model_path =
   else : # backward compatibility
     name = 'mod'
 
-  mpath = 'id{}'.format(model_id) if with_model_path else ''
+  if epoch > -2:
+    filename = '{}_id{}_epoch{}.mod'.format(name, model_id, epoch)
+  else:
+    filename = '{}_id{}.mod'.format( name, model_id)
 
-  if epoch > -2 :
-    # model_file = Path( config.path_results, 'models/id{}/{}_id{}_epoch{}.mod'.format(
-    #                                                        model_id, name, model_id, epoch))
-    model_file = Path( config.path_models, mpath, '{}_id{}_epoch{}.mod'.format(
-                                                           name, model_id, epoch))
-  else :
-    model_file = Path( config.path_models, mpath, '{}_id{}.mod'.format( name, model_id))
+  pretrained_models_path = config.path_models
+  user_models_path = user_config.models
+  if with_model_path:
+    pretrained_models_path = pretrained_models_path / f'id{model_id}'
+    user_models_path = user_models_path / f'id{model_id}'
+
+  # check both locations for matching model
+  model_file = pretrained_models_path / filename
+  if not model_file.is_file():
+    model_file = user_models_path / filename
       
   return model_file
 
@@ -409,3 +434,10 @@ def weighted_mse(x, target, weights):
 
 def check_num_samples(num_samples_validate, batch_size):
   assert num_samples_validate // batch_size > 0, f"Num samples validate: {num_samples_validate} is smaller than batch size: {batch_size}. Please increase it."
+
+########################################
+
+def unique_unsorted(x):
+  x_flattened = x.flatten() 
+  _, x_idx = np.unique(x_flattened, return_index=True)
+  return x_flattened[np.sort(x_idx)]

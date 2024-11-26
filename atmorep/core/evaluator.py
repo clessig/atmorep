@@ -67,13 +67,14 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, args = {}, model_epoch=-2, user_config=None) :
 
     devices = init_torch()
     with_ddp = True 
     par_rank, par_size = setup_ddp( with_ddp)
     
-    cf = Config().load_json( model_id)
+    cf = Config(user_config).load_json( model_id)
+    print("after config creation", cf.user_config)
   
     cf.num_accs_per_task = len(devices)
     cf.with_wandb = True
@@ -163,6 +164,7 @@ class Evaluator( Trainer_BERT) :
 
     dates = args['dates']
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
+    print("after loading:", evaluator.cf.user_config)
     evaluator.model.set_global( NetMode.test, np.array( dates))
     if 0 == cf.par_rank :
       cf.print()

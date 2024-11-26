@@ -240,10 +240,11 @@ class AtmoRep( torch.nn.Module) :
         # TODO: inconsistent with embeds_token_info -> version that can handle both
         #       we could imply use the file name: embed_token_info vs embeds_token_info
         name = 'AtmoRep' + '_embeds_token_info'
-        if not os.path.exists(get_model_filename( name, field_info[1][4][0], field_info[1][4][1])):
+        model_filename = get_model_filename(cf.user_config, name, field_info[1][4][0], field_info[1][4][1])
+        if not os.path.exists(model_filename):
           name = 'AtmoRep' + '_embed_token_info'
 
-        mloaded = torch.load( get_model_filename( name, field_info[1][4][0], field_info[1][4][1]))
+        mloaded = torch.load(model_filename)
       
         if "weight" not in mloaded.keys(): #TODO: get rid of this
           mloaded["weight"] = mloaded["0.weight"]
@@ -347,7 +348,8 @@ class AtmoRep( torch.nn.Module) :
     # name = self.__class__.__name__ + '_' + block_name + '_' + field_info[0]
     name = 'AtmoRep_' + block_name + '_' + field_info[0]
 
-    b_loaded = torch.load( get_model_filename(name, field_info[1][4][0], field_info[1][4][1]))
+    model_filename = get_model_filename(self.cf.user_config, name, field_info[1][4][0], field_info[1][4][1])
+    b_loaded = torch.load(model_filename)
 
     # in coupling mode, proj_out of attention heads needs separate treatment: only the pre-trained
     # part can be loaded
@@ -448,12 +450,12 @@ class AtmoRep( torch.nn.Module) :
   def load( model_id, devices, cf = None, epoch = -2, load_pretrained=False) :
     '''Load network from checkpoint'''
 
-    if not cf : 
-      cf = utils.Config()
-      cf.load_json( model_id)
+    if not cf : #Should never happen when inpecting the call stack
+      msg = f"missing configuration object.THIS SHOULD NEVER HAPPEN"
+      raise ValueError(msg)
 
     model = AtmoRep( cf).create( devices, load_pretrained=False)
-    mloaded = torch.load( utils.get_model_filename( model, model_id, epoch) )
+    mloaded = torch.load( utils.get_model_filename(cf.user_config, model, model_id, epoch) )
     mkeys, ukeys = model.load_state_dict( mloaded, False )
     if (f'encoders.0.heads.0.proj_heads.weight') in mkeys:
       mloaded = model.translate_weights(mloaded, mkeys, ukeys)
@@ -471,30 +473,27 @@ class AtmoRep( torch.nn.Module) :
   ###################################################
   def save( self, epoch = -2) :
     '''Save network '''
+    user_config = self.cf.user_config    
 
     # save entire network
-    torch.save( self.state_dict(), utils.get_model_filename( self, self.cf.wandb_id, epoch) )
+    torch.save( self.state_dict(), utils.get_model_filename(user_config, self, self.cf.wandb_id, epoch) )
 
     # save parts also separately
-
-    # name = self.__class__.__name__ + '_embed_token_info'
-    # torch.save( self.embed_token_info.state_dict(),
-    #             utils.get_model_filename( name, self.cf.wandb_id, epoch) )
     name = self.__class__.__name__ + '_embeds_token_info'
     torch.save( self.embeds_token_info.state_dict(),
-                utils.get_model_filename( name, self.cf.wandb_id, epoch) )
+                utils.get_model_filename(user_config, name, self.cf.wandb_id, epoch) )
 
     for ifield, enc in enumerate(self.encoders) :
       name = self.__class__.__name__ + '_encoder_' + self.cf.fields[ifield][0]
-      torch.save( enc.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
+      torch.save( enc.state_dict(), utils.get_model_filename(user_config, name, self.cf.wandb_id, epoch) )
 
     for ifield, dec in enumerate(self.decoders) :
       name = self.__class__.__name__ + '_decoder_' + self.cf.fields_prediction[ifield][0]
-      torch.save( dec.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
+      torch.save( dec.state_dict(), utils.get_model_filename(user_config, name, self.cf.wandb_id, epoch) )
 
     for ifield, tail in enumerate(self.tails) :
       name = self.__class__.__name__ + '_tail_' + self.cf.fields_prediction[ifield][0]
-      torch.save( tail.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
+      torch.save( tail.state_dict(), utils.get_model_filename(user_config, name, self.cf.wandb_id, epoch) )
 
   ###################################################
   def forward( self, xin) :
