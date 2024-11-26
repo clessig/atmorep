@@ -42,7 +42,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
-from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize
+from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize, unique_unsorted
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention, write_data_compression
 from atmorep.datasets.normalizer import denormalize
 
@@ -152,6 +152,7 @@ class Trainer_Base() :
                                                               optimizer_class=torch.optim.AdamW,
                                                               lr=cf.lr_start )
     else :
+      self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
                                           weight_decay=cf.weight_decay)
     
@@ -225,7 +226,7 @@ class Trainer_Base() :
       print( '{} : {} :: batch_size = {}, lr = {}'.format( epoch, tstr, cf.batch_size, lr) )
 
       self.train( epoch)
-      
+
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
       '''
@@ -552,12 +553,14 @@ class Trainer_Base() :
         losses['kernel_crps'].append( kcrps_loss)
     
     #TODO: uncomment it and add it when running in debug mode
+    # field_losses = ""
     # for ifield, field in enumerate(cf.fields):
     #   ifield_loss = 0
     #   for key in losses :  
     #     ifield_loss += losses[key][ifield].to(self.device_out)
     #   ifield_loss /= len(losses.keys())
-    #   print("LOSS :", field[0], ifield_loss, flush = True)
+    #   field_losses +=  f"{field[0]}: {ifield_loss}; "
+    # print(field_losses, flush = True)
           
     loss = torch.tensor( 0., device=self.device_out)
     tot_weight = torch.tensor( 0., device=self.device_out)
@@ -847,8 +850,8 @@ class Trainer_BERT( Trainer_Base) :
           
             idx_loc = idx - np.prod(num_tokens) * bidx
             #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
-            lats_mskd = np.array([np.unique(t) for t in grid_lats_toked[ idx_loc ].numpy()])
-            lons_mskd = np.array([np.unique(t) for t in grid_lons_toked[ idx_loc ].numpy()])
+            lats_mskd = np.array([unique_unsorted(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lons_mskd = np.array([unique_unsorted(t) for t in grid_lons_toked[ idx_loc ].numpy()])
 
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]

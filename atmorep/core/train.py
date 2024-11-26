@@ -22,6 +22,7 @@ import pdb
 import wandb
 import numpy as np
 
+import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.utils.utils import Config
 from atmorep.utils.utils import setup_ddp
@@ -34,13 +35,13 @@ from atmorep.utils.utils import init_torch
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
-  num_accs_per_task =  int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  devices = init_torch()
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
   cf = Config().load_json( wandb_id)
 
+  cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.with_ddp = with_ddp
   cf.par_rank = par_rank
   cf.par_size = par_size
@@ -99,15 +100,14 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
     epoch_continue = epoch
 
   # run
-  trainer = Trainer.load( cf, wandb_id, epoch, device)
+  trainer = Trainer.load( cf, wandb_id, epoch, devices)
   print( 'Loaded run \'{}\' at epoch {}.'.format( wandb_id, epoch))
   trainer.run( epoch_continue)
 
 ####################################################################################################
 def train() :
 
-  num_accs_per_task = 1 #int( 4 / int( os.environ.get('SLURM_TASKS_PER_NODE', '1')[0] ))
-  device = init_torch( num_accs_per_task)
+  devices = init_torch()
   with_ddp = True
   par_rank, par_size = setup_ddp( with_ddp)
 
@@ -117,7 +117,7 @@ def train() :
   cf = Config()
   # parallelization
   cf.with_ddp = with_ddp
-  cf.num_accs_per_task = num_accs_per_task   # number of GPUs / accelerators per task
+  cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.par_rank = par_rank
   cf.par_size = par_size
   
@@ -130,39 +130,33 @@ def train() :
   #   [ total masking rate, rate masking, rate noising, rate for multi-res distortion]
   # ]
 
-  cf.fields = [ [ 'temperature', [ 1, 512, [ ], 0 ], 
-                               [ 96, 105, 114, 123, 137 ], 
-                               [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ] ]
+  # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
+  #                              [ 96, 105, 114, 123, 137 ], 
+  #                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ] ]
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+ 
+  cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
+                                [ 96, 105, 114, 123, 137 ], 
+                                 [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
+
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
-  # cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
-
-  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
-  # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
-  #                               [ 96, 105, 114, 123, 137 ], 
-  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
-
-  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
-
+  
   # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
   #                               [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
 
-  # cf.fields = [ [ 'velocity_z', [ 1, 512, [ ], 0 ], 
+  # cf.fields = [ [ 'velocity_z', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05] ] ]
+  #                               [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
 
   # cf.fields = [ [ 'specific_humidity', [ 1, 1024, [ ], 0 ], 
   #                               [ 96, 105, 114, 123, 137 ], 
-  #                               [12, 6, 12], [3, 9, 9], [0.25, 0.9, 0.1, 0.05], 'local' ] ]
-  #                             [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.1, 0.05], 'local' ] ]
-
+  #                               [12, 3, 6], [3, 18, 18], [0.25, 0.9, 0.1, 0.05] ] ]
+  
   cf.fields_targets = []
 
-  cf.years_train = list( range( 2010, 2021))
+  cf.years_train = list( range( 1979, 2021))
   cf.years_val = [2021]  #[2018] 
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
@@ -175,7 +169,7 @@ def train() :
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 6
   
   # additional infos
   cf.size_token_info = 8
@@ -205,7 +199,7 @@ def train() :
   cf.net_tail_num_nets = 16
   cf.net_tail_num_layers = 0
   # loss
-  cf.losses = ['crps'] #['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
+  cf.losses = ['mse_ensemble', 'stats'] # mse, mse_ensemble, stats, crps, weighted_mse
   # training
   cf.optimizer_zero = False
   cf.lr_start = 5. * 10e-7
@@ -261,7 +255,7 @@ def train() :
     cf.write_json( wandb)
     cf.print()
 
-  trainer = Trainer_BERT( cf, device).create()
+  trainer = Trainer_BERT( cf, devices).create()
   trainer.run()
 
 ####################################################################################################

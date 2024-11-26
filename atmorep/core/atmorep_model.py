@@ -21,7 +21,7 @@ import os
 # code.interact(local=locals())
 
 # import horovod.torch as hvd
-
+import atmorep.config.config as config
 import atmorep.utils.utils as utils
 from atmorep.utils.utils import identity
 from atmorep.utils.utils import NetMode
@@ -187,7 +187,7 @@ class AtmoRepData( torch.nn.Module) :
     loader_params = { 'batch_size': None, 'batch_sampler': None, 'shuffle': False, 
                       'num_workers': cf.num_loader_workers, 'pin_memory': True}
 
-    self.dataset_train = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_train,
+    self.dataset_train = MultifieldDataSampler( config.path_data, cf.fields, cf.years_train,
                                                 cf.batch_size,
                                                 pre_batch, cf.n_size, cf.num_samples_per_epoch,
                                                 with_shuffle = (cf.BERT_strategy not in ['global_forecast', 'data_compression']), 
@@ -196,7 +196,7 @@ class AtmoRepData( torch.nn.Module) :
     self.data_loader_train = torch.utils.data.DataLoader( self.dataset_train, **loader_params,
                                                           sampler = None)
 
-    self.dataset_test = MultifieldDataSampler( cf.file_path, cf.fields, cf.years_val,
+    self.dataset_test = MultifieldDataSampler( config.path_data, cf.fields, cf.years_val,
                                                cf.batch_size_validation,
                                                pre_batch, cf.n_size, cf.num_samples_validate,
                                                with_shuffle = (cf.BERT_strategy not in ['global_forecast', 'data_compression']), 
