@@ -53,8 +53,8 @@ class FieldConfig:
         mask_rate (float): Local masking rate.
         noise_rate (float): Noising rate.
         dist_rate (float): Multi-resolution distortion rate.
+        use_local_normalization (bool): normalization to use: local or global.
     """
-
 
     name: str # fields[x][0]
     """ Name of the variable used in the zarr """
@@ -98,6 +98,9 @@ class FieldConfig:
     dist_rate: float # fields[x][5][3]
     """ Multi-resolution distortion rate """
 
+    use_local_normalization: bool  # (true if fields[x][6] is present)
+    """ normalization to use: local or global. """
+
     def make_predictable(self, weight: float = 1) -> PredictionFieldConfig:
         """ Make PredictionFieldConfig for this field
         """
@@ -124,7 +127,13 @@ class FieldConfig:
         mask_rate = field[5][1]
         noise_rate = field[5][2]
         dist_rate = field[5][3]
-        
+
+        try:
+            field[6]
+            use_local_normalization = True
+        except:
+            use_local_normalization = False
+
         return cls(
             name,
             dynamic,
@@ -139,9 +148,10 @@ class FieldConfig:
             total_mask_rate,
             mask_rate,
             noise_rate,
-            dist_rate
+            dist_rate,
+            use_local_normalization
         )
-    
+
     def as_list(self) -> list[Any]:
         """ serialize into model config format. """
         if self.singleformer_epoch is None and self.singleformer_id is None:
@@ -157,6 +167,10 @@ class FieldConfig:
             list(self.token_size),
             [self.total_mask_rate, self.mask_rate, self.noise_rate, self.dist_rate],
         ]
+        
+        if self.use_local_normalization:
+            field_list.append("local")
+
         return field_list
 
 
