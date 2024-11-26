@@ -153,8 +153,8 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
         self.idx_perm_era5_t = rng.permutation( 
             self.valid_time_indices[self.n_size[0]:])[: self.num_samples // self.batch_size]
 
-        self.idx_perm_imerg_t = np.arange(self.range_time[1]-self.range_time[0])[self.idx_perm_era5_t]
-
+        self.idx_perm_imerg_t = self.idx_perm_era5_t - self.range_time[0]
+        
         era5_lats = np.arange(self.range_lat[0],self.range_lat[1]-self.n_size[1])
         
         if self.range_lon[1] > self.range_lon[0]:
