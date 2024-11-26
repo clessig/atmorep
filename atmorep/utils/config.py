@@ -42,6 +42,7 @@ class FieldConfig:
         name (str): Name of the variable used in the Zarr dataset.
         dynamic (bool): Indicates whether the field is dynamic. If `False`, the field is static.
         embed_dim (int): Embedding dimension.
+        cross_attention (list[str]): Fields used for cross attention feedback.
         dev_id (int): CUDA device ID within the process.
         vertical_levels (list[int]): Vertical levels to be used. These must match the Zarr file convention.
         num_tokens (list[int]): Number of tokens for each dimension, in the order [time, lon, lat].
@@ -62,7 +63,10 @@ class FieldConfig:
     embed_dim: int # field[x][1][1]
     """ Embedding dimension """
 
-    dev_id: int # field[x][1][2]
+    cross_attention: list[str] # field[x][1][2]
+    """ Fields used for cross attention feedback. """
+
+    dev_id: int # field[x][1][3]
     """ CUDA device ID within the process """
     
     vertical_levels: list[int] # fields[x][2]
@@ -97,7 +101,8 @@ class FieldConfig:
         name = field[0]
         dynamic = field[1][0]
         embed_dim = field[1][1]
-        dev_id = field[1][2]
+        cross_attention = field[1][2]
+        dev_id = field[1][3]
         vertical_lvls = field[2]
         num_tokens = TimeLatLon(*field[3])
         token_size = TimeLatLon(*field[4])
@@ -110,6 +115,7 @@ class FieldConfig:
             name,
             dynamic,
             embed_dim,
+            cross_attention,
             dev_id,
             vertical_lvls,
             num_tokens,
@@ -124,7 +130,7 @@ class FieldConfig:
         """ serialize into model config format. """
         return [
             self.name,
-            [self.dynamic, self.embed_dim, self.dev_id],
+            [self.dynamic, self.embed_dim, self.cross_attention, self.dev_id],
             self.vertical_levels,
             list(self.num_tokens),
             list(self.token_size),
