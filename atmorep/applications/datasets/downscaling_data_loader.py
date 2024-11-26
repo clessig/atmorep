@@ -280,13 +280,10 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                                    idx_lat_era5[0]:idx_lat_era5[1] ,
                                    list(np.arange(idx_lon_era5[0],idx_lon_era5[1])) if lon_list is None else lon_list]
                         
-                        # removed normalize and tokenize for test purpose
-                        #cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
+                        cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
                         
-                        #source_data = tokenize( torch.from_numpy( cdata), tok_size)
+                        source_data = tokenize( torch.from_numpy( cdata), tok_size)
                         
-                        source_data = cdata #need to remove this line once the test is done
-
                         dates = self.era5_ds['time'][ idxs_t_era5[0]:idxs_t_era5[1]].astype(datetime)
                         cdates = dates[tok_size[0]-1::tok_size[0]]
 
@@ -308,7 +305,6 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                     token_infos[ifield] += [ torch.stack(tok_info_lvl, 0)]
                 
                 for ifield, field_info in enumerate(self.target_fields):
-                    #target_lvl, target_tok_info_lvl = [], []
                     target_lvl = []
                     target_tok_size = field_info[4]
                     target_num_tokens = field_info[3]
@@ -335,27 +331,20 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                                    idx_lat_era5[0]:idx_lat_era5[1] ,
                                    idx_lon_era5[0]:idx_lon_era5[1]]
 
-                        #uncomment these lines after testing
-                        #cdata_imerg = normalize(cdata_imerg, normalizer, target_infos[-1][0], year_base = self.year_base)
+                        cdata_imerg = normalize(cdata_imerg, normalizer, target_infos[-1][0], year_base = self.year_base)
                         
-                        #target_data = tokenize( torch.from_numpy( cdata_imerg), target_tok_size)
-
-                        target_data = cdata_imerg #remove this line once testing is done
-
-                        ##need to fill based on how the positional encoding needs to be done for output_latent_arrays
+                        target_data = tokenize( torch.from_numpy( cdata_imerg), target_tok_size)
+                        
                         target_lvl += [ target_data ]
-                        #target_tok_info_lvl += [np.array([0])]
-
+                        
                     targets[ifield] += [torch.stack(target_lvl, 0)]
-                    #target_token_infos[ifield] += [ torch.stack(target_tok_info_lvl, 0)]
-
+            
             sources = [torch.stack(sources_field) for sources_field in sources]
             token_infos = [torch.stack(tis_field) for tis_field in token_infos]
 
             targets = [torch.stack(targets_field) for targets_field in targets]
-            #target_token_infos = [torch.stack(target_tis_field).transpose(1,0) for target_tis_field in target_token_infos]
             
-            yield ((sources, token_infos), (source_idxs, sources_infos), targets)          # (targets, target_token_infos))
+            yield ((sources, token_infos), (source_idxs, sources_infos), targets, (target_idxs,target_infos)) 
   
     def __len__(self):
         return self.num_samples // self.batch_size
