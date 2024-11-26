@@ -137,8 +137,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                     logical_array = np.logical_or(logical_array,
                          np.where(years_input_file == str(year), True, False))
         
-            self.valid_time_indices = np.where(logical_array)[0]
-
+            self.valid_time_indices = np.arange(self.range_time[0],self.range_time[1])[logical_array]
             self.num_samples = min( self.num_samples, self.valid_time_indices.shape[0] - n_size[0])
             
 
