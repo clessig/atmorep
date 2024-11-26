@@ -301,6 +301,7 @@ class RunConfig:
         torch_rng_seed (int): Seed for PyTorch's internal random number generator.
         log_frequency (int): Number of batches between saving checkpoints.
         grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
+        optimizer_zero (bool): If true, use ZeroRedundancyOptimizer.
     """
     wandb_id: str
     """ Run ID assigned by the wandb """
@@ -350,6 +351,9 @@ class RunConfig:
     grad_checkpointing: bool
     """ If true, checkpointing is used in training """
 
+    optimizer_zero: bool
+    """ If true, use ZeroRedundancyOptimizer. """
+
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
         """ Deserialize from model config format. """
@@ -370,7 +374,8 @@ class RunConfig:
             config_dict["with_wandb"],
             config_dict["torch_seed"],
             config_dict["model_log_frequency"],
-            config_dict["grad_checkpointing"]
+            config_dict["grad_checkpointing"],
+            config_dict["optimizer_zero"]
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -392,7 +397,8 @@ class RunConfig:
             "with_wandb": self.with_wandb,
             "torch_seed": self.torch_rng_seed,
             "model_log_frequency": self.log_frequency,
-            "grad_checkpointing": self.grad_checkpointing
+            "grad_checkpointing": self.grad_checkpointing,
+            "optimizer_zero": self.optimizer_zero
         }
 
 @dc.dataclass
