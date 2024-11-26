@@ -44,6 +44,8 @@ class FieldConfig:
         embed_dim (int): Embedding dimension.
         cross_attention (list[str]): Fields used for cross attention feedback.
         dev_id (int): CUDA device ID within the process.
+        singleformer_id (str | None): ModelId for the singleformer (Optional).
+        singleformer_epoc (str | None): Singleformer epoch to continue multiformer finetuning with (Optional).
         vertical_levels (list[int]): Vertical levels to be used. These must match the Zarr file convention.
         num_tokens (list[int]): Number of tokens for each dimension, in the order [time, lon, lat].
         token_size (list[int]): Size of the tokens for each dimension, in the order [time, lon, lat].
@@ -68,7 +70,13 @@ class FieldConfig:
 
     dev_id: int # field[x][1][3]
     """ CUDA device ID within the process """
-    
+
+    singleformer_id: str | None # field[x][1][3][0]
+    """ ModelId for the singleformer. """
+
+    singleformer_epoch: str | None # field[x][1][3][1]
+    """ Singleformer epoch to continue multiformer finetuning with. """
+
     vertical_levels: list[int] # fields[x][2]
     """ Vertical levels that are to be used. They have to match zarr file convention """
 
@@ -103,6 +111,12 @@ class FieldConfig:
         embed_dim = field[1][1]
         cross_attention = field[1][2]
         dev_id = field[1][3]
+        try:
+            singleformer_id = field[1][4][0]
+            singleformer_epoch = field[1][4][1]
+        except IndexError:
+            singleformer_id = None
+            singleformer_epoch = None
         vertical_lvls = field[2]
         num_tokens = TimeLatLon(*field[3])
         token_size = TimeLatLon(*field[4])
@@ -117,6 +131,8 @@ class FieldConfig:
             embed_dim,
             cross_attention,
             dev_id,
+            singleformer_id,
+            singleformer_epoch,
             vertical_lvls,
             num_tokens,
             token_size,
@@ -128,14 +144,20 @@ class FieldConfig:
     
     def as_list(self) -> list[Any]:
         """ serialize into model config format. """
-        return [
+        if self.singleformer_epoch is None and self.singleformer_id is None:
+            field_0 = [self.dynamic, self.embed_dim, self.cross_attention, self.dev_id]
+        else:
+            field_0 = [self.dynamic, self.embed_dim, self.cross_attention, self.dev_id, [self.singleformer_id, self.singleformer_epoch]]
+
+        field_list = [
             self.name,
-            [self.dynamic, self.embed_dim, self.cross_attention, self.dev_id],
+            field_0,
             self.vertical_levels,
             list(self.num_tokens),
             list(self.token_size),
-            [self.total_mask_rate, self.mask_rate, self.noise_rate, self.dist_rate]
+            [self.total_mask_rate, self.mask_rate, self.noise_rate, self.dist_rate],
         ]
+        return field_list
 
 
 @dc.dataclass
