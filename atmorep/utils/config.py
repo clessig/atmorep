@@ -1,7 +1,7 @@
 import dataclasses as dc
 import pathlib as pl
 import json
-from typing import Iterable, Any, Self, Optional
+from typing import Any, Self, Optional
 from collections import namedtuple
 
 TimeLatLon = namedtuple("TimeLatLon", ["time", "lat", "lon"])
@@ -43,9 +43,9 @@ class FieldConfig:
         dynamic (bool): Indicates whether the field is dynamic. If `False`, the field is static.
         embed_dim (int): Embedding dimension.
         dev_id (int): CUDA device ID within the process.
-        vertical_levels (Iterable[int]): Vertical levels to be used. These must match the Zarr file convention.
-        num_tokens (Iterable[int]): Number of tokens for each dimension, in the order [time, lon, lat].
-        token_size (Iterable[int]): Size of the tokens for each dimension, in the order [time, lon, lat].
+        vertical_levels (list[int]): Vertical levels to be used. These must match the Zarr file convention.
+        num_tokens (list[int]): Number of tokens for each dimension, in the order [time, lon, lat].
+        token_size (list[int]): Size of the tokens for each dimension, in the order [time, lon, lat].
         total_mask_rate (float): Total masking rate.
         mask_rate (float): Local masking rate.
         noise_rate (float): Noising rate.
@@ -65,7 +65,7 @@ class FieldConfig:
     dev_id: int # field[x][1][2]
     """ CUDA device ID within the process """
     
-    vertical_levels: Iterable[int] # fields[x][2]
+    vertical_levels: list[int] # fields[x][2]
     """ Vertical levels that are to be used. They have to match zarr file convention """
 
     num_tokens: TimeLatLon # fields[x][3]
@@ -401,11 +401,11 @@ class TrainingConfig:
     Configuration class for training parameters.
 
     Attributes:
-        fields (Iterable[FieldConfig]): List of configuration objects for each field.
-        fields_prediction (Iterable[PredictionFieldConfig]): Configuration object for predicted fields.
-        field_targets (Iterable[PredictionFieldConfig]): Configuration object for fields to be targeted in downscaling applications.
-        years_training (Iterable[int]): List of years to be used for training.
-        years_validation (Iterable[int]): List of years to be used for validation.
+        fields (list[FieldConfig]): List of configuration objects for each field.
+        fields_prediction (list[PredictionFieldConfig]): Configuration object for predicted fields.
+        field_targets (list[PredictionFieldConfig]): Configuration object for fields to be targeted in downscaling applications.
+        years_training (list[int]): List of years to be used for training.
+        years_validation (list[int]): List of years to be used for validation.
         sampling_range_lat (GeoRange): Range of sampling for latitude.
         sampling_range_lon (GeoRange): Range of sampling for longitude.
         sampling_time_rate (int): Sampling rate for timesteps.
@@ -415,7 +415,7 @@ class TrainingConfig:
         samples_per_epoch (int): Number of samples per epoch.
         samples_validation (int): Number of samples for validation.
         num_workers (int): Number of workers to be used by data loaders.
-        losses (Iterable[str]): List of loss functions to be used. Available options: 'mse', 'mse_ensemble', 'stats', 'crps', 'weighted_mse'.
+        losses (list[str]): List of loss functions to be used. Available options: 'mse', 'mse_ensemble', 'stats', 'crps', 'weighted_mse'.
         lr_start (float): Initial learning rate for computing learning rates.
         lr_max (float): Maximum learning rate for computing learning rates.
         lr_min (float): Minimum learning rate for computing learning rates.
@@ -428,19 +428,19 @@ class TrainingConfig:
         maximum_res_reduction (int): Maximum reduction for the resolution.
     """
 
-    fields: Iterable[FieldConfig]
+    fields: list[FieldConfig]
     """ List of configuration objects for each field """
 
-    fields_prediction: Iterable[PredictionFieldConfig]
+    fields_prediction: list[PredictionFieldConfig]
     """ Configuration object for predicted fields """
 
-    field_targets: Iterable[PredictionFieldConfig]
+    field_targets: list[PredictionFieldConfig]
     """ Configuration object for fields that are to be target in downscaling application"""
 
-    years_training: Iterable[int]
+    years_training: list[int]
     """ List of years to be used for training """
 
-    years_validation: Iterable[int]
+    years_validation: list[int]
     """ List of years to be used for validation """
 
     sampling_range_lat: GeoRange
@@ -470,7 +470,7 @@ class TrainingConfig:
     num_workers: int
     """ Number of workers for to be used by dataloaders """
 
-    losses: Iterable[str]
+    losses: list[str]
     """ List of loss functions to be used. Available are: mse, mse_ensemble, stats, crps, weighted_mse """
 
     lr_start: float
