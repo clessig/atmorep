@@ -34,9 +34,21 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
                 num_samples, with_shuffle = False, time_sampling = 1, with_source_idxs = False, compute_weights = False, 
                 fields_targets = None, pre_batch_targets = None ) :
     '''
-      Data set for single dynamic field at an arbitrary number of vertical levels
+      Iterable torch dataset for dynamic fields at an arbitrary number of vertical levels
 
-      nsize : neighborhood in (tsteps, deg_lat, deg_lon)
+      :param file_path : path to zarr store
+      :param fields : list of fields with configurations that should be sampled
+      :param years : list of years to sample from
+      :param batch_size : number of samples per batch
+      :param pre_batch : function to prepare batch (from training/bert.py)
+      :param n_size : neighborhood size in (tsteps, deg_lat, deg_lon)
+      :param num_samples : total number of samples to generate (samples per epoch)
+      :param with_shuffle : flag to shuffle data
+      :param time_sampling : time sampling step length (default: 1)
+      :param with_source_idxs : flag to include source indices in output
+      :param compute_weights : flag to compute weights depending on latitude for each token
+      :param fields_targets : list of fields with configurations that should be sampled for targets
+      :param pre_batch_targets : function to prepare batch for targets (from training/bert.py)
     '''
     super( MultifieldDataSampler).__init__()
 
@@ -49,12 +61,15 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     self.with_shuffle = with_shuffle
     self.pre_batch = pre_batch
     
-    assert os.path.exists(file_path), f"File path {file_path} does not exist"
+    # open zarr data store
+    if not os.path.exists(file_path):
+      raise FileNotFoundError(f"File path {file_path} does not exist")
     self.ds = zarr.open( file_path)
    
     self.dask_array_data = da.from_zarr(self.ds['data'])
     self.dask_array_sfc  = da.from_zarr(self.ds['data_sfc'])
 
+    # get coordinate information
     self.ds_global = self.ds.attrs['is_global']
 
     self.lats = np.array( self.ds['lats'])
@@ -102,7 +117,10 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     idxs_years = self.times.year == years[0]
     for year in years[1:] :
       idxs_years = np.logical_or( idxs_years, self.times.year == year)
-    self.idxs_years = np.where( idxs_years)[0]
+    
+    # ensure that the first n_size[0] samples are not used to avoid combination of
+    # negative and positive time indices (resulting in incoherent data slices over time)
+    self.idxs_years = np.where( idxs_years)[0][self.n_size[0]::]
 
     self.num_samples = min( self.num_samples, self.idxs_years.shape[0])
 
