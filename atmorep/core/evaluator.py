@@ -238,7 +238,8 @@ class Evaluator( Trainer_BERT) :
       cf.write_json( wandb)
     evaluator.evaluate( 0)
   ##############################################
-  ########################################### Asma date = 25.09.2024 ########################################################
+
+  ########################################### Asma date = 19.11.2024 ########################################################
   @staticmethod
   def data_compression( cf, model_id, model_epoch, devices, args = {}) :
     '''
@@ -249,34 +250,38 @@ class Evaluator( Trainer_BERT) :
     cf.batch_size_test = 24
     cf.num_loader_workers = 12 #1
     cf.log_test_num_ranks = 1
+    cf.years_val = [2021]
 
     #TODO: temporary solution. Add support for batch_size > 1 
     cf.batch_size_validation = 1 #64
     cf.batch_size = 1
-    
     if not hasattr(cf, 'num_samples_validate'):
       cf.num_samples_validate = 196 
+    
     #if not hasattr(cf,'with_mixed_precision'):
     cf.with_mixed_precision = True
 
     Evaluator.parse_args( cf, args)
 
-    match cf.experiment_type:
-      case 'unmask_first':
-        cf.forecast_num_tokens = 11
-      case 'unmask_last':
-        cf.forecast_num_tokens = 11
-      case 'unmask_middle':
-        cf.forecast_num_tokens = 11
-      case 'unmask_first_last':
-        cf.forecast_num_tokens = 10
-      case 'unmask_first_last_middle':
-        cf.forecast_num_tokens = 9
-      case 'unmask_checker':
-        cf.forecast_num_tokens = 6
-      case _ :
-        # stands for masking the whole level
-        cf.forecast_num_tokens = 12
+    if not hasattr(cf, 'experiment_type'):
+      cf.experiment_type = ""
+
+    if cf.experiment_type != "unmask_checker" and cf.experiment_type !=  "unmask_checker_combined":
+      # to be improved
+      match cf.experiment_type:
+        case 'unmask_first':
+          cf.forecast_num_tokens = 11
+        case 'unmask_last':
+          cf.forecast_num_tokens = 11
+        case 'unmask_middle':
+          cf.forecast_num_tokens = 11
+        case 'unmask_first_last':
+          cf.forecast_num_tokens = 10
+        case 'unmask_first_last_middle':
+          cf.forecast_num_tokens = 9
+        case _ :
+          # stands for masking the whole level
+          cf.forecast_num_tokens = 12
 
     dates = args['dates']
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
@@ -285,4 +290,4 @@ class Evaluator( Trainer_BERT) :
       cf.print()
       cf.write_json( wandb)
     evaluator.validate( 0, cf.BERT_strategy)
-  ########################################### End of Asma changes ########################################################
+  # ########################################### End of Asma changes ########################################################
