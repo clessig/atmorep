@@ -30,6 +30,8 @@ from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 # from atmorep.utils.utils import generate_dates #Asma
 # from atmorep.utils.utils import NetMode # Asma
+import argparse # Asma parallel runs
+import ast # Asma parallel runs
 
 
 ####################################################################################################
@@ -71,22 +73,15 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   cf.model_log_frequency = 256 # Asma: had to add it from train
   '''
   # '''
-  ####################################### Asma on sep 27, 2024 ##############################################
+  ####################################### Asma on Nov 27, 2024 ##############################################
   cf.BERT_strategy = 'data_compression'
-  cf.experiment_type = ''
-  cf.forecast_num_tokens = 9
+  cf.experiment_type = 'unmask_checker_combined'
   cf.token_overlap = [0, 0]
-  cf.to_mask = [105, 123]
+  cf.to_mask = [96, 105, 114, 123, 137]
   cf.model_log_frequency = 256 # Asma: had to add it from train
-  ##### adjustments to model_id = '3qou60es
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
-  cf.batch_size_validation = 1
-  cf.batch_size = 96
-  cf.years_val = [2021]
-  cf.years_train = [1979, 1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 
-                    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]
-  cf.years_test = [2021]
-  ####################################### end of Asma on sep 27, 2024 #######################################
+  cf.test_initial = True
+  cf.batch_size = 24
+  ####################################### end of Asma on Nov 27, 2024 #######################################
   # '''
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
@@ -265,9 +260,17 @@ if __name__ == '__main__':
 
     # train() # 
 
-    #  wandb_id, epoch, epoch_continue = 'pcr15i15', 331, 331 # round 1 of fine-tuning - whole level masked
-    # wandb_id, epoch, epoch_continue = 'ol7ogj17', 395, 395 # round 2 of fine-tuning - whole level masked
-    wandb_id, epoch, epoch_continue = 'q45c5bvm', 471, 471  # round 3 of fine-tuning - whole level masked
+    # wandb_id, epoch, epoch_continue = '7ojls62c', 189, 189 # round 1 of fine-tuning - checker comb
+    parser = argparse.ArgumentParser(description="Training script")
+    parser.add_argument("--wandb_id", required=True, type=str, help="First parameter")
+    parser.add_argument("--epoch", required=True, type=str, help="Second parameter")
+
+    args = parser.parse_args()
+
+    wandb_id = args.wandb_id
+    epoch = ast.literal_eval(args.epoch)
+    epoch_continue = epoch
+    
     Trainer = Trainer_BERT
     train_continue( wandb_id, epoch, Trainer, epoch_continue)
 
