@@ -229,18 +229,23 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
  
   return (source, token_info, target, tokens_masked_idx_list)
 
-########################################### Asma date = 25.09.2024 ########################################################
+ ########################################### Asma date = 19.11.2024 ########################################################
 def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, rng) :
-  nt = cf.forecast_num_tokens # new, Asma
-  num_tokens = source.shape[-6:-3] # new, Asma
-  num_tokens_space = num_tokens[1] * num_tokens[2]  # new, Asma
+  
   idxs = torch.empty(0, dtype=torch.int64) # new, Asma
   
-  # vlevel = np.unique(token_info[0,:,6]).astype(int).item() # old way of retrieving vlevel
   vlevel = int(token_info[0,0,0,6]) # new, develop appropriate, Asma
   target = torch.empty(0, dtype=torch.float32) # new, Asma
-  tokens_masked_idx = [torch.empty(0, dtype=torch.int64)] # Asma changed develop # new, Asma
-  # print(f"vlevel = {vlevel}", flush=True)
+  tokens_masked_idx_list = [torch.empty(0, dtype=torch.int64)] # Asma changed develop # new, Asma
+
+  if cf.experiment_type != "unmask_checker" and cf.experiment_type !=  "unmask_checker_combined":
+    nt = cf.forecast_num_tokens # new, Asma
+    num_tokens = source.shape[-6:-3] # new, Asma
+    num_tokens_space = num_tokens[1] * num_tokens[2]  # new, Asma
+  else:
+    batch_dim = source.shape[0] 
+    num_tokens = source.shape[1]
+
   if vlevel in cf.to_mask: 
     match cf.experiment_type:
       case 'unmask_first':
@@ -257,17 +262,15 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
         idxs_first_half =  num_tokens_space + torch.arange(nt_middle * num_tokens_space) # shift by 1 from the start
         idxs_second_half = torch.arange((nt_middle+2) * num_tokens_space, (nt+2) * num_tokens_space)        
         idxs = torch.cat((idxs_first_half, idxs_second_half), 0)
+      case 'unmask_checker':
+        pattern = torch.cat([ torch.tensor([1,3,4,6]) + i for i in range(0, num_tokens, 8)])
+        idxs = torch.cat([pattern for nms in range(batch_dim)])
+      case 'unmask_checker_combined':
+        pattern = torch.cat([ torch.tensor([1,3,4,6, 8, 9, 10, 11, 12, 13, 14, 15]) + i for i in range(0, num_tokens, 16)])
+        idxs = torch.cat([pattern for nms in range(batch_dim)])
       case _:
         # stands for masking the whole level
         idxs = torch.arange(nt * num_tokens_space)
-      ## Asma: This case is set aside because it is not currently urgent
-      # case 'unmask_checker':
-      #   idxs = [idx 
-      #     for idx_per_section in range((bidx%2)*num_tokens_space,(nt*2) * num_tokens_space +(bidx%2), num_tokens_space*2)
-      #     for idx in range(idx_per_section, (idx_per_section + num_tokens_space))]
-      #   idxs = torch.tensor(idxs)
-      #   print(f"idxs = {idxs}", flush=True)
-      #   print(f"len(idxs) = {len(idxs)}", flush=True)
 
     # collapse token dimensions 
     source_shape0 = source.shape
@@ -275,11 +278,9 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
 
     num_tokens = source.shape[1]
 
-    ########### change proper to develop 
-    tokens_masked_idx = [idxs + num_tokens * i for i in range( source.shape[0] )] 
-    idx = torch.cat(tokens_masked_idx) # new, Asma, should be merged after
-    ########### end of change proper to develop 
-    
+    tokens_masked_idx_list = [idxs + num_tokens * i for i in range( source.shape[0] )] 
+    idx = torch.cat(tokens_masked_idx_list) # new, Asma, should be merged after
+
     # flatten along first two dimension to simplify linear indexing (which then requires an
     # easily computable row offset)
     source_shape = source.shape
@@ -292,6 +293,6 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
     # recover batch dimension which was flattend for easier indexing and also token dimensions
     source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
     
-  return (source, token_info, target, tokens_masked_idx)
-
-  ########################################### End of Asma changes ########################################################
+  return (source, token_info, target, tokens_masked_idx_list)
+  
+########################################### End of Asma changes ########################################################
