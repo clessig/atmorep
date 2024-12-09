@@ -15,7 +15,10 @@
 ####################################################################################################
 
 from atmorep.core.evaluator import Evaluator
+from atmorep.utils.utils import generate_dates
 import time
+import argparse # Asma parallel runs
+import ast # Asma parallel runs
 
 if __name__ == '__main__':
 
@@ -36,7 +39,7 @@ if __name__ == '__main__':
   #model_id='0tlnm5up' #velocity_v
   #model_id='v63l01zu' #specific humidity 
   #model_id='9l1errbo' #velocity_z
-  model_id='7ojls62c' #temperature 1024 
+  # model_id='7ojls62c' #temperature 1024 
   
   # supported modes: test, forecast, fixed_location, temporal_interpolation, global_forecast,
   #                  global_forecast_range
@@ -68,17 +71,31 @@ if __name__ == '__main__':
 #                                       'forecast_num_tokens' : 2,
 #                                       'with_pytest' : True }
 
-  ########################################### Asma date = 25.09.2024 ########################################################
-  start_date = { 'year': 2021, 'month':  1,  'day': 2, 'hour': 12} # because data_loader loads previous 36hrs
-  end_date = {'year': 2021,'month':  1, 'day': 31,'hour': 00}
-  # model_id = 'yxhfkh7r'     # new temperature model
-  model_id = '3qou60es'     # old temperature model
+  # ####################################### Asma ########################
+  # Create argument parser
+  parser = argparse.ArgumentParser(description="Evaluator script")
+
+  # Define expected arguments
+  parser.add_argument("--start_date", required=True, type=str, help="First parameter")
+  parser.add_argument("--end_date", required=True, type=str, help="Second parameter")
+  parser.add_argument("--experiment_type", required=True, type=str, help="third parameter")
+  parser.add_argument("--model_id", required=True, type=str, help="fourth parameter")
+
+
+  # Parse arguments
+  args = parser.parse_args()
+
+  # Access the values
+  start_date = ast.literal_eval(args.start_date)
+  end_date = ast.literal_eval(args.end_date)
+  experiment_type = args.experiment_type
+  model_id = args.model_id
   mode, options = 'data_compression', {
                                       # 'dates' : [[2021, 2, 10, 12]] ,
                                       'dates': generate_dates(start_date, end_date),
                                       'token_overlap' : [0, 0],
-                                      'experiment_type': 'unmask_last', # 'unmask_first_last_middle', # 'unmask_first_last', # 'unmask_first', #
-                                      'to_mask': [105, 123],
+                                      'experiment_type': experiment_type, # 'unmask_checker_combined', # 'unmask_first_last_middle', # 'unmask_first_last', # 'unmask_first', #
+                                      'to_mask': [96, 105, 114, 123, 137], # in checker and checker comb, must write all levels
                                       'with_pytest' : True }
   ###########################################################################################################################
   
