@@ -141,7 +141,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
             self.anchor_ilon = self.anchor_ilon%self.era5_num_lons
         else:
             self.anchor_ilon = np.arange(*self.range_ilon)       
-
+        
         # Note: sample time-index is not centered, but placed at the end of the time sequence
         # add n_size[0] to avoid sampling from time steps at whch no IMERG data is available
         self.range_itime = np.array([min(tidx_era5) + self.n_size[0], max(tidx_era5)])
@@ -258,7 +258,9 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
 
                 # get corresponding spatial sampling indices for IMERG dataset
                 ilat_imerg0 = np.where(np.isclose(self.era5_lats[ilat_range_era5[0]] - self.dx_shift[0], self.imerg_lats))[0]
-                ilon_imerg0 = np.where(np.isclose(self.era5_lons[ilon_range_era5[0]] - self.dx_shift[1], self.imerg_lons))[0]
+                ilon_imerg0 = np.where(np.isclose((self.era5_lons[ilon_range_era5[0]] - self.dx_shift[1]
+                                        if self.era5_lons[ilon_range_era5[0]] - self.dx_shift[1] >= 0.0
+                                        else self.era5_lons[ilon_range_era5[0]] - self.dx_shift[1] + 360.0), self.imerg_lons))[0]
 
                 assert len(ilat_imerg0) == 1, f"Could not find required IMERG latitude grid point for first ERA5 grid point at {self.era5_lats[ilat_range_era5[0]]} deg"
                 assert len(ilon_imerg0) == 1, f"Could not find required IMERG longitude grid point for first ERA5 grid point at {self.era5_lons[ilon_range_era5[0]]} deg"
