@@ -141,12 +141,27 @@ class Trainer_Base() :
     model = self.model
 
     learn_rates = self.get_learn_rates()
-    
+
     if cf.with_ddp :
       self.model_ddp = torch.nn.parallel.DistributedDataParallel( model, static_graph=True)
+      ########## Asma freeezing weights ##########
+      for embed in self.model_ddp.module.net.embeds:
+        for param in embed.parameters():
+          param.requires_grad = False
+
+      for encoder in self.model_ddp.module.net.encoders:
+        for param in encoder.parameters():
+          param.requires_grad = False
+      ########## end of Asma freezing ############
       if not cf.optimizer_zero :
-        self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
-                                            weight_decay=cf.weight_decay)
+        ########## related to Asma freeezing weights ##########
+        decoder_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.decoders.parameters())
+        tail_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.tails.parameters())
+        trainable_params = list(decoder_params) + list(tail_params)
+        self.optimizer = torch.optim.AdamW(trainable_params, lr=cf.lr_start, weight_decay=cf.weight_decay)
+        ########## end of related to Asma freezing ############
+        # self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
+        #                                     weight_decay=cf.weight_decay)
       else :
         self.optimizer = ZeroRedundancyOptimizer(self.model_ddp.parameters(),
                                                               optimizer_class=torch.optim.AdamW,
@@ -163,21 +178,19 @@ class Trainer_Base() :
       model_parameters = filter(lambda p: p.requires_grad, self.model_ddp.parameters())
       num_params = sum([np.prod(p.size()) for p in model_parameters])
       print( f'Number of trainable parameters: {num_params:,}')
-    
-    '''
-    # related to Asma's fine-tuning
-    if cf.test_initial :
-      validation_dates = [
-        [2021, 2, 10, 12]
-        # [2021, 1, 10, 12],
-        # [2021, 4, 10, 12], 
-        # [2021, 7, 10, 12], 
-        # [2021, 10, 10, 12]
-      ]
-      self.model.set_global( NetMode.test, np.array( validation_dates)) # Asma
-    '''
-      cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
-      test_loss = np.array( [cur_test_loss])
+      
+      # related to Asma's fine-tuning
+      if cf.test_initial :
+        validation_dates = [
+          [2021, 2, 10, 12]
+          # [2021, 1, 10, 12],
+          # [2021, 4, 10, 12], 
+          # [2021, 7, 10, 12], 
+          # [2021, 10, 10, 12]
+        ]
+        self.model.set_global( NetMode.test, np.array( validation_dates)) # Asma
+        cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
+        test_loss = np.array( [cur_test_loss])
     else :
       # generic value based on data normalization
       test_loss = np.array( [1.0]) 
@@ -188,7 +201,7 @@ class Trainer_Base() :
       for g in self.optimizer.param_groups:
         g['lr'] = lr
       self.profile()
-    '''
+    # '''
     # related to Asma's fine-tuning
     ####################################### Asma on sep 27, 2024 ##############################################
     
@@ -199,25 +212,25 @@ class Trainer_Base() :
     end_date = {'year': 2020,'month':  12, 'day': 31,'hour': 23}
     train_dates = generate_dates(start_date, end_date)
     #################################### end of Asma on sep 27, 2024 ###########################################
-    '''
+    # '''
     # training loop
     while True :
 
       if epoch >= cf.num_epochs :
         break
       
-      '''
+      # '''
       # related to Asma's fine-tuning
       ####################################### Asma on sep 27, 2024 ##############################################
-      This should be turned into a function before pushing the code. For now it is only for testing purposes
-      If it works, I should ask Ilaria where to put this part, architecture-wise
+      # This should be turned into a function before pushing the code. For now it is only for testing purposes
+      # If it works, I should ask Ilaria where to put this part, architecture-wise
       train_dates_rnd1 = np.random.permutation(train_dates)
       train_dates_rnd2 = np.random.permutation(train_dates_rnd1)
 
       train_dates_rnd = train_dates_rnd2[:253]
       self.model.set_global( NetMode.train, np.array( train_dates_rnd)) # Asma
       #################################### end of Asma on sep 27, 2024 ###########################################
-      '''
+      # '''
       lr = learn_rates[epoch]
       for g in self.optimizer.param_groups:
         g['lr'] = lr
@@ -229,7 +242,7 @@ class Trainer_Base() :
 
       if cf.with_wandb and 0 == cf.par_rank :
         self.save( epoch)
-      '''
+      # '''
       # related to Asma's fine-tuning
       validation_dates = [
         [2021, 2, 10, 12]
@@ -239,7 +252,7 @@ class Trainer_Base() :
         # [2021, 10, 10, 12]
       ]
       self.model.set_global( NetMode.test, np.array( validation_dates)) # Asma
-      '''
+      # '''
       cur_test_loss = self.validate( epoch, cf.BERT_strategy).cpu().numpy()
       # self.validate( epoch, 'forecast')
 
@@ -418,6 +431,7 @@ class Trainer_Base() :
     # run test set evaluation
     with torch.no_grad() : 
       for it in range( self.model.len( NetMode.test)) :
+        print(f"it = {it}/{self.model.len( NetMode.test)}", flush=True)
         batch_data = self.model.next()
         if cf.par_rank < cf.log_test_num_ranks :
           # keep on cpu since it will otherwise clog up GPU memory
@@ -673,7 +687,11 @@ class Trainer_BERT( Trainer_Base) :
     if 'forecast' in self.cf.BERT_strategy :
       self.log_validate_forecast( epoch, bidx, log_sources, log_preds)
     elif 'data_compression' in self.cf.BERT_strategy : 
-      self.log_validate_data_compression( epoch, bidx, log_sources, log_preds)
+      # to be improved 
+      if self.cf.experiment_type != "unmask_checker" and self.cf.experiment_type !=  "unmask_checker_combined":
+        self.log_validate_data_compression_global( epoch, bidx, log_sources, log_preds)
+      else:
+        self.log_validate_data_compression_BERT( epoch, bidx, log_sources, log_preds)
     elif 'BERT' in self.cf.BERT_strategy or 'temporal_interpolation' == self.cf.BERT_strategy :
       self.log_validate_BERT( epoch, bidx, log_sources, log_preds)
     else :
@@ -858,7 +876,7 @@ class Trainer_BERT( Trainer_Base) :
             #create range from t_idx-2 to t_idx
             t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx])
             dates_mskd = dates[t_idx]
-            
+
             for ii,(t,p,e,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
                                                     dates_mskd, lats_mskd, lons_mskd)) :
               normalizer_ii = normalizer
@@ -914,7 +932,7 @@ class Trainer_BERT( Trainer_Base) :
                     bidx, levels, attn_out,  coords_b )
   ######################################################
   ######################## Asma ###########################
-  def log_validate_data_compression( self, epoch, batch_idx, log_sources, log_preds) :
+  def log_validate_data_compression_global( self, epoch, batch_idx, log_sources, log_preds) :
     '''Logging for BERT_strategy=data compression.'''
 
     cf = self.cf
@@ -1022,5 +1040,114 @@ class Trainer_BERT( Trainer_Base) :
       case '':
         dates_targets =  dates_sources
     return dates_targets
-    
+
+###################################################
+  def log_validate_data_compression_BERT( self, epoch, batch_idx, log_sources, log_preds) :
+    '''Logging for BERT_strategy=BERT.'''
+
+    cf = self.cf
+    batch_size = len(self.sources_info) 
+
+    # save source: remains identical so just save ones
+    (sources, targets, tokens_masked_idx_list) = log_sources
+
+    sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
+    coords = []
+
+    for fidx, field_info in enumerate(cf.fields) : 
+
+      # reconstruct coordinates
+      is_predicted = fidx in self.fields_prediction_idx
+      num_levels = len(field_info[2])
+      num_tokens = field_info[3]
+      token_size = field_info[4]
+      # Asma: temporarly ommitted
+      # sources_b = detokenize( sources[fidx].numpy())
+     
+      if is_predicted :
+        targets_b   = self.get_masked_data(field_info, targets[fidx], tokens_masked_idx_list[fidx])
+        preds_mu_b  = self.get_masked_data(field_info, log_preds[fidx][0], tokens_masked_idx_list[fidx])
+        # Asma: temporarly ommitted
+        # preds_ens_b = self.get_masked_data(field_info, log_preds[fidx][2], tokens_masked_idx_list[fidx], ensemble = True)
+
+      # for all batch items
+      coords_b = []
+      for bidx in range(batch_size):
+        dates = self.sources_info[bidx][0]
+        lats  = self.sources_info[bidx][1]
+        lons  = self.sources_info[bidx][2]
+
+        lats_idx = self.sources_idxs[bidx][1]
+        lons_idx = self.sources_idxs[bidx][2]
+
+        # target etc are aliasing targets_b which simplifies bookkeeping below
+        if is_predicted :
+          target   = [targets_b[vidx][bidx] for vidx in range(num_levels)]
+          pred_mu  = [preds_mu_b[vidx][bidx] for vidx in range(num_levels)]
+          # Asma: temporarly ommitted
+          # pred_ens = [preds_ens_b[vidx][bidx] for vidx in range(num_levels)]
+
+        coords_mskd_l = []
+        for vidx, _ in enumerate(field_info[2]) :
+
+          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx)
+          # Asma: temporarly ommitted
+          # sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
+
+          if is_predicted :
+            idx = tokens_masked_idx_list[fidx][vidx][bidx]
+            grid = np.flip(np.array( np.meshgrid( lons, lats)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+            grid_idx = np.flip(np.array( np.meshgrid( lons_idx, lats_idx)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
+       
+            # recover time dimension since idx assumes the full space-time cube
+            grid = torch.from_numpy( np.array( np.broadcast_to( grid,
+                                shape = [token_size[0]*num_tokens[0], *grid.shape])).swapaxes(0,1))
+            grid_lats_toked = tokenize( grid[0], token_size).flatten( 0, 2)
+            grid_lons_toked = tokenize( grid[1], token_size).flatten( 0, 2)
+          
+            idx_loc = idx - np.prod(num_tokens) * bidx
+            #save only useful info for each bidx. shape e.g. [n_bidx, lat_token_size*lat_num_tokens]
+            lats_mskd = np.array([unique_unsorted(t) for t in grid_lats_toked[ idx_loc ].numpy()])
+            lons_mskd = np.array([unique_unsorted(t) for t in grid_lons_toked[ idx_loc ].numpy()])
+
+            #time: idx ranges from 0->863 12x6x12 
+            t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
+            #create range from t_idx-2 to t_idx
+            t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx])
+            dates_mskd = dates[t_idx]
+
+            # Asma: temporarly ommitted
+            # for ii,(t,p,e,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
+            #                                         dates_mskd, lats_mskd, lons_mskd)) :
+            for ii,(t,p,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx],
+                                                    dates_mskd, lats_mskd, lons_mskd)) :
+              normalizer_ii = normalizer
+              if len(normalizer.shape) > 2: #local normalization                                     
+                lats_mskd_idx = np.where(np.isin(lats,la))[0]
+                lons_mskd_idx = np.where(np.isin(lons,lo))[0]
+                #normalizer_ii = normalizer[:, :, lats_mskd_idx, lons_mskd_idx] problems in python 3.9
+                normalizer_ii = normalizer[:, :, lats_mskd_idx[0]:lats_mskd_idx[-1]+1, lons_mskd_idx[0]:lons_mskd_idx[-1]+1]
+             
+              targets_b[vidx][bidx][ii]   = denormalize(t, normalizer_ii, da, year_base)  
+              preds_mu_b[vidx][bidx][ii]  = denormalize(p, normalizer_ii, da, year_base) 
+              # Asma: temporarly ommitted
+              # preds_ens_b[vidx][bidx][ii] = denormalize(e, normalizer_ii, da, year_base)
+            
+            coords_mskd_l += [[dates_mskd, 90.-lats_mskd, lons_mskd] ]
+       
+        coords_b += [ [dates, 90. - lats, lons] + coords_mskd_l ]
+      
+      coords += [ coords_b ]
+      fn = field_info[0]
+      # sources_out.append( [fn, sources_b])
+
+      targets_out.append([fn, [[t.numpy(force=True) for t in t_v] for t_v in targets_b]] if is_predicted else [fn, []])
+      preds_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_mu_b]] if is_predicted else [fn, []] )
+      # ensembles_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_ens_b]] if is_predicted else [fn, []] )
+
+    levels = [[np.array(l) for l in field[2]] for field in cf.fields]
+    write_BERT( cf.wandb_id, epoch, batch_idx, 
+                levels, sources_out, targets_out,
+                preds_out, _, coords )
+
   ######################## end of Asma adding stuff ###########################
