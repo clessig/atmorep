@@ -2,6 +2,13 @@ import atmorep.utils.config as config
 import pathlib as pl
 import json
 import pytest
+import typing
+
+def get_sample_legacy_config() -> dict[str, typing.Any]:
+    with open(SAMPLE_CONFIG, "r") as fp_config:
+        legacy_config_dict = json.load(fp_config)
+    
+    return legacy_config_dict
 
 SAMPLE_CONFIG = pl.Path(__file__).parent / "model_idwc5e2i3t.json"
 
@@ -9,12 +16,9 @@ IGNORE_LEGACY_OPTIONS = ["file_path", "month"]
 
 @pytest.fixture
 def legacy_config_dict():
-    with open(SAMPLE_CONFIG, "r") as fp_config:
-        legacy_config_dict = json.load(fp_config)
-        
-        # remove irrelevant options
-        for key in IGNORE_LEGACY_OPTIONS:
-            del legacy_config_dict[key]
+    legacy_config_dict = get_sample_legacy_config()
+    for key in IGNORE_LEGACY_OPTIONS:
+        del legacy_config_dict[key]
     
     return legacy_config_dict
 
