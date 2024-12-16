@@ -641,21 +641,22 @@ class AtmorepConfig:
     training: TrainingConfig
 
     @classmethod
-    def from_dict(cls, config_dict) -> Self:
+    def from_dict(cls, config_dict, **kwargs) -> Self:
         return cls(
             ModelConfig.from_dict(config_dict),
             RunConfig.from_dict(config_dict),
             TrainingConfig.from_dict(config_dict),
+            **kwargs
         )
 
     @classmethod
-    def from_json(cls, config_file: pl.Path) -> Self:
+    def from_json(cls, config_file: pl.Path, **kwargs) -> Self:
         """ deserialize Config from model.json file. """
 
         with open(config_file, "r") as config:
             config_dict = json.load(config)
         
-        return cls.from_dict(config_dict)
+        return cls.from_dict(config_dict, **kwargs)
 
     def as_dict(self) -> dict[str, Any]:
         return self.model.as_dict() | self.run.as_dict() | self.training.as_dict()
