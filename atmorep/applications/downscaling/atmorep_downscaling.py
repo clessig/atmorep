@@ -111,20 +111,26 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.downscaling_ratio,
                     with_shuffle=True
         )
+
         
         self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params, sampler = None)
         return self
 
-class AtmoRepDownscaling( AtmoRep) :
+class AtmoRepDownscaling( torch.nn.Module) :
 
     def __init__(self, cf) :
         
-        super( AtmoRepDownscaling, self).__init__(cf)
+        super( AtmoRepDownscaling, self).__init__()
+        self.cf = cf
 
     def create( self, devices, load_pretrained=True) :
         
         cf = self.cf
-        self = super(AtmoRepDownscaling, self).create(devices, load_pretrained=load_pretrained)
+        self.backbone = AtmoRep(cf).create(devices, load_pretrained=load_pretrained)
+
+        for idx, _ in enumerate(self.backbone.tails) :
+            self.backbone.tails[idx] = torch.nn.Identity()
+
         self.perceivers = torch.nn.ModuleList()
         self.downscaling_tails = torch.nn.ModuleList()
 
@@ -139,21 +145,17 @@ class AtmoRepDownscaling( AtmoRep) :
                 if field_info[0] in field[1][2]:
                     coupling_indices.append(idx)
             self.fields_downscaling_coupling_idx.append(coupling_indices)
-        
-        
-        logger.info("downscaling",cf.fields_downscaling,len(cf.fields_downscaling))
 
         for field_idx,field_info in enumerate(cf.fields_downscaling):
             device = devices[
-                    self.cf.fields[self.field_pred_idxs[self.fields_downscaling_idx[field_idx]]][1][3]]
+                    self.cf.fields[self.backbone.field_pred_idxs[self.fields_downscaling_idx[field_idx]]][1][3]]
             coupled_dim_embeds = []
             for coupled_fields_indices in self.fields_downscaling_coupling_idx[field_idx]:
-                coupled_dim_embed = self.cf.fields[self.field_pred_idxs[coupled_fields_indices]][1][1]
+                coupled_dim_embed = self.cf.fields[self.backbone.field_pred_idxs[coupled_fields_indices]][1][1]
                 coupled_dim_embeds.append(coupled_dim_embed)
             
-            logger.info("field_idx",field_idx)
             self.perceivers.append(Perceiver(cf, field_info, coupled_dim_embeds).create().to(device))
-            self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_output_emb, np.prod(field_info[4])).create().to(device))
+            self.downscaling_tails.append(TailEnsemble(cf, cf.perceiver_latent_dimension, np.prod(field_info[4])).create().to(device))
 
         return self
 
@@ -189,8 +191,8 @@ class AtmoRepDownscaling( AtmoRep) :
             print( f'Loaded AtmoRep: ignoring {len(mkeys)} elements: {mkeys}')
 
         # TODO: remove, only for backward 
-        if model.embeds_token_info[0].weight.abs().max() == 0. :
-            model.embeds_token_info = torch.nn.ModuleList()
+        if model.backbone.embeds_token_info[0].weight.abs().max() == 0. :
+            model.backbone.embeds_token_info = torch.nn.ModuleList()
         
         return model
   
@@ -207,14 +209,14 @@ class AtmoRepDownscaling( AtmoRep) :
         # torch.save( self.embed_token_info.state_dict(),
         #             utils.get_model_filename( name, self.cf.wandb_id, epoch) )
         name = self.__class__.__name__ + '_embeds_token_info'
-        torch.save( self.embeds_token_info.state_dict(),
+        torch.save( self.backbone.embeds_token_info.state_dict(),
                     utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
-        for ifield, enc in enumerate(self.encoders) :
+        for ifield, enc in enumerate(self.backbone.encoders) :
             name = self.__class__.__name__ + '_encoder_' + self.cf.fields[ifield][0]
             torch.save( enc.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
-        for ifield, dec in enumerate(self.decoders) :
+        for ifield, dec in enumerate(self.backbone.decoders) :
             name = self.__class__.__name__ + '_decoder_' + self.cf.fields_prediction[ifield][0]
             torch.save( dec.state_dict(), utils.get_model_filename( name, self.cf.wandb_id, epoch) )
 
@@ -228,7 +230,7 @@ class AtmoRepDownscaling( AtmoRep) :
     ###################################################
     def forward( self, xin) :
         '''Evaluate network'''
-        preds, atts = super().forward(xin)
+        preds, atts = self.backbone(xin)
 
         for idx_perceiver_net,perceiver_net in enumerate(self.perceivers):
 
@@ -238,10 +240,11 @@ class AtmoRepDownscaling( AtmoRep) :
         
             preds[self.fields_downscaling_idx[idx_perceiver_net]] = perceiver_net(preds[self.fields_downscaling_idx[idx_perceiver_net]], coupled_preds)
 
+
         downscale_ensemble = []
         for idx_tail,tails in enumerate(self.downscaling_tails):
-            downscale_ensemble.append(tails(preds[self.fields_downscaling_idx[idx_tail]]))        
-
+            downscale_ensemble.append(tails(preds[self.fields_downscaling_idx[idx_tail]]))
+        
         return downscale_ensemble, atts
   
   
