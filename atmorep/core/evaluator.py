@@ -67,7 +67,7 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, file_path, args = {}, model_epoch=-2) :
+  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
 
     devices = init_torch()
     with_ddp = True 
@@ -76,7 +76,6 @@ class Evaluator( Trainer_BERT) :
     cf = Config().load_json( model_id)
   
     cf.num_accs_per_task = len(devices)
-    cf.file_path = file_path
     cf.with_wandb = True
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank

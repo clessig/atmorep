@@ -66,9 +66,7 @@ if __name__ == '__main__':
                                       'token_overlap' : [0, 0],
                                       'forecast_num_tokens' : 2,
                                       'with_pytest' : True }
-
-  file_path = '/gpfs/scratch/ehpc03/era5_y1979_2021_res025_chunk8.zarr'
   
   now = time.time()
-  Evaluator.evaluate( mode, model_id, file_path, options)
+  Evaluator.evaluate( mode, model_id, options)
   print("time", time.time() - now)
