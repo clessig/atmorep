@@ -206,8 +206,8 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
         # get random time index
         self.idx_perm_t = rng.choice(self.anchor_itime, self.num_samples // self.batch_size, replace=False)
 
-        idx_lat, idx_lon = rng.choice(self.anchor_ilat, self.num_samples, replace=False), \
-                           rng.choice(self.anchor_ilon, self.num_samples, replace=False)
+        idx_lat, idx_lon = rng.choice(self.anchor_ilat, self.num_samples, replace=True), \
+                           rng.choice(self.anchor_ilon, self.num_samples, replace=True)
 
         self.idx_perm_s = np.stack([idx_lat, idx_lon], axis=1)        
 
@@ -266,7 +266,6 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                 assert len(ilon_imerg0) == 1, f"Could not find required IMERG longitude grid point for first ERA5 grid point at {self.era5_lons[ilon_range_era5[0]]} deg"
 
                 ilat_imerg0, ilon_imerg0 = ilat_imerg0[0], ilon_imerg0[0]
-
                 ilat_range_imerg = np.arange(ilat_imerg0, ilat_imerg0 + self.n_size[1]*self.downscaling_ratio)
                 ilon_range_imerg = np.arange(ilon_imerg0, ilon_imerg0 + self.n_size[2]*self.downscaling_ratio)
 
