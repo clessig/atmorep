@@ -33,6 +33,52 @@ from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 from atmorep.utils.logger import logger
 
+####################################################################################################
+def train_continue( wandb_id, epoch,  epoch_continue = -1) :
+
+  devices = init_torch()
+  with_ddp = True
+  par_rank, par_size = setup_ddp( with_ddp)
+
+  cf = Config().load_json( wandb_id)
+
+  cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
+  cf.with_ddp = with_ddp
+  cf.par_rank = par_rank
+  cf.par_size = par_size
+  cf.optimizer_zero = False
+  cf.attention = False
+  # name has changed but ensure backward compatibility
+  if hasattr( cf, 'loader_num_workers') :
+    cf.num_loader_workers = cf.loader_num_workers
+  if not hasattr( cf, 'n_size'):
+    cf.n_size = [36, 9*6, 9*12] 
+  if not hasattr(cf, 'num_samples_per_epoch'):
+    cf.num_samples_per_epoch = 1024
+  if not hasattr(cf, 'num_samples_validate'):
+    cf.num_samples_validate = 128
+  if not hasattr(cf, 'with_mixed_precision'):
+    cf.with_mixed_precision = True
+  if not hasattr(cf, 'years_val'):
+    cf.years_val = cf.years_test
+ 
+  setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
+  # resuming a run requires online mode, which is not available everywhere
+  #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
+  
+  if cf.with_wandb and 0 == cf.par_rank :
+    cf.write_json( wandb)
+    cf.print()
+
+  if -1 == epoch_continue :
+    epoch_continue = epoch
+
+  # run
+  trainer = Trainer_Downscaling.load( cf, wandb_id, epoch, devices)
+  print( 'Loaded run \'{}\' at epoch {}.'.format( wandb_id, epoch))
+  trainer.run( epoch_continue)
+
+####################################################################################################
 
 def train():
 
@@ -45,7 +91,7 @@ def train():
   torch.backends.cuda.matmul.allow_tf32 = True
 
   #model_id = "3kdutwqb"  
-  model_id = "1jh2qvrx"
+  model_id = "wc5e2i3t"
   cf = Config().load_json( model_id)
   # parallelization
   cf.with_ddp = with_ddp
@@ -54,8 +100,9 @@ def train():
   cf.par_size = par_size
 
   for field in cf.fields:
-    field[1].pop(4)
-    #field[1].append([model_id,45])
+      if len(field[1]) == 5:
+          field[1].pop(4)
+      field[1].append([model_id,61])
   
   #cf.model_id = "3kdutwqb" 
 
@@ -63,14 +110,14 @@ def train():
  
   cf.downscaling_ratio = 3
   cf.fields_downscaling = [ ['total_precip', 
-                            [1,1536,["velocity_u","velocity_v","specific_humidity"]],
+                            [1,1024,["velocity_u","velocity_v","velocity_z","specific_humidity"]],
                             [0],
                             [12,6,12],
                             [3,9*cf.downscaling_ratio,9*cf.downscaling_ratio], 
                             1.0 ] ]
   cf.target_fields = cf.fields_downscaling
   cf.input_file_path = "/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr"
-  cf.target_file_path = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res008_chunk8.zarr"
+  cf.target_file_path = "/p/scratch/atmo-rep/data/imerg/imerg_regridded/imerg_regrid_y2003_2021_res083_chunk8.zarr"
   #cf.years_train = list( range( 2010, 2021))
   cf.years_train = [2003,2020]
   cf.years_val = [2021]  #[2018] 
@@ -80,11 +127,7 @@ def train():
   
   # random seeds
   cf.torch_seed = torch.initial_seed()
- 
-  cf.input_data = "/p/scratch/atmo-rep/data/era5/new_structure/total_precip/ml0/*"
-  cf.output_data = "/p/scratch/atmo-rep/data/imerg_regridded"
 
-  cf.num_epochs = 30
   cf.rng_seed = None 
   
   cf.with_wandb = True
@@ -99,12 +142,12 @@ def train():
   cf.BERT_fields_synced = True
   
   #training params
-  cf.batch_size_validation = 1 #64
+  cf.batch_size_validation = 4 #64
 
-  cf.batch_size = 2
+  cf.batch_size = 16
   cf.num_epochs = 128
-  cf.num_samples_per_epoch = 8
-  cf.num_samples_validate = 8
+  cf.num_samples_per_epoch = 1024*12
+  cf.num_samples_validate = 32*12
   cf.num_loader_workers = 6
 
   #additional infos
@@ -135,15 +178,16 @@ def train():
   cf.decoder_att_type = 'dense'
 
   #perceiver
-  cf.num_latent_queries = 64
+  cf.num_latent_queries = 4320
   cf.init_scale = 0.02
   cf.perceiver_num_layers = 6
   cf.perceiver_num_heads = 16
   cf.perceiver_num_mlp_layers = 2
-  cf.perceiver_output_emb = 256
+  #cf.perceiver_output_emb = 256
+  cf.perceiver_latent_dimension = 1024
 
   # tail net
-  cf.net_tail_num_nets = 16
+  cf.net_tail_num_nets = 8
   cf.net_tail_num_layers = 0
   # loss
   cf.losses = ['mse_ensemble', 'stats']  # mse, mse_ensemble, stats, crps, weighted_mse
@@ -153,12 +197,14 @@ def train():
   cf.profile = False
   cf.test_initial = False
   cf.attention = False
-
-  setup_wandb(cf.with_wandb, cf, par_rank,'train', mode="offline")
-  
-  cf.file_path = '/p/scratch/atmo-rep/data/era5_1deg/months/era5_y1979_2021_res025_chunk8.zarr'
   cf.n_size = [36, 9*6, 9*12]
+  
+  setup_wandb(cf.with_wandb, cf, par_rank,'train', mode="offline")
 
+  if cf.with_wandb and 0 == cf.par_rank:
+      cf.write_json( wandb)
+      cf.print()
+  
   trainer = Trainer_Downscaling( cf, device).create()
   trainer.run()
 
@@ -166,11 +212,10 @@ def train():
 if __name__ == "__main__":
   try :
   
-    train()
+    #train()
   
-    #  wandb_id, epoch, epoch_continue = '1jh2qvrx', 392, 392
-    #  Trainer = Trainer_BERT
-    #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
+    wandb_id, epoch, epoch_continue = '6ff1d620', 31, 31
+    train_continue( wandb_id, epoch, epoch_continue)
   
   except :
   
