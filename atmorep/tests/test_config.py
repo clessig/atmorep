@@ -1,4 +1,5 @@
 import atmorep.utils.config as config
+import atmorep.utils.config_facade as facade
 import pathlib as pl
 import json
 import pytest
@@ -12,7 +13,11 @@ def get_sample_legacy_config() -> dict[str, typing.Any]:
 
 SAMPLE_CONFIG = pl.Path(__file__).parent / "model_idwc5e2i3t.json"
 
+ALL_LEGACY_OPTIONS = list(get_sample_legacy_config().keys())
 IGNORE_LEGACY_OPTIONS = ["file_path", "month"]
+LEGACY_OPTIONS = [
+    key for key in ALL_LEGACY_OPTIONS if key not in IGNORE_LEGACY_OPTIONS
+]
 
 @pytest.fixture
 def legacy_config_dict():
@@ -26,6 +31,10 @@ def legacy_config_dict():
 def deserialized_config(legacy_config_dict):
     return config.AtmorepConfig.from_dict(legacy_config_dict)
 
+@pytest.fixture
+def config_facade(legacy_config_dict):
+    return facade.ConfigFacade.from_dict(legacy_config_dict, user_config=None)
+
 def test_serialization_identity(deserialized_config):
     config_dict = deserialized_config.as_dict()
     redeserialized_config = config.AtmorepConfig.from_dict(config_dict)
@@ -36,3 +45,7 @@ def test_legacy_compatibility(legacy_config_dict, deserialized_config):
     config_dict = deserialized_config.as_dict()
     
     assert config_dict == legacy_config_dict
+
+@pytest.mark.parametrize("option", LEGACY_OPTIONS)
+def test_facade_read_access(config_facade, legacy_config_dict, option):
+    assert config_facade.__dict__[option] == legacy_config_dict[option]
