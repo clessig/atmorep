@@ -4,12 +4,31 @@ import pathlib as pl
 import json
 import pytest
 import typing
+import unittest.mock as mock
 
 def get_sample_legacy_config() -> dict[str, typing.Any]:
     with open(SAMPLE_CONFIG, "r") as fp_config:
         legacy_config_dict = json.load(fp_config)
     
     return legacy_config_dict
+
+def twiddle_option(value, option) -> typing.Any:
+    def replicate_nested_list_structure(my_list: list[typing.Any]):
+        return [
+            replicate_nested_list_structure(item) if isinstance(item, list)
+            else None
+            for item in my_list
+        ]
+        
+    if option in ["geo_range_sampling", "n_size"]:
+        # special case for structural assumptions for geo_range_sampling
+        mock_value = replicate_nested_list_structure(value)
+    else:
+        # for most options this suffices
+        mock_value = mock.create_autospec(value)
+    
+    return mock_value
+
 
 SAMPLE_CONFIG = pl.Path(__file__).parent / "model_idwc5e2i3t.json"
 
@@ -48,4 +67,23 @@ def test_legacy_compatibility(legacy_config_dict, deserialized_config):
 
 @pytest.mark.parametrize("option", LEGACY_OPTIONS)
 def test_facade_read_access(config_facade, legacy_config_dict, option):
-    assert config_facade.__dict__[option] == legacy_config_dict[option]
+    assert getattr(config_facade, option) == legacy_config_dict[option]
+
+@pytest.mark.parametrize("option", LEGACY_OPTIONS)
+def test_facade_write_access(config_facade, option):
+    # twiddle option value
+    real_value = getattr(config_facade, option)
+    mock_value = twiddle_option(real_value, option)
+    setattr(config_facade, option, mock_value)
+    
+    # deserialize to make sure values of new config backend are used
+    try:
+        config_dict = config_facade.as_dict()
+    except AttributeError:
+        assert False
+
+    # make sure option is the same accessed through facade or serialized dict
+    assert config_dict[option] == getattr(config_facade, option)
+
+def test_new_argument_handling():
+    pass
