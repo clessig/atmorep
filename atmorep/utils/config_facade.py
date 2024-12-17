@@ -9,6 +9,8 @@ import typing
 class ConfigFacade(AtmorepConfig):
     """
     Facade that imitates Config from utils.utils but uses new AtmorepConfig utils.config internally.
+    
+    This class should only facilitate the incremental refactoring of code with references to the old utils.utils.Config class. Once every referce to the legacy configuration arguments has been updatet, this class should be removed.
     """
 
     def __init__(
