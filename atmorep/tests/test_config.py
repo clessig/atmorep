@@ -54,16 +54,21 @@ def deserialized_config(legacy_config_dict):
 def config_facade(legacy_config_dict):
     return facade.ConfigFacade.from_dict(legacy_config_dict, user_config=None)
 
+@pytest.fixture
+def config_facade_empty():
+    return facade.ConfigFacade.init_empty(user_config=None)
+
 def test_serialization_identity(deserialized_config):
     config_dict = deserialized_config.as_dict()
     redeserialized_config = config.AtmorepConfig.from_dict(config_dict)
-    
+
     assert deserialized_config == redeserialized_config
 
-def test_legacy_compatibility(legacy_config_dict, deserialized_config):
+@pytest.mark.parametrize("option", LEGACY_OPTIONS)
+def test_legacy_compatibility(legacy_config_dict, deserialized_config, option):
     config_dict = deserialized_config.as_dict()
     
-    assert config_dict == legacy_config_dict
+    assert config_dict[option] == legacy_config_dict[option]
 
 @pytest.mark.parametrize("option", LEGACY_OPTIONS)
 def test_facade_read_access(config_facade, legacy_config_dict, option):
@@ -85,5 +90,10 @@ def test_facade_write_access(config_facade, option):
     # make sure option is the same accessed through facade or serialized dict
     assert config_dict[option] == getattr(config_facade, option)
 
-def test_new_argument_handling():
-    pass
+@pytest.mark.parametrize("option", LEGACY_OPTIONS)
+def test_facade_add_to_empty(config_facade_empty, legacy_config_dict, option):
+    value = legacy_config_dict[option]
+    setattr(config_facade_empty, option, value)
+
+    # make sure option is the same accessed through facade or serialized dict
+    assert getattr(config_facade_empty, option) == value
