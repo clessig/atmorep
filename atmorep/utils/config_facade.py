@@ -1,4 +1,4 @@
-from atmorep.utils.config import AtmorepConfig, ModelConfig, RunConfig,TrainingConfig, GeoRange, TimeLatLon, FieldConfig, PredictionFieldConfig
+from atmorep.utils.config import AtmorepConfig, ModelConfig, RunConfig,TrainingConfig, GeoRange, TimeLatLon, FieldConfig, PredictionFieldConfig, _empty_config
 import atmorep.config.config as config
 
 import pathlib as pl
@@ -597,8 +597,11 @@ class ConfigFacade(AtmorepConfig):
         return ConfigFacade.from_json(
             config_file, user_config=self.user_config, wandb_id=self.wandb_id
         )
-    
-    
+
+    @classmethod
+    def init_empty(cls, user_config: config.UserConfig) -> typing.Self:
+        return _empty_config(cls, user_config=user_config)
+
     @property
     def _run_dir(self):
         """ Directory where data relevant to the run will be safed. """

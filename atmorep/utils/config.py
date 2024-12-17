@@ -393,6 +393,7 @@ class RunConfig:
     grad_checkpointing: bool
     """ If true, checkpointing is used in training """
 
+    # TODO: maybe deprecate
     optimizer_zero: bool
     """ If true, use ZeroRedundancyOptimizer. """
 
@@ -666,3 +667,15 @@ class AtmorepConfig:
 
         with open(config_file, "w") as config:
             json.dump(self.as_dict(), config)
+
+def _empty_config(cls, **kwargs):
+    """
+    construct empty config.
+    
+    This method is a work around to keep the initialization of utils.config_facade.ConfigFacade similar to utils.utils.Config to allow for easy refactor. It should be removed as soon as further refactoring is done.
+    """
+    model = ModelConfig(*[None]*21)
+    run = RunConfig(*[None]*17)
+    training = TrainingConfig([], [], [], [], [], GeoRange(None, None), GeoRange(None, None), None, None, None, None, None, None, None, [], None, None, None, None, None, None, None, None, None, None, None)
+    
+    return cls(model, run, training, **kwargs)
