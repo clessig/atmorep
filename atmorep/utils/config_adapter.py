@@ -1,4 +1,14 @@
-from atmorep.utils.config import AtmorepConfig, ModelConfig, RunConfig,TrainingConfig, GeoRange, TimeLatLon, FieldConfig, PredictionFieldConfig, _empty_config
+from atmorep.utils.config import (
+    AtmorepConfig,
+    ModelConfig,
+    RunConfig,
+    TrainingConfig,
+    GeoRange,
+    TimeLatLon,
+    FieldConfig,
+    PredictionFieldConfig,
+    _empty_config,
+)
 import atmorep.config.config as config
 
 import pathlib as pl
@@ -6,10 +16,11 @@ import wandb
 import json
 import typing
 
-class ConfigFacade(AtmorepConfig):
+
+class Config(AtmorepConfig):
     """
-    Facade that imitates Config from utils.utils but uses new AtmorepConfig utils.config internally.
-    
+    Adapter that imitates Config from utils.utils but uses new AtmorepConfig utils.config internally.
+
     This class should only facilitate the incremental refactoring of code with references to the old utils.utils.Config class. Once every referce to the legacy configuration arguments has been updatet, this class should be removed.
     """
 
@@ -18,7 +29,7 @@ class ConfigFacade(AtmorepConfig):
         model: ModelConfig,
         run: RunConfig,
         training: TrainingConfig,
-        user_config: config.UserConfig
+        user_config: config.UserConfig,
     ):
         super().__init__(model, run, training)
         self.user_config = user_config
@@ -536,19 +547,19 @@ class ConfigFacade(AtmorepConfig):
     def n_size(self, value: list[int | float]):
         self.training.n_size = TimeLatLon(*value)
 
-    def add_to_wandb(self, wandb_id): # TODO fix unused argument
-        """ Serialize config to wandb. """
+    def add_to_wandb(self, wandb_id):  # TODO fix unused argument
+        """Serialize config to wandb."""
         wandb.config.update(self.as_dict())
-        
+
     def print(self):
-        """ Serialize config to stdout. """
+        """Serialize config to stdout."""
         for key, value in self.as_dict():
             print(f"{key} : {value}")
 
     def create_dirs(self, wandb_id: str):
         """
         Ensure directory with wandb_id of run exists.
-        
+
         Arguments:
             wandb_id (str): unique identifier for the run used as directory name.
         """
@@ -557,7 +568,7 @@ class ConfigFacade(AtmorepConfig):
         self._run_dir_alt.mkdir(exist_ok=True)
 
     def write_json(self):
-        """ Serialize config into run specific directory. """
+        """Serialize config into run specific directory."""
 
         # TODO really nessecairy ???
         self.create_dirs(self.wandb_id)
@@ -572,7 +583,7 @@ class ConfigFacade(AtmorepConfig):
             fp.write(serialized_config)
 
     def load_json(self, wandb_id):
-        """ Deserialize config from json file in run specific directory. """
+        """Deserialize config from json file in run specific directory."""
 
         # possible file paths
         config_file_name = f"model_id{wandb_id}.json"
@@ -593,8 +604,8 @@ class ConfigFacade(AtmorepConfig):
         # TODO: can be removed ???
         if pl.Path(wandb_id).is_file():
             config_file = pl.Path(wandb_id)
-        
-        return ConfigFacade.from_json(
+
+        return Config.from_json(
             config_file, user_config=self.user_config, wandb_id=self.wandb_id
         )
 
@@ -604,11 +615,11 @@ class ConfigFacade(AtmorepConfig):
 
     @property
     def _run_dir(self):
-        """ Directory where data relevant to the run will be safed. """
+        """Directory where data relevant to the run will be safed."""
         return self.user_config.results / f"id{self.wandb_id}"
 
     # TODO: phase out ???
     @property
     def _run_dir_alt(self):
-        """ Alternative directory where data relevant to the run will be safed. """
+        """Alternative directory where data relevant to the run will be safed."""
         return self.user_config.results / "models" / f"id{self.wandb_id}"
