@@ -1,4 +1,4 @@
-from atmorep.utils.config import AtmorepConfig
+from atmorep.utils.config import AtmorepConfig, ModelConfig,RunConfig, TrainingConfig
 import atmorep.config.config as config
 
 import pathlib as pl
@@ -11,9 +11,15 @@ class ConfigFacade(AtmorepConfig):
     Facade that imitates Config from utils.utils but uses new AtmorepConfig utils.config internally.
     """
 
-    def __init__(self, user_config: config.UserConfig, wandb_id: str):
+    def __init__(
+        self,
+        model: ModelConfig,
+        run: RunConfig,
+        training: TrainingConfig,
+        user_config: config.UserConfig
+    ):
+        super().__init__(model, run, training)
         self.user_config = user_config
-        self.wandb_id = wandb_id # make sure wandb is initialized
         
         # expose configuration arguments as expected from rest of system
         self.with_ddp: bool = self.run.with_ddp
