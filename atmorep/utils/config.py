@@ -432,7 +432,7 @@ class RunConfig:
             "par_size": self.par_size,
             "log_test_num_ranks": self.log_num_ranks,
             "save_grads": self.save_grads,
-            "profile": self.save_grads,
+            "profile": self.profiler,
             "test_initial": self.test_initial,
             "attention": self.log_att,
             "rng_seed": self.rng_seed,
