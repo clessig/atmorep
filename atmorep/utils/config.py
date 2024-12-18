@@ -344,6 +344,7 @@ class RunConfig:
         log_frequency (int): Number of batches between saving checkpoints.
         grad_checkpointing (bool): Indicates whether gradient checkpointing is used during training.
         optimizer_zero (bool): If true, use ZeroRedundancyOptimizer.
+        with_pytest (Optional[bool]): Run validation suite after evaluation run.
     """
     wandb_id: str
     """ Run ID assigned by the wandb """
@@ -396,11 +397,13 @@ class RunConfig:
     # TODO: maybe deprecate
     optimizer_zero: bool
     """ If true, use ZeroRedundancyOptimizer. """
+    
+    with_pytest: Optional[bool]
+    """ Run validation suite after evaluation run. """
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> Self:
         """ Deserialize from model config format. """
-
         return cls(
             config_dict["wandb_id"],
             config_dict["slurm_job_id"],
@@ -418,7 +421,8 @@ class RunConfig:
             config_dict["torch_seed"],
             config_dict["model_log_frequency"],
             config_dict["grad_checkpointing"],
-            config_dict["optimizer_zero"]
+            config_dict["optimizer_zero"],
+            config_dict.get("with_pytest")
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -441,7 +445,8 @@ class RunConfig:
             "torch_seed": self.torch_rng_seed,
             "model_log_frequency": self.log_frequency,
             "grad_checkpointing": self.grad_checkpointing,
-            "optimizer_zero": self.optimizer_zero
+            "optimizer_zero": self.optimizer_zero,
+            "with_pytest": self.with_pytest
         }
 
 @dc.dataclass
@@ -656,12 +661,12 @@ class AtmorepConfig:
 
         with open(config_file, "r") as config:
             config_dict = json.load(config)
-        
+
         return cls.from_dict(config_dict, **kwargs)
 
     def as_dict(self) -> dict[str, Any]:
         return self.model.as_dict() | self.run.as_dict() | self.training.as_dict()
-    
+
     def to_json(self, config_file: pl.Path):
         """ serialize Config into model.json file. """
 
@@ -675,7 +680,7 @@ def _empty_config(cls, **kwargs):
     This method is a work around to keep the initialization of utils.config_facade.ConfigFacade similar to utils.utils.Config to allow for easy refactor. It should be removed as soon as further refactoring is done.
     """
     model = ModelConfig(*[None]*21)
-    run = RunConfig(*[None]*17)
+    run = RunConfig(*[None]*18)
     training = TrainingConfig([], [], [], [], [], GeoRange(None, None), GeoRange(None, None), None, None, None, None, None, None, None, [], None, None, None, None, None, None, None, None, None, None, None)
     
     return cls(model, run, training, **kwargs)

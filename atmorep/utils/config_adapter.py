@@ -547,6 +547,14 @@ class Config(AtmorepConfig):
     def n_size(self, value: list[int | float]):
         self.training.n_size = TimeLatLon(*value)
 
+    @property
+    def with_pytest(self) -> bool | None:
+        return self.run.with_pytest
+    
+    @with_pytest.setter
+    def with_pytest(self, value: bool):
+        self.run.with_pytest = value
+
     def add_to_wandb(self, wandb_id):  # TODO fix unused argument
         """Serialize config to wandb."""
         wandb.config.update(self.as_dict())
