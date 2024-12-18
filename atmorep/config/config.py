@@ -38,15 +38,14 @@ class HPC_Platform:
         try:
             with open(platform_config_file, "r") as fp:
                 platform_config = json.load(fp)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             msg = f"computing platform: {platform_config_file} is unknown, should be one of : {', '.join(known_platforms)}"
             raise ValueError(msg)
         
         platform_config = {
             key: Path(value) for key, value in platform_config.items()
         }
-        platform = cls(**platform_config)
-        return platform
+        return cls(**platform_config)
 
     
 # compatibiltiy facade
