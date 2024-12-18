@@ -131,7 +131,7 @@ class FieldConfig:
         try:
             field[6]
             use_local_normalization = True
-        except:
+        except IndexError:
             use_local_normalization = False
 
         return cls(
