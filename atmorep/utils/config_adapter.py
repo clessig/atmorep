@@ -575,8 +575,13 @@ class Config(AtmorepConfig):
         self._run_dir.mkdir(exist_ok=True)
         self._run_dir_alt.mkdir(exist_ok=True)
 
-    def write_json(self):
-        """Serialize config into run specific directory."""
+    def write_json(self, wandb):
+        """
+        Serialize config into run specific directory.
+        
+        Arguments:
+            wandb (Any): unused argument purely for compatibility DO NOT USE
+        """
 
         # TODO really nessecairy ???
         self.create_dirs(self.wandb_id)
