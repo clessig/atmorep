@@ -32,6 +32,10 @@ import numpy as np
 
 
 def initialize_atmorep(with_ddp):
+  atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
+  print("Atmorep project dir:", atmorep_project_dir)
+  user_config = config.UserConfig.from_path(atmorep_project_dir)
+    
   devices = init_torch()
   par_rank, par_size = setup_ddp(with_ddp)
 
@@ -204,10 +208,6 @@ def train():
 
 ####################################################################################################
 if __name__ == "__main__":
-  atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
-  print("Atmorep project dir:", atmorep_project_dir)
-  user_config = config.UserConfig.from_path(atmorep_project_dir)
-
   train_fresh = False
 
   try:
