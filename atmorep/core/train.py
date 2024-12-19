@@ -30,6 +30,16 @@ from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 import numpy as np
 
+
+def initialize_atmorep(with_ddp):
+  devices = init_torch()
+  par_rank, par_size = setup_ddp(with_ddp)
+
+  cf = Config(user_config=user_config)
+
+  return devices, par_rank, par_size, cf
+
+
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
