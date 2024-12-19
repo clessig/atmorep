@@ -191,7 +191,7 @@ if __name__ == "__main__":
   atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
   print("Atmorep project dir:", atmorep_project_dir)
   user_config = config.UserConfig.from_path(atmorep_project_dir)
-    train_fresh = False
+  train_fresh = False
 
   try:
     if train_fresh:
