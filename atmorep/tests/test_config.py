@@ -46,11 +46,33 @@ def legacy_config_dict():
 
     return legacy_config_dict
 
+@pytest.fixture
+def legacy_config_dict_old_missing_options(legacy_config_dict):
+    new_options = [
+        "n_size", "num_samples_per_epoch", "num_samples_validate"
+    ]
+    renamed_options = {
+        "num_loader_workers": "loader_num_workers",
+        "years_val": "years_test",
+        "batch_size": "batch_size_max",
+        "batch_size_validation": "batch_size_max"
+    }
+    for option in new_options:
+        try:
+            del legacy_config_dict[option]
+        except KeyError:
+            pass
+    
+    for new_option, old_option in renamed_options.items():
+        value = legacy_config_dict[new_option]
+        legacy_config_dict[old_option] = value
+    
+    return legacy_config_dict
+
 
 @pytest.fixture
 def deserialized_config(legacy_config_dict):
     return config.AtmorepConfig.from_dict(legacy_config_dict)
-
 
 @pytest.fixture
 def config_adapter(legacy_config_dict):
@@ -68,6 +90,14 @@ def test_serialization_identity(deserialized_config):
 
     assert deserialized_config == redeserialized_config
 
+def test_options_backward_compatible(
+    legacy_config_dict_old_missing_options, deserialized_config
+):
+    redeserialized_config = config.AtmorepConfig.from_dict(
+        legacy_config_dict_old_missing_options
+    )
+    
+    assert deserialized_config == redeserialized_config   
 
 @pytest.mark.parametrize("option", LEGACY_OPTIONS)
 def test_legacy_compatibility(legacy_config_dict, deserialized_config, option):

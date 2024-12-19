@@ -24,57 +24,11 @@ from pathlib import Path
 
 import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
-from atmorep.utils.utils import setup_ddp
+from atmorep.core.train import train_continue, initialize_atmorep
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 import numpy as np
 
-####################################################################################################
-def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
-
-  devices = init_torch()
-  with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
-
-  cf = Config(user_config=user_config).load_json( wandb_id)
-
-  cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
-  cf.with_ddp = with_ddp
-  cf.par_rank = par_rank
-  cf.par_size = par_size
-  cf.optimizer_zero = False
-  cf.attention = False
-  # name has changed but ensure backward compatibility
-  if hasattr( cf, 'loader_num_workers') :
-    cf.num_loader_workers = cf.loader_num_workers
-  if not hasattr( cf, 'n_size'):
-    cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
-  if not hasattr(cf, 'num_samples_per_epoch'):
-    cf.num_samples_per_epoch = 1024
-  if not hasattr(cf, 'num_samples_validate'):
-    cf.num_samples_validate = 128
-  if not hasattr(cf, 'with_mixed_precision'):
-    cf.with_mixed_precision = True
-
-  if not hasattr(cf, 'years_val'):
-    cf.years_val = cf.years_test
-  
-  setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
-  # resuming a run requires online mode, which is not available everywhere
-  #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
-  
-  if cf.with_wandb and 0 == cf.par_rank :
-    cf.write_json( wandb)
-    cf.print()
-
-  if -1 == epoch_continue :
-    epoch_continue = epoch
-
-  # run
-  trainer = Trainer.load( cf, wandb_id, epoch, devices)
-  print( 'Loaded run \'{}\' at epoch {}.'.format( wandb_id, epoch))
-  trainer.run( epoch_continue)
 
 ####################################################################################################
 def train() :

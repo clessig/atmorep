@@ -651,6 +651,9 @@ class AtmorepConfig:
 
     @classmethod
     def from_dict(cls, config_dict, **kwargs) -> Self:
+
+        config_dict = cls._ensure_backwards_compatibility(config_dict)
+
         return cls(
             ModelConfig.from_dict(config_dict),
             RunConfig.from_dict(config_dict),
@@ -676,6 +679,22 @@ class AtmorepConfig:
         with open(config_file, "w") as config:
             json.dump(self.as_dict(), config)
 
+    @staticmethod
+    def _ensure_backwards_compatibility(config_dict: dict[str, Any]) -> dict[str, Any]:
+        # use get as to not raise KeyError
+        backward_compatible_options = {
+            "num_loader_workers": config_dict.get("loader_num_workers"),
+            "n_size": [36, 0.25 * 9 * 6, 0.25 * 9 * 12],
+            "num_samples_per_epoch": 1024,
+            "num_samples_validate": 128,
+            "with_mixed_precision": True,
+            "years_val": config_dict.get("years_test"),
+            "batch_size": config_dict.get("batch_size_max"),
+            "batch_size_validation": config_dict.get("batch_size_max"),
+        }
+
+        # only use backward_compatible_options if option is not present in config_dict
+        return backward_compatible_options | config_dict
 
 def _get_empty_instance(cls, **kwargs) -> typing.Any:
     """
