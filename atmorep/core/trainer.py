@@ -54,17 +54,17 @@ class Trainer_Base() :
     self.device_in = devices[0]
     self.device_out = devices[-1]
 
-    self.fields_prediction_idx = []
-    self.loss_weights = torch.zeros( len(cf.fields_prediction) )
-    for ifield, field in enumerate(cf.fields_prediction) :
-      self.loss_weights[ifield] = self.cf.fields_prediction[ifield][1]
-      for idx, field_info in enumerate(cf.fields) :
-        if field_info[0] == field[0] :
-          self.fields_prediction_idx.append( idx)
-          break
-    self.loss_weights = self.loss_weights.to( self.device_out)
+    # self.fields_prediction_idx = []
+    # self.loss_weights = torch.zeros( len(cf.fields_prediction) )
+    # for ifield, field in enumerate(cf.fields_prediction) :
+    #   self.loss_weights[ifield] = self.cf.fields_prediction[ifield][1]
+    #   for idx, field_info in enumerate(cf.fields) :
+    #     if field_info[0] == field[0] :
+    #       self.fields_prediction_idx.append( idx)
+    #       break
+    # self.loss_weights = self.loss_weights.to( self.device_out)
 
-    self.MSELoss = torch.nn.MSELoss()
+    # self.MSELoss = torch.nn.MSELoss()
 
     # transformation for token infos
     if hasattr( cf, 'token_infos_transformation') :
@@ -82,14 +82,14 @@ class Trainer_Base() :
 
   ###################################################
   def create( self, load_embeds=True) :
-    net = AtmoRep( self.cf) 
-    self.model = AtmoRepData( net)
+    # net = AtmoRep( self.cf) 
+    # self.model = AtmoRepData( net)
 
-    self.model.create( self.pre_batch, self.devices, load_embeds)
+    # self.model.create( self.pre_batch, self.devices, load_embeds)
     
-    # TODO: pass the properly to model / net
-    self.model.net.encoder_to_decoder = self.encoder_to_decoder
-    self.model.net.decoder_to_tail = self.decoder_to_tail
+    # # TODO: pass the properly to model / net
+    # self.model.net.encoder_to_decoder = self.encoder_to_decoder
+    # self.model.net.decoder_to_tail = self.decoder_to_tail
     return self
 
   ###################################################
