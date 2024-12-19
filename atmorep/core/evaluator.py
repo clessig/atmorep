@@ -83,27 +83,9 @@ class Evaluator( Trainer_BERT) :
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
       print( 'Running Evaluate.evaluate with mode =', mode)
-
-    # if not hasattr( cf, 'num_loader_workers'):
     cf.num_loader_workers = 12 #cf.loader_num_workers
     cf.rng_seed = None 
-    
-    #backward compatibility
-    if not hasattr( cf, 'n_size'):
-      cf.n_size = [36, 0.25*9*6, 0.25*9*12]
-      #cf.n_size = [36, 0.25*27*2, 0.25*27*4] 
-    if not hasattr(cf, 'num_samples_per_epoch'):
-      cf.num_samples_per_epoch = 1024
-    if not hasattr(cf, 'with_mixed_precision'):
-      cf.with_mixed_precision = False
-    if not hasattr(cf, 'with_pytest'):
-      cf.with_pytest = False
-    if not hasattr(cf, 'batch_size'):
-      cf.batch_size = cf.batch_size_max
-    if not hasattr(cf, 'batch_size_validation'):
-      cf.batch_size_validation = cf.batch_size_max
-    if not hasattr(cf, 'years_val'):
-      cf.years_val = cf.years_test
+    cf.with_pytest = False
 
     func = getattr( Evaluator, mode)
     func( cf, model_id, model_epoch, devices, args)

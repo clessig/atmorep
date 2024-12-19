@@ -52,20 +52,6 @@ def train_continue(wandb_id, epoch, Trainer, epoch_continue=-1) :
   cf.par_size = par_size
   cf.optimizer_zero = False
   cf.attention = False
-  # name has changed but ensure backward compatibility
-  if hasattr( cf, 'loader_num_workers') :
-    cf.num_loader_workers = cf.loader_num_workers
-  if not hasattr( cf, 'n_size'):
-    cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
-  if not hasattr(cf, 'num_samples_per_epoch'):
-    cf.num_samples_per_epoch = 1024
-  if not hasattr(cf, 'num_samples_validate'):
-    cf.num_samples_validate = 128
-  if not hasattr(cf, 'with_mixed_precision'):
-    cf.with_mixed_precision = True
-  if not hasattr(cf, 'years_val'):
-    cf.years_val = cf.years_test
- 
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
