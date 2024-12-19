@@ -41,13 +41,10 @@ def initialize_atmorep(with_ddp):
 
 
 ####################################################################################################
-def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
-
-  devices = init_torch()
+def train_continue(wandb_id, epoch, Trainer, epoch_continue=-1) :
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
-
-  cf = Config(user_config=user_config).load_json( wandb_id)
+  devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
+  cf = cf.load_json(wandb_id)
 
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.with_ddp = with_ddp
@@ -86,16 +83,10 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   trainer.run( epoch_continue)
 
 ####################################################################################################
-def train() :
-
-  devices = init_torch()
+def train():
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
 
-  # torch.cuda.set_sync_debug_mode(1)
-  torch.backends.cuda.matmul.allow_tf32 = True
-
-  cf = Config(user_config=user_config)
   # parallelization
   cf.with_ddp = with_ddp
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task

@@ -15,31 +15,23 @@
 ####################################################################################################
 
 import torch
-import os
 import sys
 import traceback
 import pdb
 import wandb
-from pathlib import Path
 
 import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
 from atmorep.core.train import train_continue, initialize_atmorep
 from atmorep.utils.utils import setup_wandb
-from atmorep.utils.utils import init_torch
 import numpy as np
 
 
 ####################################################################################################
-def train() :
-
-  devices = init_torch()
+def train():
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
 
-  torch.backends.cuda.matmul.allow_tf32 = True
-
-  cf = Config(user_config=user_config)
   # parallelization
   cf.with_ddp = with_ddp
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task

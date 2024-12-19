@@ -15,22 +15,17 @@
 ####################################################################################################
 
 import numpy as np
-import os
-import code
 import pytest
 import datetime
 
 import wandb
 
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
-from atmorep.utils.utils import setup_ddp
+from atmorep.core.train import initialize_atmorep
 from atmorep.utils.utils import setup_wandb
-from atmorep.utils.utils import init_torch
 from atmorep.utils.utils import NetMode
 import atmorep.utils.utils as utils
 
-import atmorep.config.config as config
 
 class Evaluator( Trainer_BERT) :
 
@@ -69,20 +64,21 @@ class Evaluator( Trainer_BERT) :
   @staticmethod
   def evaluate( mode, model_id, args = {}, model_epoch=-2, user_config=None) :
 
-    devices = init_torch()
-    with_ddp = True 
-    par_rank, par_size = setup_ddp( with_ddp)
+    with_ddp = True
+    with_wandb = True
+    devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
     
-    cf = Config(user_config).load_json( model_id)
+    cf = cf.load_json( model_id)
     print("after config creation", cf.user_config)
   
     cf.num_accs_per_task = len(devices)
-    cf.with_wandb = True
+    cf.with_wandb = with_wandb
     cf.with_ddp = with_ddp
     cf.par_rank = par_rank
     cf.par_size = par_size
     cf.losses = cf.losses
     # overwrite old config
+
     cf.attention = False
     setup_wandb( cf.with_wandb, cf, par_rank, '', mode='offline')
     if 0 == cf.par_rank :
