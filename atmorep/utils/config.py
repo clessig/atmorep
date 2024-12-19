@@ -3,6 +3,9 @@ import pathlib as pl
 import json
 from typing import Any, Self, Optional
 from collections import namedtuple
+import inspect
+import builtins
+import typing
 
 TimeLatLon = namedtuple("TimeLatLon", ["time", "lat", "lon"])
 GeoRange = namedtuple("GeoRange", ["start", "stop"])
@@ -673,14 +676,40 @@ class AtmorepConfig:
         with open(config_file, "w") as config:
             json.dump(self.as_dict(), config)
 
-def _empty_config(cls, **kwargs):
+
+def _get_empty_instance(cls, **kwargs) -> typing.Any:
     """
     construct empty config.
-    
+
     This method is a work around to keep the initialization of utils.config_facade.ConfigFacade similar to utils.utils.Config to allow for easy refactor. It should be removed as soon as further refactoring is done.
     """
-    model = ModelConfig(*[None]*21)
-    run = RunConfig(*[None]*18)
-    training = TrainingConfig([], [], [], [], [], GeoRange(None, None), GeoRange(None, None), None, None, None, None, None, None, None, [], None, None, None, None, None, None, None, None, None, None, None)
-    
-    return cls(model, run, training, **kwargs)
+    unsubscripted_type = typing.get_origin(cls)
+    my_type = cls if unsubscripted_type is None else unsubscripted_type
+    match my_type:
+        case builtins.int:
+            empty_instance = 0
+        case builtins.float:
+            empty_instance = 0.0
+        case builtins.str:
+            empty_instance = str
+        case builtins.bool:
+            empty_instance = False
+        case builtins.list:
+            empty_instance = []
+        case typing.Optional:
+            empty_instance = None
+        case typing.Union:
+            sub_type = typing.get_args(cls)[0]
+            empty_instance = _get_empty_instance(sub_type)
+        case _:
+            print(cls)
+            constructor_args = {}
+            for name, parameter in inspect.signature(cls).parameters.items():
+                # prevent additional keyword args to be inspected
+                print(parameter.empty)
+                if name not in kwargs.keys():
+                    constructor_args[name] = _get_empty_instance(parameter.annotation)
+
+            empty_instance = cls(**constructor_args, **kwargs)
+
+    return empty_instance

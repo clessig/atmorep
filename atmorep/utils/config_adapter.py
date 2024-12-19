@@ -7,7 +7,7 @@ from atmorep.utils.config import (
     TimeLatLon,
     FieldConfig,
     PredictionFieldConfig,
-    _empty_config,
+    _get_empty_instance,
 )
 import atmorep.config.config as config
 
@@ -550,7 +550,7 @@ class Config(AtmorepConfig):
     @property
     def with_pytest(self) -> bool | None:
         return self.run.with_pytest
-    
+
     @with_pytest.setter
     def with_pytest(self, value: bool):
         self.run.with_pytest = value
@@ -578,7 +578,7 @@ class Config(AtmorepConfig):
     def write_json(self, wandb):
         """
         Serialize config into run specific directory.
-        
+
         Arguments:
             wandb (Any): unused argument purely for compatibility DO NOT USE
         """
@@ -624,7 +624,7 @@ class Config(AtmorepConfig):
 
     @classmethod
     def init_empty(cls, user_config: config.UserConfig) -> typing.Self:
-        return _empty_config(cls, user_config=user_config)
+        return _get_empty_instance(cls, user_config=user_config)
 
     @property
     def _run_dir(self):
