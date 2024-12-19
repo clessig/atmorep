@@ -216,21 +216,22 @@ def train() :
   trainer.run()
 
 ####################################################################################################
-if __name__ == '__main__':
+if __name__ == "__main__":
   atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
   print("Atmorep project dir:", atmorep_project_dir)
   user_config = config.UserConfig.from_path(atmorep_project_dir)
-  
-  try :
 
-    train()
- 
-    #  wandb_id, epoch, epoch_continue = 'gxfywjzl', 127, 127
-    #  Trainer = Trainer_BERT
-    #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
+  train_fresh = False
 
-  except :
-    
+  try:
+    if train_fresh:
+      train()
+    else:
+      wandb_id, epoch, epoch_continue = "gxfywjzl", 127, 127
+      Trainer = Trainer_BERT
+      train_continue(wandb_id, epoch, Trainer, epoch_continue)
+
+  except Exception:
     extype, value, tb = sys.exc_info()
     traceback.print_exc()
     pdb.post_mortem(tb)
