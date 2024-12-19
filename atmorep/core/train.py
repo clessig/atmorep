@@ -120,7 +120,6 @@ def train():
 
   cf.years_train = list( range( 1979, 2021))
   cf.years_val = [2021]  #[2018] 
-  cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
   cf.time_sampling = 1   # sampling rate for time steps
   # random seeds
