@@ -24,7 +24,7 @@ from pathlib import Path
 
 import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
+import atmorep.utils.config_adapter as adapter
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
@@ -35,7 +35,7 @@ def initialize_atmorep(with_ddp):
   devices = init_torch()
   par_rank, par_size = setup_ddp(with_ddp)
 
-  cf = Config(user_config=user_config)
+  cf = adapter.Config.init_empty(user_config=user_config)
 
   return devices, par_rank, par_size, cf
 
