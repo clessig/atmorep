@@ -34,6 +34,7 @@ class Evaluator( Trainer_BERT) :
     Trainer_BERT.__init__( self, cf, devices)
 
   ##############################################
+  @staticmethod
   def parse_args( cf, args) :
 
     # set/over-write options as desired
