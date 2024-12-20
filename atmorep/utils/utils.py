@@ -109,7 +109,7 @@ class Config :
     except (OSError, IOError) as e:
       # try path used for logging training results and checkpoints
       try :
-        fname = Path( config.path_results, 'models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
+        fname = Path( config.path_results, '/models/id{}/model_id{}.json'.format(wandb_id,wandb_id))
         with open(fname, 'r') as f :
           json_str = f.readlines()
       except (OSError, IOError) as e:
@@ -123,6 +123,28 @@ class Config :
       self.model_id = self.wandb_id
 
     return self
+
+  ####################################################################################################
+  def get_model_filename(self, model = None, model_id = '', epoch=-2, with_model_path = True) :
+
+    if isinstance( model, str) :
+      name = model 
+    elif model :
+      name = model.__class__.__name__
+    else : # backward compatibility
+      name = 'mod'
+
+    mpath = 'id{}'.format(model_id) if with_model_path else ''
+
+    if epoch > -2 :
+      # model_file = Path( config.path_results, 'models/id{}/{}_id{}_epoch{}.mod'.format(
+      #                                                        model_id, name, model_id, epoch))
+      model_file = Path( self.path_models, mpath, '{}_id{}_epoch{}.mod'.format(
+                                                            name, model_id, epoch))
+    else :
+      model_file = Path( self.path_models, mpath, '{}_id{}.mod'.format( name, model_id))
+        
+    return model_file
 
 ####################################################################################################
 def identity( func, *args) :
@@ -201,7 +223,7 @@ def setup_wandb( with_wandb, cf, rank, project_name = None, entity = 'atmorep', 
       else :
         wandb.init( id=wandb_id, resume='must',
                     mode = mode,
-                    config = cf.get_self_dict() )
+                    config = cf.get_self_dict())
       wandb.run.log_code( root='./atmorep', include_fn=lambda path : path.endswith('.py'))
       
       # append slurm job id if defined
@@ -242,28 +264,6 @@ def shape_to_str( shape) :
   ret ='{}'.format( list(shape)).replace(' ', '').replace(',','_').replace('(','s_').replace(')','')
   ret = ret.replace('[','s_').replace(']','')
   return ret
-
-####################################################################################################
-def get_model_filename( model = None, model_id = '', epoch=-2, with_model_path = True) :
-
-  if isinstance( model, str) :
-    name = model 
-  elif model :
-    name = model.__class__.__name__
-  else : # backward compatibility
-    name = 'mod'
-
-  mpath = 'id{}'.format(model_id) if with_model_path else ''
-
-  if epoch > -2 :
-    # model_file = Path( config.path_results, 'models/id{}/{}_id{}_epoch{}.mod'.format(
-    #                                                        model_id, name, model_id, epoch))
-    model_file = Path( config.path_models, mpath, '{}_id{}_epoch{}.mod'.format(
-                                                           name, model_id, epoch))
-  else :
-    model_file = Path( config.path_models, mpath, '{}_id{}.mod'.format( name, model_id))
-      
-  return model_file
 
 ####################################################################################################
 def relMSELoss( pred, target = None) :
@@ -409,10 +409,3 @@ def weighted_mse(x, target, weights):
 
 def check_num_samples(num_samples_validate, batch_size):
   assert num_samples_validate // batch_size > 0, f"Num samples validate: {num_samples_validate} is smaller than batch size: {batch_size}. Please increase it."
-
-########################################
-
-def unique_unsorted(x):
-  x_flattened = x.flatten() 
-  _, x_idx = np.unique(x_flattened, return_index=True)
-  return x_flattened[np.sort(x_idx)]
