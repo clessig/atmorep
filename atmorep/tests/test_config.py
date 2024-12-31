@@ -15,6 +15,8 @@ def get_sample_legacy_config() -> dict[str, typing.Any]:
 
 
 def twiddle_option(value, option) -> typing.Any:
+    # FIXME doesnt work for None
+
     def replicate_nested_list_structure(my_list: list[typing.Any]):
         return [
             replicate_nested_list_structure(item) if isinstance(item, list) else None

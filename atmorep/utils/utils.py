@@ -154,12 +154,13 @@ def tensor_to_str(tensor):
     return ''.join([chr(x) for x in tensor])
 
 ####################################################################################################
-def init_torch() :
+def init_torch() -> list[str] : # always called in conjunction with setup_ddp
   
   torch.set_printoptions( linewidth=120)
 
   use_cuda = torch.cuda.is_available()
   if not use_cuda :
+    # FIXME might raise issues since there are soft assumptions on the return type beeing a list
     return torch.device( 'cpu')
 
   num_accs_per_task = torch.cuda.device_count()
@@ -174,7 +175,7 @@ def init_torch() :
   return devices 
 
 ####################################################################################################
-def setup_ddp( with_ddp = True) :
+def setup_ddp( with_ddp = True) : # always called in conjunction init_torch
 
   rank = 0
   size = 1
