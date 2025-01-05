@@ -63,7 +63,7 @@ class Evaluator( Trainer_BERT) :
 
   ##############################################
   @staticmethod
-  def evaluate( mode, model_id, args = {}, model_epoch=-2, user_config=None) :
+  def evaluate( mode, model_id, args = {}, model_epoch=-2) :
 
     with_ddp = True
     with_wandb = True
