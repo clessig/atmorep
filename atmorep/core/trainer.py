@@ -43,7 +43,7 @@ from atmorep.transformer.transformer_base import positional_encoding_harmonic
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
 from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize, unique_unsorted
-from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention, write_data_compression
+from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention, write_data_compression_global #, write_data_compression_BERT
 from atmorep.datasets.normalizer import denormalize
 
 ## proper to data loading for data compression
@@ -145,23 +145,26 @@ class Trainer_Base() :
     if cf.with_ddp :
       self.model_ddp = torch.nn.parallel.DistributedDataParallel( model, static_graph=True)
       ########## Asma freeezing weights ##########
-      for embed in self.model_ddp.module.net.embeds:
-        for param in embed.parameters():
-          param.requires_grad = False
+      if getattr(cf, 'freeze_embed_enc', False):
+        for embed in self.model_ddp.module.net.embeds:
+          for param in embed.parameters():
+            param.requires_grad = False
 
-      for encoder in self.model_ddp.module.net.encoders:
-        for param in encoder.parameters():
-          param.requires_grad = False
+        for encoder in self.model_ddp.module.net.encoders:
+          for param in encoder.parameters():
+            param.requires_grad = False
       ########## end of Asma freezing ############
       if not cf.optimizer_zero :
         ########## related to Asma freeezing weights ##########
-        decoder_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.decoders.parameters())
-        tail_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.tails.parameters())
-        trainable_params = list(decoder_params) + list(tail_params)
-        self.optimizer = torch.optim.AdamW(trainable_params, lr=cf.lr_start, weight_decay=cf.weight_decay)
-        ########## end of related to Asma freezing ############
-        # self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
-        #                                     weight_decay=cf.weight_decay)
+        if getattr(cf, 'freeze_embed_enc', False):
+          decoder_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.decoders.parameters())
+          tail_params = filter(lambda p: p.requires_grad, self.model_ddp.module.net.tails.parameters())
+          trainable_params = list(decoder_params) + list(tail_params)
+          self.optimizer = torch.optim.AdamW(trainable_params, lr=cf.lr_start, weight_decay=cf.weight_decay)
+          ########## end of related to Asma freezing ############
+        else:
+          self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
+                                              weight_decay=cf.weight_decay)
       else :
         self.optimizer = ZeroRedundancyOptimizer(self.model_ddp.parameters(),
                                                               optimizer_class=torch.optim.AdamW,
@@ -854,7 +857,7 @@ class Trainer_BERT( Trainer_Base) :
 
           normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx)
           sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
-
+          print(f"np.unique(sources_b[bidx,vidx]) = {np.unique(sources_b[bidx,vidx])}")
           if is_predicted :
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
             grid = np.flip(np.array( np.meshgrid( lons, lats)), axis = 0) #flip to have lat on pos 0 and lon on pos 1
@@ -960,7 +963,6 @@ class Trainer_BERT( Trainer_Base) :
         lats    = self.sources_info[bidx][1]
         lons    = self.sources_info[bidx][2]
         dates_t = self.get_dates_t(bidx) # Asma added this
-        # self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
 
         lats_idx = self.sources_idxs[bidx][1]
         lons_idx = self.sources_idxs[bidx][2]
@@ -1008,10 +1010,10 @@ class Trainer_BERT( Trainer_Base) :
       
     levels = np.array(cf.fields[0][2])
     masked_levels = cf.to_mask
-    write_data_compression( cf.wandb_id, epoch, batch_idx,
+    write_data_compression_global( cf.wandb_id, epoch, batch_idx,
                                  levels, masked_levels, sources_out,
                                  targets_out, preds_out,
-                                 _, coords)
+                                 ensembles_out, coords)
                                  
   def get_dates_t(self, bidx):
     cf = self.cf
@@ -1061,8 +1063,7 @@ class Trainer_BERT( Trainer_Base) :
       num_levels = len(field_info[2])
       num_tokens = field_info[3]
       token_size = field_info[4]
-      # Asma: temporarly ommitted
-      # sources_b = detokenize( sources[fidx].numpy())
+      sources_b = detokenize( sources[fidx].numpy())
      
       if is_predicted :
         targets_b   = self.get_masked_data(field_info, targets[fidx], tokens_masked_idx_list[fidx])
@@ -1091,8 +1092,7 @@ class Trainer_BERT( Trainer_Base) :
         for vidx, _ in enumerate(field_info[2]) :
 
           normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx)
-          # Asma: temporarly ommitted
-          # sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
+          sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
 
           if is_predicted :
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
@@ -1112,10 +1112,16 @@ class Trainer_BERT( Trainer_Base) :
 
             #time: idx ranges from 0->863 12x6x12 
             t_idx = (idx_loc // (num_tokens[1]*num_tokens[2])) * token_size[0]
+            # print(f"t_idx = ({idx_loc} // ({num_tokens[1]}*{num_tokens[2]})) * {token_size[0]}")
+            # print(f"t_idx = {t_idx}")
             #create range from t_idx-2 to t_idx
             t_idx = np.array([np.arange(t, t + token_size[0]) for t in t_idx])
+            
             dates_mskd = dates[t_idx]
-
+            # print(f'dates = {dates}\n')
+            # print(f't_idx = {t_idx}\n')
+            # print(f'dates_mskd = {dates_mskd}\n')
+            
             # Asma: temporarly ommitted
             # for ii,(t,p,e,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
             #                                         dates_mskd, lats_mskd, lons_mskd)) :
@@ -1139,7 +1145,7 @@ class Trainer_BERT( Trainer_Base) :
       
       coords += [ coords_b ]
       fn = field_info[0]
-      # sources_out.append( [fn, sources_b])
+      sources_out.append( [fn, sources_b])
 
       targets_out.append([fn, [[t.numpy(force=True) for t in t_v] for t_v in targets_b]] if is_predicted else [fn, []])
       preds_out.append( [fn, [[p.numpy(force=True) for p in p_v] for p_v in preds_mu_b]] if is_predicted else [fn, []] )
@@ -1148,6 +1154,6 @@ class Trainer_BERT( Trainer_Base) :
     levels = [[np.array(l) for l in field[2]] for field in cf.fields]
     write_BERT( cf.wandb_id, epoch, batch_idx, 
                 levels, sources_out, targets_out,
-                preds_out, _, coords )
+                preds_out, ensembles_out, coords )
 
   ######################## end of Asma adding stuff ###########################
