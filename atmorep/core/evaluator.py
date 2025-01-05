@@ -217,4 +217,4 @@ class Evaluator( Trainer_BERT) :
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
-    evaluator.evaluate( 0)
+    evaluator.evaluate( 0, cf.BERT_strategy)
