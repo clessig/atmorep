@@ -35,7 +35,7 @@ import ast # Asma parallel runs
 
 
 ####################################################################################################
-def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
+def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1, **kwargs) :
 
   devices = init_torch()
   with_ddp = True
@@ -63,6 +63,8 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   if not hasattr(cf, 'years_val'):
     cf.years_val = cf.years_test
   
+  cf.freeze_embed_enc = kwargs.get('freeze_embed_enc', False) # Added by Asma
+  
   # any parameter in cf can be overwritten when training is continued, e.g. we can increase the 
   # masking rate 
   # cf.fields = [ [ 'specific_humidity', [ 1, 2048, [ ], 0 ], 
@@ -80,7 +82,7 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   cf.to_mask = [96, 105, 114, 123, 137]
   cf.model_log_frequency = 256 # Asma: had to add it from train
   cf.test_initial = True
-  cf.batch_size = 24
+  cf.batch_size = 8
   ####################################### end of Asma on Nov 27, 2024 #######################################
   # '''
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
@@ -264,15 +266,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training script")
     parser.add_argument("--wandb_id", required=True, type=str, help="First parameter")
     parser.add_argument("--epoch", required=True, type=str, help="Second parameter")
+    parser.add_argument("--freeze_embed_enc", required=True, type=str, help="Third parameter")
 
     args = parser.parse_args()
 
     wandb_id = args.wandb_id
     epoch = ast.literal_eval(args.epoch)
     epoch_continue = epoch
+    freeze_embed_enc = ast.literal_eval(args.freeze_embed_enc)
     
     Trainer = Trainer_BERT
-    train_continue( wandb_id, epoch, Trainer, epoch_continue)
+    train_continue( wandb_id, epoch, Trainer, epoch_continue, freeze_embed_enc=freeze_embed_enc)
 
   except :
     
