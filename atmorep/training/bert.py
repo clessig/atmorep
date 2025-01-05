@@ -232,6 +232,8 @@ def prepare_batch_BERT_temporal_field( cf, ifield, source, token_info, rng) :
  ########################################### Asma date = 19.11.2024 ########################################################
 def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, rng) :
   
+  # print(f'source.shape = {source.shape}')
+
   idxs = torch.empty(0, dtype=torch.int64) # new, Asma
   
   vlevel = int(token_info[0,0,0,6]) # new, develop appropriate, Asma
@@ -243,8 +245,11 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
     num_tokens = source.shape[-6:-3] # new, Asma
     num_tokens_space = num_tokens[1] * num_tokens[2]  # new, Asma
   else:
-    batch_dim = source.shape[0] 
-    num_tokens = source.shape[1]
+    batch_dim = source.shape[0] # FYI source.shape = (1,12,4,2,3,27,27)
+    # num_tokens_space = source.shape[1]
+    num_tokens_space = source.shape[1] * source.shape[2] * source.shape[3]  # new, Asma
+    # print(f"num_tokens_space = {source.shape[1]} * {source.shape[2]} * {source.shape[3]}")
+    # print(f"num_tokens_space = {num_tokens_space}")
 
   if vlevel in cf.to_mask: 
     match cf.experiment_type:
@@ -263,10 +268,12 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
         idxs_second_half = torch.arange((nt_middle+2) * num_tokens_space, (nt+2) * num_tokens_space)        
         idxs = torch.cat((idxs_first_half, idxs_second_half), 0)
       case 'unmask_checker':
-        pattern = torch.cat([ torch.tensor([1,3,4,6]) + i for i in range(0, num_tokens, 8)])
+        pattern_repetition_step = source.shape[2] * source.shape[3]
+        pattern = torch.cat([ torch.tensor([1,3,4,6]) + i for i in range(0, num_tokens_space, pattern_repetition_step)])
         idxs = torch.cat([pattern for nms in range(batch_dim)])
       case 'unmask_checker_combined':
-        pattern = torch.cat([ torch.tensor([1,3,4,6, 8, 9, 10, 11, 12, 13, 14, 15]) + i for i in range(0, num_tokens, 16)])
+        pattern_repetition_step = source.shape[2] * source.shape[3] * 2
+        pattern = torch.cat([ torch.tensor([1,3,4,6, 8, 9, 10, 11, 12, 13, 14, 15]) + i for i in range(0, num_tokens_space, pattern_repetition_step)])
         idxs = torch.cat([pattern for nms in range(batch_dim)])
       case _:
         # stands for masking the whole level
@@ -289,7 +296,8 @@ def prepare_batch_BERT_data_compression_field( cf, ifield, source, token_info, r
     target = source[idx].clone()
     # set mask 
     source[ idx ] = 0.
-
+    # print(f"after flattening source.shape = {source.shape}")
+    # print(f"idx = {idx}")
     # recover batch dimension which was flattend for easier indexing and also token dimensions
     source = torch.reshape( torch.reshape( source, source_shape), source_shape0)
     
