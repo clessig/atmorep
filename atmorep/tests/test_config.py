@@ -1,3 +1,4 @@
+import atmorep.config.config as config_global
 import atmorep.utils.config as config
 import atmorep.utils.config_adapter as adapter
 import pathlib as pl
@@ -5,6 +6,7 @@ import json
 import pytest
 import typing
 import unittest.mock as mock
+import tempfile
 
 
 def get_sample_legacy_config() -> dict[str, typing.Any]:
@@ -49,6 +51,11 @@ def legacy_config_dict():
     return legacy_config_dict
 
 @pytest.fixture
+def user_config() -> config_global.UserConfig:
+    temp_dir = pl.Path(tempfile.gettempdir())
+    return config_global.UserConfig.from_path(temp_dir)
+
+@pytest.fixture
 def legacy_config_dict_old_missing_options(legacy_config_dict):
     new_options = [
         "n_size", "num_samples_per_epoch", "num_samples_validate"
@@ -77,13 +84,13 @@ def deserialized_config(legacy_config_dict):
     return config.AtmorepConfig.from_dict(legacy_config_dict)
 
 @pytest.fixture
-def config_adapter(legacy_config_dict):
-    return adapter.Config.from_dict(legacy_config_dict, user_config=None)
+def config_adapter(legacy_config_dict, user_config):
+    return adapter.Config.from_dict(legacy_config_dict, user_config=user_config)
 
 
 @pytest.fixture
-def config_adapter_empty():
-    return adapter.Config.init_empty(user_config=None)
+def config_adapter_empty(user_config):
+    return adapter.Config.init_empty(user_config=user_config)
 
 
 def test_serialization_identity(deserialized_config):
