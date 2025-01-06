@@ -537,8 +537,8 @@ class Trainer_BERT( Trainer_Base) :
     self.rng_seed = cf.rng_seed
     if not self.rng_seed :
       self.rng_seed = int(torch.randint( 100000000, (1,))) 
-    # TODO: generate only rngs that are needed
-    ll = len(cf.fields) * 8 #len(cf.vertical_levels)
+    # generate rngs up to fields times max configured levels among fields plus one
+    ll = len(cf.fields) * (max([len(f[2]) for f in cf.fields])+1)
     if cf.BERT_fields_synced :
       self.rngs = [np.random.default_rng(self.rng_seed) for _ in range(ll)]
     else : 
