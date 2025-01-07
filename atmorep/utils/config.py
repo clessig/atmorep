@@ -721,11 +721,9 @@ def _get_empty_instance(cls, **kwargs) -> typing.Any:
             sub_type = typing.get_args(cls)[0]
             empty_instance = _get_empty_instance(sub_type)
         case _:
-            print(cls)
             constructor_args = {}
             for name, parameter in inspect.signature(cls).parameters.items():
                 # prevent additional keyword args to be inspected
-                print(parameter.empty)
                 if name not in kwargs.keys():
                     constructor_args[name] = _get_empty_instance(parameter.annotation)
 

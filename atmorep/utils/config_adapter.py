@@ -561,7 +561,7 @@ class Config(AtmorepConfig):
 
     def print(self):
         """Serialize config to stdout."""
-        for key, value in self.as_dict():
+        for key, value in self.as_dict().items():
             print(f"{key} : {value}")
 
     def create_dirs(self, wandb_id: str):
@@ -598,6 +598,9 @@ class Config(AtmorepConfig):
     def load_json(self, wandb_id):
         """Deserialize config from json file in run specific directory."""
 
+        # so that self._run_dir produces correct result
+        self.run.wandb_id = wandb_id
+
         # possible file paths
         config_file_name = f"model_id{wandb_id}.json"
         config_pretrained = config.path_models / f"id{wandb_id}" / config_file_name
@@ -619,7 +622,7 @@ class Config(AtmorepConfig):
             config_file = pl.Path(wandb_id)
 
         return Config.from_json(
-            config_file, user_config=self.user_config, wandb_id=self.wandb_id
+            config_file, user_config=self.user_config
         )
 
     @classmethod

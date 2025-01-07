@@ -92,6 +92,10 @@ def config_adapter(legacy_config_dict, user_config):
 def config_adapter_empty(user_config):
     return adapter.Config.init_empty(user_config=user_config)
 
+def test_from_json(config_adapter_empty, deserialized_config, user_config):
+    config = config_adapter_empty.from_json(SAMPLE_CONFIG, user_config=user_config)
+    assert config.as_dict() == deserialized_config.as_dict()
+
 
 def test_serialization_identity(deserialized_config):
     config_dict = deserialized_config.as_dict()
