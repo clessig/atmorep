@@ -29,6 +29,17 @@ from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 import numpy as np
 
+import gc
+gc.collect(2)
+gc.freeze()
+
+allocs, gen1, gen2 = gc.get_threshold()
+allocs = 70  # Start the GC sequence every 50K not 700 allocations.
+gen1 = gen1 // 2
+gen2 = gen2 // 2
+gc.set_threshold(allocs, gen1, gen2)
+
+
 ####################################################################################################
 def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
@@ -157,16 +168,16 @@ def train() :
   # training params
   cf.batch_size_validation = 1 #64
 
-  cf.batch_size = 96
+  cf.batch_size = 41 #96
   cf.num_epochs = 128
   cf.num_samples_per_epoch = 4096*12
   cf.num_samples_validate = 128*12
-  cf.num_loader_workers = 8
+  cf.num_loader_workers = 32
   
   # additional infos
   cf.size_token_info = 8
   cf.size_token_info_net = 16
-  cf.grad_checkpointing = True
+  cf.grad_checkpointing = False
   cf.with_cls = False
   # network config
   cf.with_mixed_precision = True 

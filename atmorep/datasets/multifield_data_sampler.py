@@ -139,7 +139,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     res = self.res
 
     iter_start, iter_end = self.worker_workset()
-
+    worker_info = torch.utils.data.get_worker_info()
+    time.sleep(worker_info.id * 2)
+    print(f"<<< WORKER {worker_info.id} STARTING >>>")
     for bidx in range( iter_start, iter_end) :
 
       sources, token_infos = [[] for _ in self.fields], [[] for _ in self.fields]

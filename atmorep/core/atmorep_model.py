@@ -529,7 +529,7 @@ class AtmoRep( torch.nn.Module) :
       pred = self.checkpoint( self.tails[idx], tail_in)
       
       preds.append( pred)
-      [atts[i].append( a) for a in att]
+      for a in att: atts[i].append(a)
 
     return preds, atts
 
@@ -557,14 +557,62 @@ class AtmoRep( torch.nn.Module) :
     return fields_embed_cur, atts
 
   ###################################################
+
+  def _positional_encoding_harmonic(self,x, num_levels, num_tokens, with_cls = False) :
+    dim_embed = x.shape[-1]
+    dev = x.get_device()
+
+    idx = torch.arange( x.view(x.shape[0], -1, x.shape[-1]).shape[1], device=dev)
+    #idx = torch.arange( torch.prod( torch.tensor(x.shape[1:-1])), device=dev)
+    num_tokens_t_lat_lon = torch.prod( torch.tensor(num_tokens))
+
+    num_tokens_lat_lon = num_tokens[1] * num_tokens[2]
+
+    idxs_v = (idx / num_tokens_t_lat_lon).int()
+    
+    temp = torch.remainder( idx, num_tokens_t_lat_lon)
+    idxs_t = (temp / num_tokens_lat_lon).int()
+
+    temp = torch.remainder( idx, num_tokens_lat_lon)
+    idxs_lat = (temp / num_tokens[1]).int()
+    idxs_lon = torch.remainder( temp, num_tokens[2])
+
+    pe = torch.zeros( idx.shape[0], dim_embed, device=dev)
+    xs = (2. * np.pi *  torch.arange( 0, dim_embed, 2, device=dev) / dim_embed)
+    pe[:, 0::2] = 0.5 * torch.sin( torch.outer( 8 * idxs_lat, xs) ) + torch.sin( torch.outer( idxs_t, xs) )
+    pe[:, 1::2] = 0.5 * torch.cos( torch.outer( 8 * idxs_lon, xs) ) + torch.cos( torch.outer( idxs_v , xs) )
+
+    if with_cls :
+      x[:,1:] += pe.reshape( x[0,1:].shape)
+    else :
+      x += pe.reshape( x[0].shape)
+    return x
+
+#######
+
+  def _prepare_token(self, xin, embed, embed_token_info) :
+    (token_seq, token_info) = xin
+    num_tokens = token_seq.shape[-6:-3]
+    num_levels = token_seq.shape[1]
+    # embedding, flatten along token dimension and spatial dimensions
+    token_seq_embed = embed( torch.flatten( torch.flatten( token_seq, -3, -1), -3, -2) )
+    # add auxiliary, global token information
+    token_info = embed_token_info( token_info).to( token_seq_embed.device, non_blocking=True )
+    # token_info = prepare_token_info( cf, token_info)
+    token_info = token_info.reshape([-1] + list(token_seq_embed.shape[1:-1])+[token_info.shape[-1]])
+    token_seq_embed = torch.cat( [token_seq_embed, token_info], -1)
+    # add positional encoding
+    token_seq_embed = self._positional_encoding_harmonic( token_seq_embed, num_levels, num_tokens)
+    return token_seq_embed
+
   def get_fields_embed( self, xin ) :
     if 0 == len(self.embeds_token_info) :   # TODO: only for backward compatibility, remove
       emb_net_ti = self.embed_token_info
-      return [prepare_token( field_data, emb_net, emb_net_ti )
+      return [self._prepare_token( field_data, emb_net, emb_net_ti )
                               for fidx,(field_data,emb_net) in enumerate(zip( xin, self.embeds))]
     else :
       embs_net_ti = self.embeds_token_info
-      return [prepare_token( field_data, emb_net, embs_net_ti[fidx] )
+      return [self._prepare_token( field_data, emb_net, embs_net_ti[fidx] )
                                 for fidx,(field_data,emb_net) in enumerate(zip( xin, self.embeds))]
     
   ###################################################

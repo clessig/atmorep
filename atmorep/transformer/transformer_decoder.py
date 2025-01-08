@@ -38,9 +38,9 @@ class TransformerDecoder(torch.nn.Module) :
 
     # TODO: split up create() for consistency
 
-    num_heads = cf.decoder_num_heads
-    num_mlp_layers = cf.decoder_num_mlp_layers 
-    self_att = cf.decoder_self_att
+    num_heads       = cf.decoder_num_heads
+    num_mlp_layers  = cf.decoder_num_mlp_layers 
+    self_att        = cf.decoder_self_att
     cross_att_ratio = cf.decoder_cross_att_ratio 
 
     num_heads_other = int(num_heads * cross_att_ratio)
@@ -94,19 +94,18 @@ class TransformerDecoder(torch.nn.Module) :
     '''Evaluate decoder'''
 
     dev = self.device()
-
     (decoder_in, encoder_out) = x
     encoder_out.reverse()
     
-    token_seq_embed = decoder_in.to( dev, non_blocking=True)
+    token_seq_embed = decoder_in #.to( dev, non_blocking=True)
 
     atts = []
     car = self.cf.decoder_cross_att_rate
     for il in range(self.num_layers) : 
       token_seq_embed, att = self.checkpoint( self.blocks[2*il], token_seq_embed, 
-                                            encoder_out[int(car*il)].to(dev, non_blocking=True) )
+                                            encoder_out[int(car*il)] )  #.to(dev, non_blocking=True)
       token_seq_embed = self.checkpoint( self.blocks[2*il+1], token_seq_embed, 
-                                            encoder_out[int(car*il)].to(dev, non_blocking=True) )
+                                            encoder_out[int(car*il)] ) #.to(dev, non_blocking=True)
       atts += [ att ]
 
     return token_seq_embed, atts

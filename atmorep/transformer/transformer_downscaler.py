@@ -87,8 +87,7 @@ class TransformerDownscaler(torch.nn.Module) :
         assert False, 'Unsupported attention type: ' + cf.decoder_att_type
       self.heads.append( head)
       # feature space mapping sub-block
-      self.mlps.append( MLP( dims_embed[0], cf.downscaling_num_mlp_layers, 
-                                            with_ln, dropout_rate=dor))
+      self.mlps.append( MLP( dims_embed[0], cf.downscaling_num_mlp_layers, with_ln, dropout_rate=dor))
 
     return self
 

@@ -66,9 +66,11 @@ def positional_encoding_harmonic( x, num_levels, num_tokens, with_cls = False) :
 
   # x += pe.reshape( x[0].shape )
 
+  # print(type(x),type(num_levels),type(num_tokens))
+  idx = torch.arange( torch.prod( torch.tensor(x.shape[1:-1])), device=dev)
+  # idx = torch.arange(1000, device=dev)
 
-  idx = torch.arange( np.prod( x.shape[1:-1]), device=dev)
-  num_tokens_t_lat_lon = np.prod( num_tokens)
+  num_tokens_t_lat_lon = torch.prod( torch.tensor(num_tokens))
   num_tokens_lat_lon = num_tokens[1] * num_tokens[2]
   idxs_v = (idx / num_tokens_t_lat_lon).int()
   # idxs_v = num_tokens_t_lat_lon
