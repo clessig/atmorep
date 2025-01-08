@@ -624,6 +624,9 @@ class Config(AtmorepConfig):
         return Config.from_json(
             config_file, user_config=self.user_config
         )
+    
+    def get_self_dict(self): # used by setup_wandb
+        return self.as_dict()
 
     @classmethod
     def init_empty(cls, user_config: config.UserConfig) -> typing.Self:
