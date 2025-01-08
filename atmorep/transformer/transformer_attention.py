@@ -30,7 +30,7 @@ class CouplingAttentionMode( Enum) :
 class MultiSelfAttentionHead(torch.nn.Module):
 
   #########################################
-  def __init__(self, dim_embed, num_heads, dropout_rate=0., with_qk_lnorm=True, with_flash=False) :
+  def __init__(self, dim_embed, num_heads, dropout_rate=0., with_qk_lnorm=True, with_flash=True) :
     
     super(MultiSelfAttentionHead, self).__init__()
 
@@ -88,7 +88,7 @@ class MultiSelfAttentionHead(torch.nn.Module):
 class MultiCrossAttentionHead(torch.nn.Module):
 
   def __init__(self, dim_embed, num_heads, num_heads_other, dropout_rate = 0., with_qk_lnorm =False,
-                     grad_checkpointing = False, with_attention=False, with_flash=False):
+                     grad_checkpointing = False, with_attention=False, with_flash=True):
     super(MultiCrossAttentionHead, self).__init__()
 
     self.num_heads = num_heads
@@ -172,7 +172,7 @@ class MultiInterAttentionHead(torch.nn.Module):
   #####################################
   def __init__( self, num_heads_self, num_fields_other, num_heads_coupling_per_field, dims_embed,
                       with_lnorm = True, dropout_rate = 0., with_qk_lnorm = False, 
-                      grad_checkpointing = False, with_attention=False, with_flash=False) :
+                      grad_checkpointing = False, with_attention=False, with_flash=True) :
     '''Multi-head attention with multiple interacting fields coupled through attention.'''
 
     super(MultiInterAttentionHead, self).__init__()
