@@ -25,6 +25,8 @@ from atmorep.training.bert import prepare_batch_BERT_multifield
 from atmorep.transformer.transformer_base import positional_encoding_harmonic
 from atmorep.core.trainer import Trainer_Base
 from atmorep.applications.downscaling.atmorep_downscaling import AtmoRepDownscaling, AtmoRepDownscalingData
+from atmorep.datasets.normalizer import denormalize
+from atmorep.applications.datasets.data_writer import write_downscale
 
 import atmorep.utils.token_infos_transformations as token_infos_transformations
 
@@ -163,14 +165,11 @@ class Trainer_Downscaling( Trainer_Base):
                 self.save( -2)
             test_loss = np.append( test_loss, [cur_test_loss])
 
-            epoch += 1
-
             tstr = datetime.datetime.now().strftime("%H:%M:%S")
             print( 'Finished training at {} with test loss = {}.'.format( tstr, test_loss[-1]) )
-
             # save final network
             if cf.with_wandb and 0 == cf.par_rank :
-                self.save( -2)
+                self.save( epoch)
 
             cur_test_loss = self.validate( epoch).cpu().numpy()
 
@@ -202,6 +201,7 @@ class Trainer_Downscaling( Trainer_Base):
 
         self.optimizer.zero_grad()
         time_start = time.time()
+        wandb.watch(model,log='all',log_freq=100)
         
         for batch_idx in range( model.len( NetMode.train)):
 
@@ -216,13 +216,10 @@ class Trainer_Downscaling( Trainer_Base):
 
             self.optimizer.zero_grad()
 
-
             [loss_total[idx].append( losses[key]) for idx, key in enumerate(losses.keys())]
-
             mse_loss_total.append( mse_loss.detach().cpu() )
             grad_loss_total.append( loss.detach().cpu() )
             [std_dev_total[idx].append( pred[1].detach().cpu()) for idx, pred in enumerate(preds)]
-
 
             if int((batch_idx * cf.batch_size) / 8) > ctr :
                 # wandb logging
@@ -250,7 +247,8 @@ class Trainer_Downscaling( Trainer_Base):
                                         torch.mean( preds[0][1]), samples_sec ), flush=True)
                 
                     # save model (use -2 as epoch to indicate latest, stored without epoch specification)
-                    self.save( -2)
+                    if batch_idx % cf.model_log_frequency:
+                        self.save( -2)
 
                 # reset
                 loss_total = [[] for i in range(len(cf.losses)) ]
@@ -299,9 +297,11 @@ class Trainer_Downscaling( Trainer_Base):
         with torch.no_grad() :
             for it in range( self.model.len( NetMode.test)) :
                 batch_data = self.model.next()
-                #if cf.par_rank < cf.log_test_num_ranks :
-                #    inputs, targets = batch_data[0]
-                #    log_sources = ( [inp.detach().clone().cpu() for inp in inputs])
+                if cf.par_rank < cf.log_test_num_ranks :
+                    (sources,_),(_,_),targets,(_,_)  = batch_data
+                    log_sources = ( [source.detach().clone().cpu() for source in sources],
+                                    [target.detach().clone().cpu() for target in targets] )
+
                 with torch.autocast(device_type='cuda',dtype=torch.float16,enabled=cf.with_mixed_precision):
                     batch_data, targets = self.prepare_batch_downscaling(batch_data)
                     preds, atts = self.model( batch_data)
@@ -320,10 +320,9 @@ class Trainer_Downscaling( Trainer_Base):
                 total_loss += loss
                 test_len += 1
                 
-                #logging    
-                #if cf.par_rank < cf.log_test_num_ranks :
-                #    log_preds
-
+                if cf.par_rank < cf.log_test_num_ranks :
+                    log_preds = [[p.detach().clone().cpu() for p in pred] for pred in preds]
+                    self.log_validate_downscale( epoch, it, log_sources, log_preds)
 
                 if cf.with_ddp :
                     total_loss_cuda = total_loss.cuda()
@@ -350,7 +349,6 @@ class Trainer_Downscaling( Trainer_Base):
                 torch.cuda.empty_cache()
 
                 self.mode_test = False
-
                 return total_loss
 
 
@@ -419,9 +417,9 @@ class Trainer_Downscaling( Trainer_Base):
 
         (sources, token_infos) = xin[0]
         (self.sources_idxs, self.sources_info) = xin[1]
-        #(self.targets, self.target_token_infos) = xin[2]
         targets = xin[2]
-
+        (self.targets_idxs, self.target_infos) = xin[3]
+        
         # network input
         batch_data = [ ( sources[i].to( devs[ cf.input_fields[i][1][3] ], non_blocking=True), 
                         self.tok_infos_trans(token_infos[i]).to( self.devices[0], non_blocking=True)) 
@@ -436,3 +434,81 @@ class Trainer_Downscaling( Trainer_Base):
             targets[field_downscaling_idx] = targets[field_downscaling_idx].to(devs[target_device])
 
         return batch_data,targets
+
+
+    ##########################################################################
+    def log_validate_downscale( self, epoch, batch_idx, log_sources, log_preds):
+
+        cf = self.cf
+
+        (sources, targets) = log_sources
+
+        sources_out, targets_out, preds_out, ensembles_out = [ ], [ ], [ ], [ ]
+        batch_size = len(self.sources_info)
+
+        ##write which timstamps are downscaled [whole, centre, or last]
+
+        source_coords = []
+        target_coords = []
+
+        for fidx, field_info in enumerate(cf.fields) :
+            num_levels = len(field_info[2])
+            source = detokenize( sources[fidx].cpu().detach().numpy())
+
+            source_coords_b = []
+
+            for bidx in range(batch_size):
+                dates = self.sources_info[bidx][0]
+                lats  = self.sources_info[bidx][1]
+                lons  = self.sources_info[bidx][2]
+
+                lats_idx = self.sources_idxs[bidx][1]
+                lons_idx = self.sources_idxs[bidx][2]
+
+                for vidx, _ in enumerate(field_info[2]):
+                    input_normalizer, year_base = self.model.input_normalizer( fidx, vidx, lats_idx, lons_idx)
+                    source[bidx,vidx] = denormalize( source[bidx,vidx], input_normalizer, dates, year_base)
+                source_coords_b += [[dates, 90.-lats, lons]]
+            sources_out.append( [field_info[0], source])
+            source_coords.append(source_coords_b)
+
+        for fidx, field_info_downscale in enumerate(cf.fields_downscaling):
+            num_levels = len(field_info_downscale[2])
+            
+            target = detokenize( targets[fidx].cpu().detach().numpy())
+            pred = log_preds[fidx][0].cpu().detach().numpy()
+            pred = detokenize( pred.reshape( [num_levels, -1, *field_info_downscale[3], *field_info_downscale[4] ]).swapaxes(0,1))
+
+            ensemble = log_preds[fidx][2].cpu().detach().numpy()
+            ensemble = detokenize( ensemble.reshape( [cf.net_tail_num_nets, num_levels, -1,
+                                *field_info_downscale[3], *field_info_downscale[4] ]).swapaxes(1,2)).swapaxes(0,1)
+
+            target_coords_b = []
+            #denormalize
+            for bidx in range(batch_size) :
+                lats = self.target_infos[bidx][1]
+                lons = self.target_infos[bidx][2]
+                dates_t = self.target_infos[bidx][0]
+
+                lats_idx = self.targets_idxs[bidx][1]
+                lons_idx = self.targets_idxs[bidx][2]
+
+                for vidx, vl in enumerate(field_info_downscale[2]):
+                    target_normalizer, year_base = self.model.target_normalizer( fidx, vidx, lats_idx, lons_idx)
+                    target[bidx, vidx] = denormalize(target[bidx,vidx], target_normalizer, dates_t, year_base)
+                    pred[bidx, vidx] = denormalize( pred[bidx,vidx], target_normalizer, dates_t, year_base)
+                    ensemble[bidx,:,vidx] = denormalize( ensemble[bidx,:,vidx], target_normalizer, dates_t, year_base)
+                target_coords_b += [[dates_t, 90-lats, lons]]
+            targets_out.append( [field_info_downscale[0], target])
+            preds_out.append( [field_info_downscale[0], pred])
+            ensembles_out.append( [field_info_downscale[0], ensemble])
+            target_coords.append(target_coords_b)
+
+        source_levels = [[np.array(l) for l in field[2]] for field in cf.fields]
+        target_levels = [[np.array(l) for l in field[2]] for field in cf.fields_downscaling]
+
+        write_downscale( cf.wandb_id, epoch, batch_idx,
+                source_levels, target_levels,
+                sources_out, targets_out,
+                preds_out, ensembles_out,
+                source_coords, target_coords )
