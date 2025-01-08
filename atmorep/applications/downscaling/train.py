@@ -112,7 +112,7 @@ def train():
   cf.fields_downscaling = [ ['total_precip', 
                             [1,1024,["velocity_u","velocity_v","velocity_z","specific_humidity"]],
                             [0],
-                            [12,6,12],
+                            [1,6,12],
                             [3,9*cf.downscaling_ratio,9*cf.downscaling_ratio], 
                             1.0 ] ]
   cf.target_fields = cf.fields_downscaling
@@ -124,6 +124,7 @@ def train():
   cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
   cf.time_sampling = 1   # sampling rate for time steps
+  cf.downscaling_time_stamps = "center"
   
   # random seeds
   cf.torch_seed = torch.initial_seed()
@@ -138,6 +139,7 @@ def train():
   cf.weight_decay = 0.05 #0.1
   cf.lr_decay_rate = 1.025
   cf.lr_start_epochs = 3
+  cf.model_log_frequency = 256
   cf.BERT_strategy = "BERT"
   cf.BERT_fields_synced = True
   
@@ -179,7 +181,7 @@ def train():
 
   #perceiver
   cf.num_latent_queries = 4320
-  cf.init_scale = 0.02
+  cf.init_scale = 0.1
   cf.perceiver_num_layers = 6
   cf.perceiver_num_heads = 16
   cf.perceiver_num_mlp_layers = 2
@@ -212,10 +214,10 @@ def train():
 if __name__ == "__main__":
   try :
   
-    #train()
+    train()
   
-    wandb_id, epoch, epoch_continue = '6ff1d620', 31, 31
-    train_continue( wandb_id, epoch, epoch_continue)
+    #wandb_id, epoch, epoch_continue = '6ff1d620', 31, 31
+    #train_continue( wandb_id, epoch, epoch_continue)
   
   except :
   
