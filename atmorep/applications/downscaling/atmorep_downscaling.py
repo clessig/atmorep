@@ -94,6 +94,7 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.n_size,
                     cf.num_samples_per_epoch,
                     cf.downscaling_ratio,
+                    cf.downscaling_time_stamps,
                     with_shuffle=True
         )
         
@@ -109,12 +110,78 @@ class AtmoRepDownscalingData( torch.nn.Module) :
                     cf.n_size,
                     cf.num_samples_validate,
                     cf.downscaling_ratio,
+                    cf.downscaling_time_stamps,
                     with_shuffle=True
         )
-
         
         self.data_loader_test = torch.utils.data.DataLoader( self.dataset_test, **loader_params, sampler = None)
         return self
+
+    def set_source_idxs( self, mode: NetMode, times, token_overlap, num_loader_workers=-1) :
+        
+        cf = self.net.cf
+        dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
+        dataset.set_source_idxs( times, token_overlap)
+        self._set_data( dataset, mode, loader_workers=-1)
+
+    def _set_data( self, dataset, mode: NetMode, loader_workers=-1):
+
+        cf = self.net.cf
+        if loader_workers < 0 :
+            loader_workers = cf.num_loader_workers
+
+        loader_params = { 'batch_size': None, 'batch_sampler':None, 'shuffle' : False,
+                            'num_workers': loader_workers, 'pin_memory': True}
+        if mode == NetMode.train :
+            self.data_loader_train = torch.utils.data.DataLoader( dataset, **loader_params,
+                                                                    sampler = None)
+        elif mode == NetMode.test :
+            self.data_loader_test = torch.utils.data.DataLoader( dataset, **loader_params,
+                                                                    sampler = None)
+        else:
+            assert False
+
+    ###################################################
+    def input_normalizer( self, field, vl_idx, lats_idx, lons_idx ) :
+ 
+      if isinstance( field, str) :
+        for fidx, field_info in enumerate(self.cf.fields) :
+          if field == field_info[0] :
+            break
+        assert fidx < len(self.cf.fields), 'invalid field'
+        normalizer = self.dataset_train.datasets[fidx].normalizer
+ 
+      elif isinstance( field, int) :
+        input_normalizer = self.dataset_train.input_normalizers[field][vl_idx]
+        if len(input_normalizer.shape) > 2:
+          input_normalizer = np.take( np.take( input_normalizer, lats_idx, -2), lons_idx, -1)
+      else :
+        assert False, 'invalid argument type (has to be index to cf.fields or field name)'
+      
+      year_base = self.dataset_train.year_base
+ 
+      return input_normalizer, year_base
+ 
+    ###################################################
+    def target_normalizer( self, field, vl_idx, lats_idx, lons_idx ) :
+ 
+      if isinstance( field, str) :
+        for fidx, field_info in enumerate(self.cf.fields) :
+          if field == field_info[0] :
+            break
+        assert fidx < len(self.cf.fields), 'invalid field'
+        normalizer = self.dataset_train.datasets[fidx].normalizer
+ 
+      elif isinstance( field, int) :
+        target_normalizer = self.dataset_train.target_normalizers[field][vl_idx]
+        if len(target_normalizer.shape) > 2:
+          target_normalizer = np.take( np.take( target_normalizer, lats_idx, -2), lons_idx, -1)
+      else :
+        assert False, 'invalid argument type (has to be index to cf.fields or field name)'
+      
+      year_base = self.dataset_train.year_base
+ 
+      return target_normalizer, year_base
 
 class AtmoRepDownscaling( torch.nn.Module) :
 
