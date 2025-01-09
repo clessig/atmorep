@@ -69,13 +69,13 @@ class AtmoRepData( torch.nn.Module) :
     self._set_data( dataset, mode, batch_size, num_loader_workers)
 
   ###################################################
-  def set_global( self, mode : NetMode, times, batch_size = -1, num_loader_workers = -1) :
+  def set_global( self, mode : NetMode, times, lat_lon_domain, batch_size = -1, num_loader_workers = -1) :
 
     cf = self.net.cf
     if batch_size < 0 :
       batch_size = cf.batch_size_train if mode == NetMode.train else cf.batch_size_test
     dataset = self.dataset_train if mode == NetMode.train else self.dataset_test
-    dataset.set_global( times, batch_size, cf.token_overlap)
+    dataset.set_global( times, batch_size, cf.token_overlap, lat_lon_domain)
 
     self._set_data( dataset, mode, batch_size, num_loader_workers)
 
