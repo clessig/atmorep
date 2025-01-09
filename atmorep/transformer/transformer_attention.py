@@ -41,8 +41,8 @@ class MultiSelfAttentionHead(torch.nn.Module):
     self.dim_head_proj = int(dim_embed / num_heads)
     self.lnorm = torch.nn.LayerNorm( dim_embed, elementwise_affine=False)
     self.proj_heads = torch.nn.Linear( dim_embed, num_heads*3*self.dim_head_proj, bias = False)
-    self.proj_out = torch.nn.Linear( dim_embed, dim_embed, bias = False)
-    self.dropout = torch.nn.Dropout( p=dropout_rate) if dropout_rate > 0. else torch.nn.Identity()
+    self.proj_out   = torch.nn.Linear( dim_embed, dim_embed, bias = False)
+    self.dropout    = torch.nn.Dropout( p=dropout_rate) if dropout_rate > 0. else torch.nn.Identity()
 
     lnorm = torch.nn.LayerNorm if with_qk_lnorm else torch.nn.Identity
     self.ln_q = lnorm( self.dim_head_proj, elementwise_affine=False)
@@ -155,6 +155,10 @@ class MultiCrossAttentionHead(torch.nn.Module):
     atts = []
     return x_in + outs, atts
 
+  def attention( self, q, k, v) :
+    scaling = 1. / torch.sqrt( torch.tensor(q.shape[-1]))
+    return torch.matmul( self.softmax( scaling * self.score( q, k)), v)
+
 ####################################################################################################
 
 class MultiInterAttentionHead(torch.nn.Module):
@@ -194,17 +198,15 @@ class MultiInterAttentionHead(torch.nn.Module):
       nhc_dim = num_heads_coupling_per_field * self.dim_head_proj
       self.proj_heads_other = torch.nn.ModuleList()
       # queries from primary source/target field
-      self.proj_heads_other.append( torch.nn.Linear( dims_embed[0], nhc_dim*nfo,
-                                                   bias=False))
+      self.proj_heads_other.append( torch.nn.Linear( dims_embed[0], nhc_dim*nfo, bias=False))
       # keys, values for other fields
       for i in range(nfo) :
         self.proj_heads_other.append( torch.nn.Linear( dims_embed[i+1], 2*nhc_dim, bias=False))
     
     ln = torch.nn.LayerNorm if with_qk_lnorm else torch.nn.Identity
-    self.ln_qk = (ln( self.dim_head_proj, elementwise_affine=False), 
-                  ln( self.dim_head_proj, elementwise_affine=False))
+    self.ln_qk = torch.nn.ModuleList([ln( self.dim_head_proj, elementwise_affine=False),  ln( self.dim_head_proj, elementwise_affine=False)])
     
-    self.ln_k_other = [ln(self.dim_head_proj,elementwise_affine=False) for _ in range(nfo)]
+    self.ln_k_other = torch.nn.ModuleList([ln(self.dim_head_proj,elementwise_affine=False) for _ in range(nfo)])
     
     if with_flash :
       self.att = torch.nn.functional.scaled_dot_product_attention

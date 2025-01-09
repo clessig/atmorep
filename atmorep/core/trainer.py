@@ -44,6 +44,12 @@ from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMo
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
 from atmorep.datasets.normalizer import denormalize
 
+import torch._inductor.config
+
+torch._dynamo.config.optimize_ddp = False 
+torch._inductor.config.cpp_wrapper = True
+torch._inductor.config.triton.cudagraphs = True
+
 ####################################################################################################
 class Trainer_Base() :
 
@@ -137,10 +143,12 @@ class Trainer_Base() :
     learn_rates = self.get_learn_rates()
     
     if cf.with_ddp :
-      self.model_ddp = torch.nn.parallel.DistributedDataParallel( model, static_graph=True)
+      self.model_ddp = torch.nn.parallel.DistributedDataParallel( model, static_graph=True, find_unused_parameters=False)
+      self.model_ddp = torch.compile( self.model_ddp, mode="max-autotune", dynamic=True)
+
       if not cf.optimizer_zero :
         self.optimizer = torch.optim.AdamW( self.model_ddp.parameters(), lr=cf.lr_start,
-                                            weight_decay=cf.weight_decay)
+                                            weight_decay=cf.weight_decay, fused=True)
       else :
         self.optimizer = ZeroRedundancyOptimizer(self.model_ddp.parameters(),
                                                               optimizer_class=torch.optim.AdamW,
@@ -148,7 +156,7 @@ class Trainer_Base() :
     else :
       self.model_ddp = model
       self.optimizer = torch.optim.AdamW( self.model.parameters(), lr=cf.lr_start,
-                                          weight_decay=cf.weight_decay)
+                                          weight_decay=cf.weight_decay, fused=True)
     
     self.grad_scaler = torch.cuda.amp.GradScaler(enabled=cf.with_mixed_precision)
 
@@ -241,12 +249,11 @@ class Trainer_Base() :
       self.optimizer.zero_grad()
 
       [loss_total[idx].append( losses[key]) for idx, key in enumerate(losses)]
-      mse_loss_total.append( mse_loss.detach().cpu() )
-      grad_loss_total.append( loss.detach().cpu() )
-      [std_dev_total[idx].append( pred[1].detach().cpu()) for idx, pred in enumerate(preds)]
+      mse_loss_total.append( mse_loss.detach())
+      grad_loss_total.append( loss.detach() )
+      [std_dev_total[idx].append( pred[1].detach()) for idx, pred in enumerate(preds)]
 
       # logging
-
       if int((batch_idx * cf.batch_size) / 8) > ctr :
         
         # wandb logging
@@ -260,14 +267,15 @@ class Trainer_Base() :
             for i, field in enumerate(cf.fields_prediction) :
               idx_name = loss_name + ', ' + field[0]
               idx_std_name = 'stddev, ' + field[0]
-              loss_dict[idx_name] = torch.mean( lt[:,i]).cpu().detach()
-              loss_dict[idx_std_name] = torch.mean(torch.cat(std_dev_total[i],0)).cpu().detach()
+              loss_dict[idx_name] = torch.mean( lt[:,i]).detach()
+              loss_dict[idx_std_name] = torch.mean(torch.cat(std_dev_total[i],0)).detach()
           wandb.log( loss_dict )
       
           # console output
+          tstr = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
           samples_sec = cf.batch_size / (time.time() - time_start)
-          str = 'epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
-          print( str.format( epoch, batch_idx, model.len( NetMode.train),
+          str = '{} epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:1.5f} : {:1.5f} :: {:1.5f} ({:2.2f} s/sec)'
+          print( str.format(tstr, epoch, batch_idx, model.len( NetMode.train),
                             100. * batch_idx/model.len(NetMode.train), 
                             torch.mean( torch.tensor( grad_loss_total)), 
                             torch.mean(torch.tensor(mse_loss_total)),
@@ -591,27 +599,25 @@ class Trainer_BERT( Trainer_Base) :
   ###################################################
   def decoder_to_tail( self, idx_pred, pred) :
     '''Positional encoding of masked tokens for tail network evaluation'''
-
     field_idx = self.fields_prediction_idx[idx_pred]
-    dev = self.devices[ self.cf.fields[field_idx][1][3] ]
+    #dev = self.devices[ self.cf.fields[field_idx][1][3] ]
     target_idx = self.tokens_masked_idx[field_idx]
     assert len(target_idx) > 0, 'no masked tokens but target variable'
     
     # select "fixed" masked tokens for loss computation
     
     # flatten token dimensions: remove space-time separation
-    pred = torch.flatten( pred, 2, 3).to( dev)
+    pred_flat = torch.flatten( pred, 2, 3)#.to(dev)
     # extract masked token level by level
     pred_masked = []
     for lidx, level in enumerate(self.cf.fields[field_idx][2]) :
       # select masked tokens, flattened along batch dimension for easier indexing and processing
-      pred_l = torch.flatten( pred[:,lidx], 0, 1)
+      pred_l = torch.flatten( pred_flat[:,lidx], 0, 1)
       pred_masked.append( pred_l[ target_idx[lidx] ])
     
     # flatten along level dimension, for loss evaluation we effectively have level, batch, ...
     # as ordering of dimensions
     pred_masked = torch.cat( pred_masked, 0)
-
     return pred_masked
 
   ###################################################

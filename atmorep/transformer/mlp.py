@@ -49,9 +49,7 @@ class MLP(torch.nn.Module):
     else :
       self.proj_residual = torch.nn.Linear( dim_embed, dim_embed_out)
 
-    self.checkpoint = identity
-    if grad_checkpointing :
-      self.checkpoint = checkpoint_wrapper
+    self.checkpoint    = checkpoint_wrapper if grad_checkpointing else identity
 
   def forward( self, x, y = None) :
     
