@@ -163,8 +163,13 @@ class Evaluator( Trainer_BERT) :
     Evaluator.parse_args( cf, args)
 
     dates = args['dates']
+    if 'lat_lon_domain' in args:
+        lat_lon_domain = args['lat_lon_domain']
+    else :
+        lat_lon_domain = ([0.,180.],[0.,360.])
+    
     evaluator = Evaluator.load( cf, model_id, model_epoch, devices)
-    evaluator.model.set_global( NetMode.test, np.array( dates))
+    evaluator.model.set_global( NetMode.test, np.array( dates), lat_lon_domain)
     if 0 == cf.par_rank :
       cf.print()
       cf.write_json( wandb)
