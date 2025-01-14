@@ -52,7 +52,14 @@ if __name__ == '__main__':
 
   #temporal interpolation 
   #idx_time_mask: list of relative time positions of the masked tokens within the cube wrt num_tokens[0]  
-  #mode, options = 'temporal_interpolation', {'idx_time_mask': [5,6,7], 'num_samples_validate' : 128, 'with_pytest' : True}
+  mode, options = 'temporal_interpolation', {
+                                              'idx_time_mask': [5], 
+                                              # 'num_samples_validate' : 128, 
+                                              'dates' : [[2021, 1, 10, 18]],
+                                              'type' : 'global', # global, BERT # todo: 'global': True, would make more sens
+                                              'token_overlap' : [0, 0],
+                                              'with_pytest' : True}
+  
 
   # BERT forecast with patching to obtain global forecast
   mode, options = 'global_forecast', { 

@@ -4,6 +4,7 @@ import cfgrib
 import xarray as xr
 import numpy as np 
 import random as rnd
+import json
 import warnings
 import os
 
@@ -26,7 +27,18 @@ def epoch(request):
 @pytest.fixture(autouse = True) 
 def BERT(request):
     strategy = request.config.getoption("strategy")
-    return (strategy == 'BERT' or strategy == 'temporal_interpolation')
+    if (strategy == 'BERT' or strategy == 'temporal_interpolation'):
+        model_id = request.config.getoption("model_id")
+        with open(atmorep_json().format(model_id, model_id), 'r') as file_model_json:
+            model_json = json.load(file_model_json)
+        if 'type' not in model_json:
+            return True # BERT is taken into consideration here cuz obviously it won't have the attribute 'type'
+        elif model_json['type'] == 'BERT':
+            return True
+        else:
+            return False
+    else:
+        return False
 
 @pytest.fixture(autouse = True) 
 def strategy(request):
@@ -124,3 +136,49 @@ def test_rmse(field, model_id, BERT, epoch = 0):
             sample_pred, _, _, _ = get_data(pred,field, s, level_idx)
 
             assert compute_RMSE(sample_target, sample_pred).mean() < get_max_RMSE(field)
+
+#########################################################################
+
+def test_idx_time_mask(field, model_id, BERT, epoch = 0):
+
+    """
+    Check against source timestamps, if the right time stamps are being masked
+    Loop over all levels individually. 5 random samples for each level.
+    N.B. pred was not included cuz previously tested in test_coordinates
+    """
+
+    with open(atmorep_json().format(model_id, model_id), 'r') as file_model_json:
+        model_json = json.load(file_model_json)
+
+    mode = model_json['BERT_strategy']
+
+    if mode == 'temporal_interpolation':
+        store_t = zarr.ZipStore(atmorep_target().format(model_id, model_id, str(epoch).zfill(5)))
+        target = zarr.group(store_t)
+
+        store_s = zarr.ZipStore(atmorep_source().format(model_id, model_id, str(epoch).zfill(5)))
+        source = zarr.group(store_s)
+
+        store_p = zarr.ZipStore(atmorep_pred().format(model_id, model_id, str(epoch).zfill(5)))
+        pred = zarr.group(store_p)
+
+        nsamples = min(len(target[field]), 50)
+        samples = rnd.sample(range(len(target[field])), nsamples)
+        levels = [int(f.split("=")[1]) for f in target[f"{field}/sample=00000"]] if BERT else target[f"{field}/sample=00000"].ml[:]
+
+        idx_time_mask = model_json['idx_time_mask']
+        token_size = model_json['fields'][0][4][0] 
+
+        for s in samples:
+            # Asma: couldn't use the aready implemented functions because they return just one timestep, and I need all of masked timesteps
+            datetime_source = get_datetime(source,field, s) #source is always written in a global forecast manner
+            datetime_source = datetime_source.reshape(-1, token_size)
+            masked_source_timesteps = datetime_source[idx_time_mask]
+            masked_source_timesteps = masked_source_timesteps.flatten()
+            
+            for level in levels:
+                datetime_target = get_datetime(target,field, s,BERT, level)
+                datetime_pred = get_datetime(pred,field, s,BERT, level)
+
+                for timestep_idx in range(len(datetime_target)):
+                    check_datetimes(datetime_target[timestep_idx], masked_source_timesteps[timestep_idx])
