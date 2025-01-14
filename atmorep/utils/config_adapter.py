@@ -601,25 +601,23 @@ class Config(AtmorepConfig):
         # so that self._run_dir produces correct result
         self.run.wandb_id = wandb_id
 
-        # possible file paths
         config_file_name = f"model_id{wandb_id}.json"
-        config_pretrained = config.path_models / f"id{wandb_id}" / config_file_name
-        config_user = self._run_dir / config_file_name
-        config_user_alt = self._run_dir_alt / config_file_name
+        
+        potential_files = [
+            config.path_models / f"id{wandb_id}" / config_file_name, # pretrained models
+            self._run_dir / config_file_name, # user models at results/<modelid>
+            self._run_dir_alt / config_file_name, # user models at results/models/<model_id>
+            pl.Path(wandb_id) # legacy convention => can be removed ??
+        ]
+        
+        for config_file in potential_files:
+            if config_file.is_file():
+                break
+        else: # loop finishes naturally => no file found
+            potential_files_ = "\n\t".join([str(file) for file in potential_files])
+            msg = f"cant find config file for wandbid: {wandb_id} looked at:\n\t{potential_files_}"
+            raise FileNotFoundError(msg)
 
-        if config_user_alt.is_file():
-            config_file = config_user_alt
-
-        if config_user.is_file():
-            config_file = config_user
-
-        if config_pretrained.is_file():
-            config_file = config_pretrained
-
-        # if wandb_id is a file
-        # TODO: can be removed ???
-        if pl.Path(wandb_id).is_file():
-            config_file = pl.Path(wandb_id)
 
         return Config.from_json(
             config_file, user_config=self.user_config

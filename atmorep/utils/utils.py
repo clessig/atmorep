@@ -212,7 +212,6 @@ def setup_wandb( with_wandb, cf, rank, project_name = None, entity = 'atmorep', 
       if slurm_job_id_node != '-1' :
         cf.slurm_job_id = slurm_job_id_node
 
-      print("find issue with serialization\n", cf.get_self_dict())
       if None == wandb_id : 
         wandb.init( project = project_name, entity = entity,
                     mode = mode,
