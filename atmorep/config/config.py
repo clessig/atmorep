@@ -13,7 +13,7 @@ class UserConfig:
     models: Path
     results: Path
     output: Path
-    
+
     @classmethod
     def from_path(cls, output_dir: Path) -> typing.Self:
         return cls(
@@ -21,6 +21,14 @@ class UserConfig:
             output_dir / "results",
             output_dir / "output",
         )
+
+    def get_run_dir(self, model_id: "str") -> Path:
+        """Directory where data relevant to the run will be safed."""
+        return self.results / f"id{model_id}"
+
+    def get_run_dir_alt(self, model_id: "str") -> Path: # TODO: phase out ???
+        """Alternative directory where data relevant to the run will be safed."""
+        return self.results / "models" / f"id{model_id}"
 
 def get_known_platforms() -> list[str]:
     return [config_file.stem for config_file in PLATFORM_CONFIG_PATH.iterdir()]
@@ -47,7 +55,7 @@ class HPC_Platform:
         }
         return cls(**platform_config)
 
-    
+
 # compatibiltiy facade
 
 _platform = "jsc"

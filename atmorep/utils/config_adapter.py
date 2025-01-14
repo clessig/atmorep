@@ -632,11 +632,9 @@ class Config(AtmorepConfig):
 
     @property
     def _run_dir(self):
-        """Directory where data relevant to the run will be safed."""
-        return self.user_config.results / f"id{self.wandb_id}"
+        return self.user_config.get_run_dir(self.wandb_id)
 
     # TODO: phase out ???
     @property
     def _run_dir_alt(self):
-        """Alternative directory where data relevant to the run will be safed."""
-        return self.user_config.results / "models" / f"id{self.wandb_id}"
+        return self.user_config.get_run_dir_alt(self.wandb_id)

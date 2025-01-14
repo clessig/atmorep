@@ -15,7 +15,6 @@
 ####################################################################################################
 
 import numpy as np
-import xarray as xr
 import zarr
 import atmorep.config.config as config
 
@@ -38,7 +37,7 @@ def write_forecast(user_config: config.UserConfig, model_id, epoch, batch_idx, l
   sources_coords = [[c[:3] for c in coord_field ] for coord_field in coords]
   targets_coords = [[[c[-1], c[1], c[2]] for c in coord_field ] for coord_field in coords]
   fname_template = f"results_id{model_id}_epoch{epoch:05d}"+r"_{}.zarr"
-  dirname = user_config.results / f"id{model_id}"
+  dirname = user_config.get_run_dir(model_id)
 
   zarr_store = getattr( zarr, zarr_store_type)
 
@@ -98,7 +97,7 @@ def write_BERT(user_config: config.UserConfig, model_id, epoch, batch_idx, level
   targets_coords = [[c[3:] for c in coord_field ] for coord_field in coords]
   
   fname_template = f"results_id{model_id}_epoch{epoch:05d}"+r"_{}.zarr"
-  dirname = user_config.results / f"id{model_id}"
+  dirname = user_config.get_run_dir(model_id)
 
   zarr_store = getattr( zarr, zarr_store_type)
 
@@ -159,7 +158,7 @@ def write_BERT(user_config: config.UserConfig, model_id, epoch, batch_idx, level
 ####################################################################################################
 def write_attention(user_config: config.UserConfig, model_id, epoch, batch_idx, levels, attn, coords, zarr_store_type = 'ZipStore' ) :
 
-  fname = user_config.results / f"id{model_id}" / f"results_id{model_id}_epoch{epoch:05d}_attention.zarr"
+  fname = user_config.get_run_dir(model_id) / f"results_id{model_id}_epoch{epoch:05d}_attention.zarr"
   
   zarr_store = getattr( zarr, zarr_store_type)
 
