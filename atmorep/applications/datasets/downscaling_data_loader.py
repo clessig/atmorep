@@ -34,7 +34,7 @@ from atmorep.utils.logger import logger
 class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
     
     def __init__(self, input_file_path, target_file_path, input_fields, target_fields, years, batch_size, n_size,
-                 num_samples, downscaling_ratio, with_shuffle=False, with_source_idxs = True, with_target_idxs=True) :
+                 num_samples, downscaling_ratio, downscaling_time_stamps, with_shuffle=False, with_source_idxs = True, with_target_idxs=True) :
         '''
           Iterable torch dataset for ERA5 to IMERG downscaling task loading data at an arbitrary number of vertical levels
     
@@ -62,6 +62,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
         self.batch_size = batch_size
         self.with_shuffle = with_shuffle
         self.downscaling_ratio = downscaling_ratio
+        self.downscaling_time_stamps = downscaling_time_stamps
 
         if not os.path.exists(input_file_path):
             FileNotFoundError(f"Input zarr store {input_file_path} does not exist.")
@@ -191,7 +192,6 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
         #self.valid_time_indices = np.where(logical_array)[0]
         self.anchor_itime = np.arange(*self.range_itime)[mask_year]
         self.num_samples = min(self.num_samples, self.anchor_itime.shape[0])
-            
 
     def shuffle(self):
 
@@ -235,6 +235,7 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
 
             # get list of time indices for slicing
             idxs_t_era5 = list(np.arange( i_bidx_era5 - n_size[0]*ts, i_bidx_era5, ts, dtype=np.int64))
+            
             idxs_t_imerg = list(np.arange( i_bidx_imerg - n_size[0]*ts, i_bidx_imerg, ts, dtype=np.int64))
 
             data_t = self.era5_ds['time'][idxs_t_era5[0]:idxs_t_era5[1]].astype(datetime)
@@ -356,8 +357,34 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                             normalizer = normalizer[ ... , ilat_range_imerg[:,np.newaxis], ilon_range_imerg[np.newaxis,:]]
                     cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
                     
-                    target_data = tokenize(torch.from_numpy(cdata), target_tok_size ) 
+                    target_data = tokenize(torch.from_numpy(cdata), target_tok_size )
 
+                    tok_t,_,_,_,_,_ = target_data.shape
+                    if self.downscaling_time_stamps == 'center':
+                        target_data = target_data[tok_t//2]
+                        # token_infos uses center of the token: *last* datetime and center in space
+                        dates = self.imerg_ds['time'][ idxs_t_imerg[tok_t//2*target_tok_size[0]: (tok_t//2 + 1)*target_tok_size[0] ]].astype(datetime)
+                        if ifield == 0:
+                            target_infos += [ [ self.imerg_ds['time'][ idxs_t_imerg[tok_t//2*target_tok_size[0]: (tok_t//2 + 1)*target_tok_size[0] ]].astype(datetime), 
+                                     self.imerg_lats[ilat_range_imerg], self.imerg_lons[ilon_range_imerg], self.imerg_res ] ]
+                            if self.with_target_idxs:
+                                target_idxs += [ (idxs_t_imerg[tok_t//2*target_tok_size[0]: (tok_t//2 + 1)*target_tok_size[0]], ilat_range_imerg, ilon_range_imerg) ]
+                    elif self.downscaling_time_stamps == 'last':
+                        target_data = target_data[-1,:]
+                        # token_infos uses center of the token: *last* datetime and center in space
+                        dates = self.imerg_ds['time'][ idxs_t_imerg[(tok_t-1)*target_tok_size[0]: tok_t*target_tok_size[0] ]].astype(datetime)
+                        if ifield == 0:
+                            target_infos += [ [ self.imerg_ds['time'][ idxs_t_imerg[(tok_t-1)*target_tok_size[0]: tok_t*target_tok_size[0] ]].astype(datetime), 
+                                     self.imerg_lats[ilat_range_imerg], self.imerg_lons[ilon_range_imerg], self.imerg_res ] ]
+                            if self.with_target_idxs:
+                                target_idxs += [ (idxs_t_imerg[(tok_t-1)*target_tok_size[0]: tok_t*target_tok_size[0] ], ilat_range_imerg, ilon_range_imerg) ]
+                    else :
+                        dates = self.imerg_ds['time'][ idxs_t_imerg ].astype(datetime)
+                        if ifield == 0:
+                            target_infos += [ [ self.imerg_ds['time'][ idxs_t_imerg].astype(datetime), 
+                                     self.imerg_lats[ilat_range_imerg], self.imerg_lons[ilon_range_imerg], self.imerg_res ] ]
+                            if self.with_target_idxs:
+                                target_idxs += [ (idxs_t_imerg, ilat_range_imerg, ilon_range_imerg) ]
                       
                     # token_infos uses center of the token: *last* datetime and center in space
                     dates = self.imerg_ds['time'][ idxs_t_imerg ].astype(datetime)
@@ -405,3 +432,35 @@ class MultifieldDownscalingSampler( torch.utils.data.IterableDataset):
                 iter_end = len(self)
 
         return iter_start, iter_end
+    
+    ########################################################
+    def set_source_idxs( self, times, token_overlap = [0,0]):
+        n_size = self.n_size          
+        times_pos = []          
+        idx_lat = self.anchor_ilat[0::n_size[1]-token_overlap[0]]         
+        if self.anchor_ilat[-1] != idx_lat[-1]:             
+            apended_lat = np.array([self.anchor_ilat[-1]])             
+            idx_lat = np.concatenate([idx_lat,apended_lat])          
+        idx_lon = self.anchor_ilon[0::n_size[2]-token_overlap[1]]
+        if self.anchor_ilon[-1] != idx_lon[-1]:
+            apended_lon = np.array([self.anchor_ilon[-1]])             
+            idx_lon = np.concatenate([idx_lon,apended_lon])
+        self.idx_perm_s = np.array(np.meshgrid(idx_lat,idx_lon)).T.reshape(-1,2)
+        self.idx_perm_t = []
+        for ctime in times:
+            tstamp = pd.to_datetime( f'{ctime[0]}-{ctime[1]}-{ctime[2]}-{ctime[3]}', format='%Y-%m-%d-%H')
+            self.idx_perm_t.append(np.where(self.era5_times[:] == np.datetime64(tstamp))[0] + 1)
+        self.num_samples = len(self.idx_perm_t)*len(self.idx_perm_s)
+        self.batch_size = len(self.idx_perm_s)
+        self.idx_perm_s = np.concatenate([self.idx_perm_s]*len(self.idx_perm_t))
+
+
+
+
+
+
+
+
+
+
+
