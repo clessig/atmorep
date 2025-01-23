@@ -292,13 +292,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       # work with mathematical lat coordinates from here on
       self.idxs_perm[idx] = np.array( [90. - item[4], item[5]])
    
-    print(self.idxs_perm)
     self.idxs_perm_t = np.array(self.idxs_perm_t).squeeze()
 
   ###################################################
   def set_global( self, times, batch_size = None, token_overlap = [0, 0], lat_lon_domain=([0.,180.0],[0.,360.])) :
     ''' generate patch/token positions for global grid '''                                           
-    print("inside_dataset", lat_lon_domain)
     token_overlap = np.array( token_overlap).astype(np.int64)                                        
     # assumed that sanity checking that field data is consistent has been done                       
     ifield = 0                                                                                       
@@ -310,9 +308,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
     assert all( overlap <= side_len_2), 'token_overlap too large for #tokens, reduce if possible'
 
     lat_min = lat_lon_domain[0][0]
-    lat_max = lat_lon_domain[0][1]
+    lat_max = lat_lon_domain[0][1] + res[0]
     lon_min = lat_lon_domain[1][0]
-    lon_max = lat_lon_domain[1][1] if lat_lon_domain[1][1] > lat_lon_domain[1][0] else lat_lon_domain[1][1] + 360.   
+    lon_max = (lat_lon_domain[1][1] if lat_lon_domain[1][1] > lat_lon_domain[1][0] else lat_lon_domain[1][1] + 360.) + res[1]  
     # generate tiles                                                                                 
     times_pos = []                                                                                   
     for ctime in times :                                                                             
@@ -322,12 +320,11 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         num_tiles_lat += 1                                                                           
         lon = side_len_2[1].item() - overlap[1].item()/2. + lon_min                                            
         num_tiles_lon = 0                                                                            
-        while (lon - side_len_2[1]) < lon_max :                                                         
+        while (lon - side_len_2[1]) < lon_max :
           times_pos += [[*ctime, -lat + 90., np.mod(lon,360.) ]]                                     
           lon += side_len[1].item() - overlap[1].item()                                              
           num_tiles_lon += 1                                                                         
         lat += side_len[0].item() - overlap[0].item()                                                
-                                                                                                     
       # add one additional row if no perfect tiling (sphere is toric in longitude so no special      
       # handling necessary but not in latitude)                                                      
       # the added row is such that it goes exaclty down to the South pole and the offset North-wards 
@@ -337,10 +334,9 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
         num_tiles_lat += 1                                                                           
         lat = lat_max - side_len_2[0].item() + res[0]                                                   
         lon = side_len_2[1].item() - overlap[1].item()/2. + lon_min                                           
-        while (lon - side_len_2[1]) < lon_max :                                                         
+        while (lon - side_len_2[1]) < lon_max :
           times_pos += [[*ctime, -lat + 90., np.mod(lon,360.) ]]                                     
           lon += side_len[1].item() - overlap[1].item()                                              
-                                                                                                     
     # adjust batch size if necessary so that the evaluations split up across batches of equal size   
     batch_size = len(times_pos) #num_tiles_lon                                                       
     print( 'Number of batches per global forecast: {}'.format( num_tiles_lat) )
