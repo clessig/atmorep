@@ -24,7 +24,7 @@ from datetime import datetime
 import time
 import os
 
-from atmorep.datasets.normalizer import normalize
+from atmorep.datasets.normalizer import Normalizer
 from atmorep.utils.utils import tokenize, get_weights
 
 class MultifieldDataSampler( torch.utils.data.IterableDataset):
@@ -81,21 +81,7 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       self.range_lon += np.array([n_size[2]/2., -n_size[2]/2.])
     
     # data normalizers
-    self.normalizers = []
-    for ifield, field_info in enumerate(fields) :
-      corr_type = 'global' if len(field_info) <= 6 else field_info[6]
-      nf_name = 'global_norm' if corr_type == 'global' else 'norm'
-      self.normalizers.append( [] )
-      for vl in field_info[2]: 
-        if vl == 0:
-          field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-          n_name = f'normalization/{nf_name}_sfc'
-          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx]] 
-        else:
-          vl_idx = self.ds.attrs['levels'].index(vl)
-          field_idx = self.ds.attrs['fields'].index( field_info[0])
-          n_name = f'normalization/{nf_name}'
-          self.normalizers[ifield] += [self.ds[n_name].oindex[ :, :, field_idx, vl_idx]] 
+    self.set_normalizers(fields)
     
     # extract indices for selected years
     self.times = pd.DatetimeIndex( self.ds['time'])
@@ -180,37 +166,21 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
           source_lvl, tok_info_lvl  = [], []
           tok_size  = field_info[4]
           num_tokens = field_info[3]
-          corr_type = 'global' if len(field_info) <= 6 else field_info[6]
-        
+          # corr_type = 'global' if len(field_info) <= 6 else field_info[6]
+          surface_level = (field_info[2][0] == 0)
           for ilevel, vl in enumerate(field_info[2]):
-            if vl == 0 : #surface level
-              field_idx = self.ds.attrs['fields_sfc'].index( field_info[0])
-              data_t = data_tt_sfc[ :, field_idx ]
-            else :
-              field_idx = self.ds.attrs['fields'].index( field_info[0])
-              vl_idx = self.ds.attrs['levels'].index(vl)
-              data_t = data_tt[ :, field_idx, vl_idx ]
-          
+            attrs_name = 'fields' if not surface_level else 'fields_sfc'
+            field_idx = self.ds.attrs[attrs_name].index( field_info[0])
+            vl_idx = self.ds.attrs['levels'].index(vl) if not surface_level else 0
+            data_t = data_tt[ :, field_idx, vl_idx ] if not surface_level else data_tt_sfc[ :, field_idx ]
+        
             source_data, tok_info = [], []
             # extract data, normalize and tokenize
             cdata = data_t[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
-            
+              
             normalizer = self.normalizers[ifield][ilevel]
-
-            if corr_type != 'global': 
-              #normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
-              if lat_ran[0] < lat_ran[-1] and lon_ran[0] < lon_ran[-1]:
-                lat_max, lat_min = max(lat_ran), min(lat_ran)
-                lon_max, lon_min = max(lon_ran), min(lon_ran)
-                normalizer = normalizer[:,:,lat_min:lat_max+1,lon_min:lon_max+1]
-                #normalizer_vu = normalizer[:,:,lat_min:lat_max+1,lon_min:lon_max+1]
-                #cdata = normalize(cdata, normalizer_vu, sources_infos[-1][0], year_base = self.year_base) 
-              else:
-                normalizer = normalizer[ ... , lat_ran[:,np.newaxis], lon_ran[np.newaxis,:]]
-                #cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
-            #else:
-            cdata = normalize(cdata, normalizer, sources_infos[-1][0], year_base = self.year_base)
-            
+            cdata = normalizer.normalize(cdata, sources_infos[-1][0], lat_ran, lon_ran)
+           
             source_data = tokenize( torch.from_numpy( cdata), tok_size )    
             # token_infos uses center of the token: *last* datetime and center in space
             dates = self.ds['time'][ idxs_t ].astype(datetime)
@@ -266,6 +236,52 @@ class MultifieldDataSampler( torch.utils.data.IterableDataset):
       target_idxs = None
      
       yield ( sources, targets, (source_idxs, sources_infos), (target_idxs, target_info))
+
+###################################################
+  def set_normalizers(self, fields):
+    
+    self.normalizers = []
+    for ifield, field_info in enumerate(fields) :
+      
+      if len(field_info) > 6:
+        corr_options = field_info[6]
+        if type(corr_options) != dict: #backward compatibility
+            corr_options = {'corr_type' : corr_options[0]}
+      else:
+        corr_options = {'corr_type' : 'global'}
+
+      corr_type = corr_options['corr_type'] #local or global
+      surface_field = (len(field_info[2]) == 1 and field_info[2][0] == 0) #check if it is a surface field
+      log_transform = ('log_transform' in corr_options.keys()) #check if need to use log_transform
+      if log_transform:
+        assert ('eps' in corr_options.keys()), AssertionError("Please speficy eps depending on the normalization values stored in the zarr file. suggested: 1e-7")
+      eps = corr_options['eps'] if log_transform else -999
+      
+      #name of the normalization
+      nf_name = [corr_type] if corr_type == 'global' else []
+      nf_name += ['norm']
+      if surface_field: 
+        nf_name += ['sfc'] 
+      if log_transform:
+        nf_name += [f'log_tr_{eps}']
+
+
+      #name of the field, to retrieve the idx
+      attrs_name = ['fields']
+      if surface_field:
+        attrs_name += ['sfc']
+
+      field_idx = self.ds.attrs['_'.join(attrs_name)].index( field_info[0])
+      n_name = 'normalization/'+'_'.join(nf_name)
+      data = self.ds[n_name].oindex[ :, :, field_idx]
+      self.normalizers.append( [] )
+      if surface_field:
+        self.normalizers[ifield] += [Normalizer(data, corr_type, eps = eps, log_tr = log_transform, year_base = self.year_base)]
+      else:
+        for vl in field_info[2]: 
+          vl_idx = self.ds.attrs['levels'].index(vl)
+          self.normalizers[ifield] += [Normalizer(data[:, :, vl_idx], corr_type, eps = eps, log_tr = log_transform, year_base = self.year_base)]
+
 
   ###################################################
   def set_data( self, times_pos, batch_size = None) :

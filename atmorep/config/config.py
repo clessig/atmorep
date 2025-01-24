@@ -12,4 +12,4 @@ path_plots   = Path( fpath, '../results/plots/')
 #ATOS: path = /ec/res4/scratch/nacl/atmorep/
 #JSC : path = /p/scratch/atmo-rep/data/era5_1deg/months/
 #BSC : path = /gpfs/scratch/ehpc03/
-path_data    = ('./data/era5_y1979_2021_res025_chunk8.zarr/')
+path_data    = ('./data/era5_y2010_2021_res025_chunk8.zarr/')
