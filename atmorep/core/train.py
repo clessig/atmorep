@@ -102,7 +102,7 @@ def train() :
 
   # cf.fields = [ [ 'temperature', [ 1, 1024, [ ], 0 ], 
   #                              [ 96, 105, 114, 123, 137 ], 
-  #                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05], 'local' ] ]
+  #                              [12, 2, 4], [3, 27, 27], [0.5, 0.9, 0.2, 0.05],  {'corr_type' : 'local'} ] ]
   # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
  
   cf.fields = [ [ 'velocity_u', [ 1, 1024, [ ], 0 ], 
@@ -110,6 +110,12 @@ def train() :
                                  [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05] ] ]
 
   cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
+
+  # cf.fields = [ [ 'total_precip', [ 1, 1024, [ ], 0 ], 
+  #                               [0], 
+  #                                [12, 3, 6], [3, 18, 18], [0.5, 0.9, 0.2, 0.05],  {'corr_type' : 'global', 'log_transform' : True, 'eps': 1e-7 } ] ]
+
+  # cf.fields_prediction = [ [cf.fields[0][0], 1.] ]
 
   
   # cf.fields = [ [ 'velocity_v', [ 1, 1024, [ ], 0 ], 

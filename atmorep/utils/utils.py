@@ -416,3 +416,13 @@ def unique_unsorted(x):
   x_flattened = x.flatten() 
   _, x_idx = np.unique(x_flattened, return_index=True)
   return x_flattened[np.sort(x_idx)]
+
+########################################
+
+def log_transform(data, eps = 0.001):
+  return np.log(data + eps) - np.log(eps)
+
+########################################
+
+def invert_log_transform(data, eps = 0.001):
+  return np.exp( data + np.log(eps)) - eps

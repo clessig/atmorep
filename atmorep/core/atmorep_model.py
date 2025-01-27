@@ -113,7 +113,7 @@ class AtmoRepData( torch.nn.Module) :
       assert False
 
   ###################################################
-  def normalizer( self, field, vl_idx, lats_idx, lons_idx ) :
+  def normalizer( self, field, vl_idx ) :
 
     if isinstance( field, str) :
       for fidx, field_info in enumerate(self.cf.fields) :
@@ -124,14 +124,12 @@ class AtmoRepData( torch.nn.Module) :
 
     elif isinstance( field, int) :
       normalizer = self.dataset_train.normalizers[field][vl_idx]
-      if len(normalizer.shape) > 2:
-        normalizer = np.take( np.take( normalizer, lats_idx, -2), lons_idx, -1)
     else :
       assert False, 'invalid argument type (has to be index to cf.fields or field name)'
     
     year_base = self.dataset_train.year_base
 
-    return normalizer, year_base
+    return normalizer #, year_base
 
   ###################################################
   def mode( self, mode : NetMode) :

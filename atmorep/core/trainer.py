@@ -42,7 +42,7 @@ import atmorep.utils.token_infos_transformations as token_infos_transformations
 
 from atmorep.utils.utils import Gaussian, CRPS, kernel_crps, weighted_mse, NetMode, tokenize, detokenize, unique_unsorted
 from atmorep.datasets.data_writer import write_forecast, write_BERT, write_attention
-from atmorep.datasets.normalizer import denormalize
+#from atmorep.datasets.normalizer import denormalize
 
 ####################################################################################################
 class Trainer_Base() :
@@ -665,9 +665,12 @@ class Trainer_BERT( Trainer_Base) :
         lons_idx = self.sources_idxs[bidx][2]
 
         for vidx, _ in enumerate(field_info[2]) :
-          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx) 
-          source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)
-          target[bidx,vidx] = denormalize( target[bidx,vidx], normalizer, dates_t, year_base)
+          normalizer = self.model.normalizer( fidx, vidx) #, lats_idx, lons_idx) 
+          source[bidx,vidx] = normalizer.denormalize( source[bidx,vidx], dates, lats_idx, lons_idx)
+          target[bidx,vidx] = normalizer.denormalize( target[bidx,vidx], dates_t, lats_idx, lons_idx)
+
+          # source[bidx,vidx] = denormalize( source[bidx,vidx], normalizer, dates, year_base)
+          # target[bidx,vidx] = denormalize( target[bidx,vidx], normalizer, dates_t, year_base)
 
         coords_b += [[dates, 90.-lats, lons, dates_t]]
 
@@ -696,9 +699,10 @@ class Trainer_BERT( Trainer_Base) :
         dates_t = self.sources_info[bidx][0][ -forecast_num_tokens*field_info[4][0] : ]
        
         for vidx, vl in enumerate(field_info[2]) :
-          normalizer, year_base = self.model.normalizer( self.fields_prediction_idx[fidx], vidx, lats_idx, lons_idx)
-          pred[bidx,vidx] = denormalize( pred[bidx,vidx], normalizer, dates_t, year_base)
-          ensemble[bidx,:,vidx] = denormalize(ensemble[bidx,:,vidx], normalizer, dates_t, year_base)
+          normalizer = self.model.normalizer( self.fields_prediction_idx[fidx], vidx) #, lats_idx, lons_idx)
+          pred[bidx,vidx] = normalizer.denormalize( pred[bidx,vidx], dates_t, lats_idx, lons_idx)
+          ensemble[bidx,:,vidx] = normalizer.denormalize(ensemble[bidx,:,vidx], dates_t, lats_idx, lons_idx)
+
 
       # append
       preds_out.append( [fn[0], pred])
@@ -784,8 +788,8 @@ class Trainer_BERT( Trainer_Base) :
         coords_mskd_l = []
         for vidx, _ in enumerate(field_info[2]) :
 
-          normalizer, year_base = self.model.normalizer( fidx, vidx, lats_idx, lons_idx)
-          sources_b[bidx,vidx] = denormalize(sources_b[bidx,vidx], normalizer, dates, year_base = 2021) 
+          normalizer = self.model.normalizer( fidx, vidx) #, lats_idx, lons_idx)
+          sources_b[bidx,vidx] = normalizer.denormalize(sources_b[bidx,vidx], dates, lats_idx, lons_idx) 
 
           if is_predicted :
             idx = tokens_masked_idx_list[fidx][vidx][bidx]
@@ -811,16 +815,14 @@ class Trainer_BERT( Trainer_Base) :
             
             for ii,(t,p,e,da,la,lo) in enumerate(zip( target[vidx], pred_mu[vidx], pred_ens[vidx],
                                                     dates_mskd, lats_mskd, lons_mskd)) :
-              normalizer_ii = normalizer
+              # normalizer_ii = normalizer
               if len(normalizer.shape) > 2: #local normalization                                     
                 lats_mskd_idx = np.where(np.isin(lats,la))[0]
                 lons_mskd_idx = np.where(np.isin(lons,lo))[0]
-                #normalizer_ii = normalizer[:, :, lats_mskd_idx, lons_mskd_idx] problems in python 3.9
-                normalizer_ii = normalizer[:, :, lats_mskd_idx[0]:lats_mskd_idx[-1]+1, lons_mskd_idx[0]:lons_mskd_idx[-1]+1]
-             
-              targets_b[vidx][bidx][ii]   = denormalize(t, normalizer_ii, da, year_base)  
-              preds_mu_b[vidx][bidx][ii]  = denormalize(p, normalizer_ii, da, year_base) 
-              preds_ens_b[vidx][bidx][ii] = denormalize(e, normalizer_ii, da, year_base)
+                
+              targets_b[vidx][bidx][ii]   = normalizer.denormalize(t, da, lats_mskd_idx, lons_mskd_idx)  
+              preds_mu_b[vidx][bidx][ii]  = normalizer.denormalize(p, da, lats_mskd_idx, lons_mskd_idx) 
+              preds_ens_b[vidx][bidx][ii] = normalizer.denormalize(e, da, lats_mskd_idx, lons_mskd_idx)
             
             coords_mskd_l += [[dates_mskd, 90.-lats_mskd, lons_mskd] ]
        
