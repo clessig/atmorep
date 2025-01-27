@@ -12,25 +12,5 @@ setup(
     python_requires=">=3.11",
     packages=find_packages(),   
     # if packages are available in a native form fo the host system then these should be used
-    install_requires=['torch>=2.3', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo', 'pytest', 'cfgrib', 'dask'],
-    data_files=[('./output', []), ('./logs', []), ('./results',[])],
+    install_requires=['torch>=2.3', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo', 'pytest', 'dask'],
 )
-
-#ATOS: 
-# path = '/ec/res4/scratch/nacl/atmorep/'
-#JSC : 
-# path = '/p/scratch/atmo-rep/data/era5_1deg/months/'
-#BSC : 
-path = '/gpfs/scratch/ehpc03/'
-assert os.path.exists(path), "The chosen data path does not exist on this device. Please chhange it in setup.py"
-
-if not os.path.exists('./data'):
-  os.system(f'ln -s {path} ./data')
-
-if not os.path.exists('./output'):
-  os.mkdir('./output')
-if not os.path.exists('./logs'):
-  os.mkdir('./logs')
-if not os.path.exists('./results'):
-  os.mkdir('./results')
-

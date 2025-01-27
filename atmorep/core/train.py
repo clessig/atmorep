@@ -20,23 +20,35 @@ import sys
 import traceback
 import pdb
 import wandb
+from pathlib import Path
 
 import atmorep.config.config as config
 from atmorep.core.trainer import Trainer_BERT
-from atmorep.utils.utils import Config
+import atmorep.utils.config_adapter as adapter
 from atmorep.utils.utils import setup_ddp
 from atmorep.utils.utils import setup_wandb
 from atmorep.utils.utils import init_torch
 import numpy as np
 
-####################################################################################################
-def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
 
+def initialize_atmorep(with_ddp):
+  atmorep_project_dir = Path(os.environ["SLURM_SUBMIT_DIR"])
+  print("Atmorep project dir:", atmorep_project_dir)
+  user_config = config.UserConfig.from_path(atmorep_project_dir)
+    
   devices = init_torch()
-  with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  par_rank, par_size = setup_ddp(with_ddp)
 
-  cf = Config().load_json( wandb_id)
+  cf = adapter.Config.init_empty(user_config=user_config)
+
+  return devices, par_rank, par_size, cf
+
+
+####################################################################################################
+def train_continue(wandb_id, epoch, Trainer, epoch_continue=-1) :
+  with_ddp = True
+  devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
+  cf = cf.load_json(wandb_id)
 
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
   cf.with_ddp = with_ddp
@@ -44,20 +56,6 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   cf.par_size = par_size
   cf.optimizer_zero = False
   cf.attention = False
-  # name has changed but ensure backward compatibility
-  if hasattr( cf, 'loader_num_workers') :
-    cf.num_loader_workers = cf.loader_num_workers
-  if not hasattr( cf, 'n_size'):
-    cf.n_size = [36, 0.25*9*6, 0.25*9*12] 
-  if not hasattr(cf, 'num_samples_per_epoch'):
-    cf.num_samples_per_epoch = 1024
-  if not hasattr(cf, 'num_samples_validate'):
-    cf.num_samples_validate = 128
-  if not hasattr(cf, 'with_mixed_precision'):
-    cf.with_mixed_precision = True
-  if not hasattr(cf, 'years_val'):
-    cf.years_val = cf.years_test
- 
   setup_wandb( cf.with_wandb, cf, par_rank, project_name='train', mode='offline')  
   # resuming a run requires online mode, which is not available everywhere
   #setup_wandb( cf.with_wandb, cf, par_rank, wandb_id = wandb_id)  
@@ -75,16 +73,10 @@ def train_continue( wandb_id, epoch, Trainer, epoch_continue = -1) :
   trainer.run( epoch_continue)
 
 ####################################################################################################
-def train() :
-
-  devices = init_torch()
+def train():
   with_ddp = True
-  par_rank, par_size = setup_ddp( with_ddp)
+  devices, par_rank, par_size, cf = initialize_atmorep(with_ddp)
 
-  # torch.cuda.set_sync_debug_mode(1)
-  torch.backends.cuda.matmul.allow_tf32 = True
-
-  cf = Config()
   # parallelization
   cf.with_ddp = with_ddp
   cf.num_accs_per_task = len(devices)   # number of GPUs / accelerators per task
@@ -128,7 +120,6 @@ def train() :
 
   cf.years_train = list( range( 1979, 2021))
   cf.years_val = [2021]  #[2018] 
-  cf.month = None
   cf.geo_range_sampling = [[ -90., 90.], [ 0., 360.]]
   cf.time_sampling = 1   # sampling rate for time steps
   # random seeds
@@ -201,9 +192,10 @@ def train() :
   setup_wandb( cf.with_wandb, cf, par_rank, 'train', mode='offline')  
 
   #calculate n_size: same for all fields
-  assert "res" in config.path_data, Exception("Resolution not in file name. Please specify it.")
+  data_path_str = config.path_data.as_posix()
+  assert "res" in data_path_str, Exception("Resolution not in file name. Please specify it.")
   size  = np.multiply(cf.fields[0][3], cf.fields[0][4]) #ntokens x token_size
-  resol = int(config.path_data.split("res")[1].split("_")[0])/100
+  resol = int(data_path_str.split("res")[1].split("_")[0])/100
   cf.n_size = [float(cf.time_sampling*size[0]), float(resol*size[1]), float(resol*size[2])]
   
   if cf.with_wandb and 0 == cf.par_rank :
@@ -214,18 +206,18 @@ def train() :
   trainer.run()
 
 ####################################################################################################
-if __name__ == '__main__':
-  
-  try :
+if __name__ == "__main__":
+  train_fresh = False
 
-    train()
- 
-    #  wandb_id, epoch, epoch_continue = 'gxfywjzl', 127, 127
-    #  Trainer = Trainer_BERT
-    #  train_continue( wandb_id, epoch, Trainer, epoch_continue)
+  try:
+    if train_fresh:
+      train()
+    else:
+      wandb_id, epoch, epoch_continue = "gxfywjzl", 127, 127
+      Trainer = Trainer_BERT
+      train_continue(wandb_id, epoch, Trainer, epoch_continue)
 
-  except :
-    
+  except Exception:
     extype, value, tb = sys.exc_info()
     traceback.print_exc()
     pdb.post_mortem(tb)
