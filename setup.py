@@ -12,7 +12,7 @@ setup(
     python_requires=">=3.11",
     packages=find_packages(),   
     # if packages are available in a native form fo the host system then these should be used
-    install_requires=['torch>=2.3', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo', 'pytest', 'cfgrib', 'dask'],
+    install_requires=['torch>=2.3', 'numpy', 'matplotlib', 'zarr', 'pandas', 'typing_extensions', 'pathlib', 'wandb', 'cloudpickle', 'ecmwflibs', 'cfgrib', 'netcdf4', 'xarray', 'pytz', 'torchinfo', 'pytest', 'cfgrib', 'dask', 'strenum'],
     data_files=[('./output', []), ('./logs', []), ('./results',[])],
 )
 
