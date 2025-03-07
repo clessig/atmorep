@@ -1,3 +1,14 @@
+
+# IMPORTANT NOTE: 
+<p align="center">
+<img src="https://github.com/user-attachments/assets/50518092-5386-4ef5-98f3-e2abf147556f" />
+</p>
+
+Please note that that the folder is **not maintained anymore since March 1st**. \
+Please use the **WeatherGenerator** code instead: https://github.com/ecmwf/WeatherGenerator 
+
+
+
 # AtmoRep
 
 This repository contains the source code for the [AtmoRep](https://www.atmorep.org) models for large scale representation learning of atmospheric dynamics as well as links to the pre-trained models and the required model input data.
